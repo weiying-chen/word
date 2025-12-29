@@ -111,6 +111,12 @@ def add_hyperlink(paragraph, text: str, url: str) -> None:
     r_style = OxmlElement("w:rStyle")
     r_style.set(qn("w:val"), "Hyperlink")
     r_pr.append(r_style)
+    r_color = OxmlElement("w:color")
+    r_color.set(qn("w:val"), "0563C1")
+    r_pr.append(r_color)
+    r_underline = OxmlElement("w:u")
+    r_underline.set(qn("w:val"), "single")
+    r_pr.append(r_underline)
     run.append(r_pr)
 
     t = OxmlElement("w:t")
@@ -132,10 +138,23 @@ def ensure_time_range_style(doc: Document):
     return style_name
 
 
+def ensure_hyperlink_style(doc: Document):
+    style_name = "Hyperlink"
+    styles = doc.styles
+    if style_name in [s.name for s in styles]:
+        style = styles[style_name]
+    else:
+        style = styles.add_style(style_name, WD_STYLE_TYPE.CHARACTER)
+    style.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+    style.font.underline = True
+    return style_name
+
+
 def fill_template(template_path: Path, input_path: Path, output_path: Path) -> None:
     data = parse_input(input_path)
     doc = Document(str(template_path))
     time_range_style = ensure_time_range_style(doc)
+    ensure_hyperlink_style(doc)
 
     for paragraph in list(doc.paragraphs):
         if "{{BODY}}" in paragraph.text:
