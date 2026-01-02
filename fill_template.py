@@ -20,6 +20,7 @@ PLACEHOLDER_KEYS = [
     "SUMMARY",
     "YT_TITLE_SUGGESTED",
     "TITLE_SUGGESTED",
+    "INTRO",
     "THUMBNAIL",
     "TIME_RANGE",
     "BODY",
@@ -29,34 +30,43 @@ PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
 
 def parse_input(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
-    body_lines: list[str] = []
-    in_body = False
-
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        if in_body:
-            body_lines.append(raw_line)
-            continue
-
+    lines = path.read_text(encoding="utf-8").splitlines()
+    idx = 0
+    while idx < len(lines):
+        raw_line = lines[idx]
         if ":" not in raw_line:
+            idx += 1
             continue
 
         key, value = raw_line.split(":", 1)
         key = key.strip().upper()
         value = value.lstrip()
 
-        if key == "BODY":
-            in_body = True
-            if value:
-                body_lines.append(value)
+        if key not in PLACEHOLDER_KEY_SET:
+            idx += 1
             continue
 
-        if key in PLACEHOLDER_KEY_SET:
-            data[key] = value
+        if key in {"BODY", "INTRO"}:
+            collected: list[str] = []
+            if value:
+                collected.append(value)
+            idx += 1
+            while idx < len(lines):
+                next_line = lines[idx]
+                if ":" in next_line:
+                    next_key = next_line.split(":", 1)[0].strip().upper()
+                    if next_key in PLACEHOLDER_KEY_SET:
+                        break
+                collected.append(next_line)
+                idx += 1
+            data[key] = "\n".join(collected).rstrip()
+            continue
 
-    if in_body:
-        data["BODY"] = "\n".join(body_lines).rstrip()
-    else:
-        data.setdefault("BODY", "")
+        data[key] = value
+        idx += 1
+
+    data.setdefault("BODY", "")
+    data.setdefault("INTRO", "")
 
     return data
 
@@ -157,6 +167,13 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
     ensure_hyperlink_style(doc)
 
     for paragraph in list(doc.paragraphs):
+        if "{{INTRO}}" in paragraph.text:
+            intro = data.get("INTRO", "")
+            if not intro and paragraph.text.strip() == "{{INTRO}}":
+                remove_paragraph(paragraph)
+                continue
+            replace_body_paragraph(paragraph, intro)
+            continue
         if "{{BODY}}" in paragraph.text:
             replace_body_paragraph(paragraph, data.get("BODY", ""))
             continue

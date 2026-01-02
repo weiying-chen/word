@@ -11,6 +11,7 @@ from docx import Document
 LABEL_MAP = {
     "建議YT標題": "YT_TITLE_SUGGESTED",
     "建議標題": "TITLE_SUGGESTED",
+    "簡介": "INTRO",
     "選圖": "THUMBNAIL",
 }
 
@@ -29,24 +30,32 @@ def parse_source_txt(path: Path) -> tuple[dict[str, str], str]:
     body_lines: list[str] = []
     idx = 0
 
+    def is_label_line(raw: str) -> bool:
+        stripped = raw.strip()
+        if not stripped.endswith("："):
+            return False
+        label = stripped[:-1]
+        return label in LABEL_MAP or label == "字幕"
+
     while idx < len(lines):
         line = lines[idx].strip()
-        if line.endswith("："):
-            label = line[:-1]
+        if not line.endswith("："):
             idx += 1
-            collected = []
-            while idx < len(lines) and lines[idx].strip() != "":
-                collected.append(lines[idx])
-                idx += 1
-            if label in LABEL_MAP:
-                fields[LABEL_MAP[label]] = "\n".join(collected).strip()
-            while idx < len(lines) and lines[idx].strip() == "":
-                idx += 1
-            if label == "字幕":
-                body_lines = lines[idx:]
-                break
-        else:
+            continue
+
+        label = line[:-1]
+        if label == "字幕":
+            body_lines = lines[idx + 1 :]
+            break
+
+        idx += 1
+        collected = []
+        while idx < len(lines) and not is_label_line(lines[idx]):
+            collected.append(lines[idx])
             idx += 1
+
+        if label in LABEL_MAP:
+            fields[LABEL_MAP[label]] = "\n".join(collected).strip("\n")
 
     while body_lines and body_lines[0].strip() == "":
         body_lines.pop(0)
@@ -64,6 +73,8 @@ def write_input(
     fields: dict[str, str],
     body: str,
 ) -> None:
+    intro = fields.get("INTRO", "")
+    intro_lines = intro.splitlines() if intro else [""]
     output_path.write_text(
         "\n".join(
             [
@@ -73,6 +84,8 @@ def write_input(
                 "",
                 f"YT_TITLE_SUGGESTED: {fields.get('YT_TITLE_SUGGESTED', '')}",
                 f"TITLE_SUGGESTED: {fields.get('TITLE_SUGGESTED', '')}",
+                "INTRO:",
+                *intro_lines,
                 f"THUMBNAIL: {fields.get('THUMBNAIL', '')}",
                 "",
                 f"TIME_RANGE: {time_range}",
