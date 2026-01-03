@@ -1,4 +1,4 @@
-TITLE: 心靈講座 - 孝為人本 徐若瑄的感恩宣言
+TITLE:
 URL: https://youtu.be/DfUFWBoqlEU?si=sfcJFzyyRn8gq6r7
 SUMMARY: 本集來賓邀請徐若瑄與張琇雅女士暢談行善做公益與孝道。 徐若瑄談到媽媽年輕時是如何辛苦養育三位子女長大成人，自己第一次賺錢交給母親的那分喜悅，初踏演藝圈的辛苦。張秀雅女士則談到自己從事公益是受到父母的影響，期望自己能一直持續下去。另外徐若瑄的姊姊也分享了當徐若瑄的助理的那五年的點點滴滴。
 
@@ -6,9 +6,6 @@ YT_TITLE_SUGGESTED: (孝為人本 徐若瑄的感恩宣言- 徐若瑄 [1])
 TITLE_SUGGESTED: 孝為人本 徐若瑄的感恩宣言
 
 INTRO:
-Do you have a stable career path but still feel lost inside? Parenting educator Wei-zhi Wei shares how discovering your talents, passions, and the value you create can lead you to your true life purpose.
-
-你是否以為，只要走在穩定的人生道路上就能獲得滿足，卻仍在內心感到迷惘？親職教育講師魏瑋志（澤爸）分享如何透過探索天賦、熱忱與創造價值，找到人生真正的方向。
 
 THUMBNAIL: thumbnail.png
 
@@ -30,9 +27,9 @@ with humility and kindness,
 00:11:45:02	00:11:46:15	因為我發現
 with humility and kindness,
 00:11:46:15	00:11:48:10	有時候我們慢慢大了
-because as we grow older, 
+because as we grow older,
 00:11:48:10	00:11:49:18	很容易不知不覺
-because as we grow older, 
+because as we grow older,
 00:11:49:18	00:11:52:23	因為說話讓父母傷心
 we can easily hurt our parents without realizing it.
 00:11:52:23	00:11:53:22	類似這樣子的
@@ -41,9 +38,9 @@ we can easily hurt our parents without realizing it.
 00:11:53:22	00:11:56:23	我覺得這一本書很好
 I think this book is really good.
 00:11:56:23	00:11:57:29	我看到這一段的時候
-When I read this part, it hit me because sometimes 
+When I read this part, it hit me because sometimes
 00:11:57:29	00:12:00:17	因為有時候自己工作很忙
-When I read this part, it hit me because sometimes 
+When I read this part, it hit me because sometimes
 00:12:00:17	00:12:02:08	或有時候我在寫歌
 I get so busy with work or writing songs
 00:12:02:08	00:12:03:20	一寫就十幾個小時
