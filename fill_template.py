@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import re
+import zipfile
 from pathlib import Path
 
 from docx import Document
@@ -171,6 +173,43 @@ def _get_section_metrics(doc: Document):
     }
 
 
+def _normalize_document_namespace(xml_text: str) -> str:
+    match = re.search(r"<w:document[^>]*>", xml_text)
+    if not match:
+        return xml_text
+    tag = match.group(0)
+    if "ns1:Ignorable" not in tag:
+        return xml_text
+    new_tag = (
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+        'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" '
+        'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" '
+        'xmlns:w16se="http://schemas.microsoft.com/office/word/2015/wordml/symex" '
+        'xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" '
+        'mc:Ignorable="w14 w15 w16se wp14">'
+    )
+    return xml_text.replace(tag, new_tag, 1)
+
+
+def fix_docx_namespaces(path: Path) -> None:
+    with zipfile.ZipFile(path, "r") as zin:
+        xml_text = zin.read("word/document.xml").decode("utf-8")
+        fixed_text = _normalize_document_namespace(xml_text)
+        if fixed_text == xml_text:
+            return
+
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        with zipfile.ZipFile(tmp_path, "w") as zout:
+            for info in zin.infolist():
+                data = zin.read(info.filename)
+                if info.filename == "word/document.xml":
+                    data = fixed_text.encode("utf-8")
+                zout.writestr(info, data)
+
+    tmp_path.replace(path)
+
+
 def fill_template(template_path: Path, input_path: Path, output_path: Path) -> None:
     data = parse_input(input_path)
     input_base = input_path.parent
@@ -224,6 +263,7 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
                 break
 
     doc.save(str(output_path))
+    fix_docx_namespaces(output_path)
 
 
 def main() -> None:
