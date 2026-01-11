@@ -227,7 +227,11 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
             replace_body_paragraph(paragraph, intro)
             continue
         if "{{BODY}}" in paragraph.text:
-            replace_body_paragraph(paragraph, data.get("BODY", ""))
+            body = data.get("BODY", "")
+            if not body and paragraph.text.strip() == "{{BODY}}":
+                remove_paragraph(paragraph)
+                continue
+            replace_body_paragraph(paragraph, body)
             continue
 
         for key in PLACEHOLDER_KEYS:
