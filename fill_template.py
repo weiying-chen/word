@@ -9,12 +9,12 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.text.paragraph import Paragraph
 from docx.oxml.ns import qn
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
-from docx.shared import RGBColor, Inches
+from docx.shared import RGBColor, Inches, Pt
 
 
 PLACEHOLDER_KEYS = [
@@ -29,6 +29,10 @@ PLACEHOLDER_KEYS = [
     "BODY",
 ]
 PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
+SOURCE_URL_RE = re.compile(r"^https?://\S+")
+TIME_RANGE_LINE_RE = re.compile(
+    r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
+)
 
 
 def parse_input(path: Path) -> dict[str, str]:
@@ -90,16 +94,48 @@ def insert_paragraph_after(paragraph, text: str):
     return new_para
 
 
-def replace_body_paragraph(paragraph, body_text: str) -> None:
+def replace_body_paragraph(paragraph, body_text: str, source_style: str | None = None) -> None:
     lines = body_text.splitlines() if body_text else []
     paragraph.text = ""
     if not lines:
         return
 
-    paragraph.add_run(lines[0])
     current = paragraph
-    for line in lines[1:]:
-        current = insert_paragraph_after(current, line)
+    in_source_block = False
+
+    def write_line(target, text: str, source_line: bool, is_url: bool) -> None:
+        if not text:
+            return
+        if source_line and source_style:
+            add_source_prefix(target)
+            if is_url:
+                add_source_hyperlink(target, text, text)
+                return
+            run = target.add_run()
+            run.style = source_style
+            run.font.size = Pt(10)
+            run.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
+            run.add_text(text)
+        else:
+            target.add_run(text)
+
+    for idx, line in enumerate(lines):
+        if idx > 0:
+            current = insert_paragraph_after(current, "")
+
+        if TIME_RANGE_LINE_RE.match(line):
+            in_source_block = False
+
+        is_url = SOURCE_URL_RE.match(line)
+        if is_url:
+            in_source_block = True
+
+        write_line(
+            current,
+            line,
+            in_source_block and not TIME_RANGE_LINE_RE.match(line),
+            bool(is_url),
+        )
 
 
 def remove_paragraph(paragraph) -> None:
@@ -140,6 +176,46 @@ def add_hyperlink(paragraph, text: str, url: str) -> None:
     paragraph._p.append(hyperlink)
 
 
+def add_source_prefix(paragraph) -> None:
+    run = paragraph.add_run()
+    run.add_tab()
+
+
+def add_source_hyperlink(paragraph, text: str, url: str) -> None:
+
+    part = paragraph.part
+    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+
+    h_run = OxmlElement("w:r")
+    r_pr = OxmlElement("w:rPr")
+    r_style = OxmlElement("w:rStyle")
+    r_style.set(qn("w:val"), "Hyperlink")
+    r_pr.append(r_style)
+    r_color = OxmlElement("w:color")
+    r_color.set(qn("w:val"), "0563C1")
+    r_pr.append(r_color)
+    r_highlight = OxmlElement("w:highlight")
+    r_highlight.set(qn("w:val"), "cyan")
+    r_pr.append(r_highlight)
+    r_sz = OxmlElement("w:sz")
+    r_sz.set(qn("w:val"), "20")
+    r_pr.append(r_sz)
+    r_u = OxmlElement("w:u")
+    r_u.set(qn("w:val"), "single")
+    r_pr.append(r_u)
+    h_run.append(r_pr)
+
+    t = OxmlElement("w:t")
+    t.text = text
+    h_run.append(t)
+
+    hyperlink.append(h_run)
+    paragraph._p.append(hyperlink)
+
+
 def ensure_time_range_style(doc: Document):
     style_name = "TimeRange"
     styles = doc.styles
@@ -160,6 +236,18 @@ def ensure_hyperlink_style(doc: Document):
         style = styles.add_style(style_name, WD_STYLE_TYPE.CHARACTER)
     style.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
     style.font.underline = True
+    return style_name
+
+
+def ensure_source_style(doc: Document):
+    style_name = "SourceBlock"
+    styles = doc.styles
+    if style_name in [s.name for s in styles]:
+        style = styles[style_name]
+    else:
+        style = styles.add_style(style_name, WD_STYLE_TYPE.CHARACTER)
+    style.font.size = Pt(10)
+    style.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
     return style_name
 
 
@@ -216,6 +304,7 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
     doc = Document(str(template_path))
     time_range_style = ensure_time_range_style(doc)
     ensure_hyperlink_style(doc)
+    source_style = ensure_source_style(doc)
     metrics = _get_section_metrics(doc)
 
     for paragraph in list(doc.paragraphs):
@@ -231,7 +320,7 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
             if not body and paragraph.text.strip() == "{{BODY}}":
                 remove_paragraph(paragraph)
                 continue
-            replace_body_paragraph(paragraph, body)
+            replace_body_paragraph(paragraph, body, source_style=source_style)
             continue
 
         for key in PLACEHOLDER_KEYS:
