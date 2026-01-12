@@ -53,7 +53,7 @@ def parse_input(path: Path) -> dict[str, str]:
             idx += 1
             continue
 
-        if key in {"BODY", "INTRO"}:
+        if key in {"BODY", "INTRO", "SUMMARY"}:
             collected: list[str] = []
             if value:
                 collected.append(value)
@@ -74,6 +74,7 @@ def parse_input(path: Path) -> dict[str, str]:
 
     data.setdefault("BODY", "")
     data.setdefault("INTRO", "")
+    data.setdefault("SUMMARY", "")
 
     return data
 
@@ -314,6 +315,13 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
                 remove_paragraph(paragraph)
                 continue
             replace_body_paragraph(paragraph, intro)
+            continue
+        if "{{SUMMARY}}" in paragraph.text:
+            summary = data.get("SUMMARY", "")
+            if not summary and paragraph.text.strip() == "{{SUMMARY}}":
+                remove_paragraph(paragraph)
+                continue
+            replace_body_paragraph(paragraph, summary, source_style=source_style)
             continue
         if "{{BODY}}" in paragraph.text:
             body = data.get("BODY", "")
