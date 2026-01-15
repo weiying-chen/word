@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import unicodedata
 import zipfile
 from pathlib import Path
 
@@ -33,6 +34,7 @@ SOURCE_URL_RE = re.compile(r"^https?://\S+")
 TIME_RANGE_LINE_RE = re.compile(
     r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
+SYMBOL_FONT_NAME = "Microsoft JhengHei"
 
 
 def parse_input(path: Path) -> dict[str, str]:
@@ -79,11 +81,36 @@ def parse_input(path: Path) -> dict[str, str]:
     return data
 
 
+def _run_contains_symbol(text: str) -> bool:
+    return any(unicodedata.category(char).startswith("S") for char in text)
+
+
+def _set_run_font(run, font_name: str) -> None:
+    run.font.name = font_name
+    r_pr = run._element.get_or_add_rPr()
+    r_fonts = r_pr.get_or_add_rFonts()
+    r_fonts.set(qn("w:ascii"), font_name)
+    r_fonts.set(qn("w:hAnsi"), font_name)
+    r_fonts.set(qn("w:eastAsia"), font_name)
+    r_fonts.set(qn("w:cs"), font_name)
+
+
+def apply_symbol_font(run) -> None:
+    if run.text and _run_contains_symbol(run.text):
+        _set_run_font(run, SYMBOL_FONT_NAME)
+
+
+def apply_symbol_fonts_in_paragraph(paragraph) -> None:
+    for run in paragraph.runs:
+        apply_symbol_font(run)
+
+
 def replace_placeholder(paragraph, placeholder: str, value: str) -> bool:
     if placeholder not in paragraph.text:
         return False
 
     paragraph.text = paragraph.text.replace(placeholder, value)
+    apply_symbol_fonts_in_paragraph(paragraph)
     return True
 
 
@@ -91,11 +118,12 @@ def insert_paragraph_after(paragraph, text: str):
     new_p = OxmlElement("w:p")
     paragraph._p.addnext(new_p)
     new_para = Paragraph(new_p, paragraph._parent)
-    new_para.add_run(text)
+    run = new_para.add_run(text)
+    apply_symbol_font(run)
     return new_para
 
 
-def replace_body_paragraph(paragraph, body_text: str, source_style: str | None = None) -> None:
+def replace_body_paragraph(paragraph, body_text: str) -> None:
     lines = body_text.splitlines() if body_text else []
     paragraph.text = ""
     if not lines:
@@ -107,18 +135,19 @@ def replace_body_paragraph(paragraph, body_text: str, source_style: str | None =
     def write_line(target, text: str, source_line: bool, is_url: bool) -> None:
         if not text:
             return
-        if source_line and source_style:
+        if source_line:
             add_source_prefix(target)
             if is_url:
                 add_source_hyperlink(target, text, text)
                 return
             run = target.add_run()
-            run.style = source_style
             run.font.size = Pt(10)
             run.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
             run.add_text(text)
+            apply_symbol_font(run)
         else:
-            target.add_run(text)
+            run = target.add_run(text)
+            apply_symbol_font(run)
 
     for idx, line in enumerate(lines):
         if idx > 0:
@@ -240,18 +269,6 @@ def ensure_hyperlink_style(doc: Document):
     return style_name
 
 
-def ensure_source_style(doc: Document):
-    style_name = "SourceBlock"
-    styles = doc.styles
-    if style_name in [s.name for s in styles]:
-        style = styles[style_name]
-    else:
-        style = styles.add_style(style_name, WD_STYLE_TYPE.CHARACTER)
-    style.font.size = Pt(10)
-    style.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
-    return style_name
-
-
 def _get_section_metrics(doc: Document):
     section = doc.sections[0]
     return {
@@ -305,7 +322,6 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
     doc = Document(str(template_path))
     time_range_style = ensure_time_range_style(doc)
     ensure_hyperlink_style(doc)
-    source_style = ensure_source_style(doc)
     metrics = _get_section_metrics(doc)
 
     for paragraph in list(doc.paragraphs):
@@ -321,14 +337,14 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
             if not summary and paragraph.text.strip() == "{{SUMMARY}}":
                 remove_paragraph(paragraph)
                 continue
-            replace_body_paragraph(paragraph, summary, source_style=source_style)
+            replace_body_paragraph(paragraph, summary)
             continue
         if "{{BODY}}" in paragraph.text:
             body = data.get("BODY", "")
             if not body and paragraph.text.strip() == "{{BODY}}":
                 remove_paragraph(paragraph)
                 continue
-            replace_body_paragraph(paragraph, body, source_style=source_style)
+            replace_body_paragraph(paragraph, body)
             continue
 
         for key in PLACEHOLDER_KEYS:
