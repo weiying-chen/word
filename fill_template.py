@@ -125,9 +125,15 @@ def insert_paragraph_after(paragraph, text: str):
     return new_para
 
 
-def replace_body_paragraph(paragraph, body_text: str) -> None:
+def replace_body_paragraph(
+    paragraph, body_text: str, source_indent_inches: float
+) -> None:
     lines = body_text.splitlines() if body_text else []
     paragraph.text = ""
+    if not lines:
+        return
+    while lines and not lines[0].strip():
+        lines.pop(0)
     if not lines:
         return
 
@@ -138,7 +144,7 @@ def replace_body_paragraph(paragraph, body_text: str) -> None:
         if not text:
             return
         if source_line:
-            add_source_prefix(target)
+            add_source_prefix(target, source_indent_inches)
             if is_url:
                 add_source_hyperlink(target, text, text)
                 return
@@ -208,9 +214,9 @@ def add_hyperlink(paragraph, text: str, url: str) -> None:
     paragraph._p.append(hyperlink)
 
 
-def add_source_prefix(paragraph) -> None:
-    run = paragraph.add_run()
-    run.add_tab()
+def add_source_prefix(paragraph, indent_inches: float) -> None:
+    paragraph.paragraph_format.left_indent = Inches(indent_inches)
+    paragraph.paragraph_format.first_line_indent = 0
 
 
 def add_source_hyperlink(paragraph, text: str, url: str) -> None:
@@ -281,6 +287,17 @@ def _get_section_metrics(doc: Document):
     }
 
 
+def get_default_tab_stop_inches(doc: Document) -> float:
+    settings = doc.part.settings.element
+    node = settings.find(qn("w:defaultTabStop"))
+    if node is None:
+        return 0.5
+    value = node.get(qn("w:val"))
+    if not value:
+        return 0.5
+    return int(value) / 1440
+
+
 def apply_default_margins(doc: Document) -> None:
     for section in doc.sections:
         section.top_margin = Inches(1.0)
@@ -333,6 +350,7 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
     apply_default_margins(doc)
     time_range_style = ensure_time_range_style(doc)
     ensure_hyperlink_style(doc)
+    source_indent_inches = get_default_tab_stop_inches(doc)
     metrics = _get_section_metrics(doc)
 
     for paragraph in list(doc.paragraphs):
@@ -341,21 +359,21 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
             if not intro and paragraph.text.strip() == "{{INTRO}}":
                 remove_paragraph(paragraph)
                 continue
-            replace_body_paragraph(paragraph, intro)
+            replace_body_paragraph(paragraph, intro, source_indent_inches)
             continue
         if "{{SUMMARY}}" in paragraph.text:
             summary = data.get("SUMMARY", "")
             if not summary and paragraph.text.strip() == "{{SUMMARY}}":
                 remove_paragraph(paragraph)
                 continue
-            replace_body_paragraph(paragraph, summary)
+            replace_body_paragraph(paragraph, summary, source_indent_inches)
             continue
         if "{{BODY}}" in paragraph.text:
             body = data.get("BODY", "")
             if not body and paragraph.text.strip() == "{{BODY}}":
                 remove_paragraph(paragraph)
                 continue
-            replace_body_paragraph(paragraph, body)
+            replace_body_paragraph(paragraph, body, source_indent_inches)
             continue
 
         for key in PLACEHOLDER_KEYS:
