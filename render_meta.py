@@ -9,6 +9,7 @@ from pathlib import Path
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.text.paragraph import Paragraph
+from docx.shared import Inches
 
 
 TITLE_PLACEHOLDER = "{{TITLE_EN}}"
@@ -70,9 +71,18 @@ def build_people_lines(people: list[dict]) -> list[str]:
     return lines
 
 
+def apply_default_margins(doc: Document) -> None:
+    for section in doc.sections:
+        section.top_margin = Inches(1.0)
+        section.bottom_margin = Inches(1.0)
+        section.left_margin = Inches(1.25)
+        section.right_margin = Inches(1.25)
+
+
 def render_meta(template_path: Path, payload_path: Path, output_path: Path) -> None:
     data = load_payload(payload_path)
     doc = Document(str(template_path))
+    apply_default_margins(doc)
 
     title_placeholder = find_paragraph_by_text(doc, TITLE_PLACEHOLDER)
     if title_placeholder:

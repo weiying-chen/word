@@ -281,6 +281,14 @@ def _get_section_metrics(doc: Document):
     }
 
 
+def apply_default_margins(doc: Document) -> None:
+    for section in doc.sections:
+        section.top_margin = Inches(1.0)
+        section.bottom_margin = Inches(1.0)
+        section.left_margin = Inches(1.25)
+        section.right_margin = Inches(1.25)
+
+
 def _normalize_document_namespace(xml_text: str) -> str:
     match = re.search(r"<w:document[^>]*>", xml_text)
     if not match:
@@ -322,6 +330,7 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
     data = parse_input(input_path)
     input_base = input_path.parent
     doc = Document(str(template_path))
+    apply_default_margins(doc)
     time_range_style = ensure_time_range_style(doc)
     ensure_hyperlink_style(doc)
     metrics = _get_section_metrics(doc)
