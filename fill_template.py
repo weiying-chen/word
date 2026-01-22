@@ -34,7 +34,7 @@ SOURCE_URL_RE = re.compile(r"^https?://\S+")
 TIME_RANGE_LINE_RE = re.compile(
     r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
-SYMBOL_FONT_NAME = "Microsoft JhengHei"
+SYMBOL_FONT_NAME = ""
 
 
 def parse_input(path: Path) -> dict[str, str]:
@@ -96,6 +96,8 @@ def _set_run_font(run, font_name: str) -> None:
 
 
 def apply_symbol_font(run) -> None:
+    if not SYMBOL_FONT_NAME:
+        return
     if run.text and _run_contains_symbol(run.text):
         _set_run_font(run, SYMBOL_FONT_NAME)
 
