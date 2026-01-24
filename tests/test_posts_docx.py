@@ -58,12 +58,12 @@ def test_generated_docx_is_well_formed(tmp_path: Path) -> None:
     output_path = output_paths[0]
     doc = Document(str(output_path))
     texts = [p.text for p in doc.paragraphs if p.text.strip()]
-    assert texts[0] == "Program - Test Title st/rc"
+    assert texts[0] == "Program - Test Title"
     assert texts[1] == "https://example.com/video"
     assert texts[2] == "https://example.com/news"
     assert texts[3] == "News title"
     assert texts[4] == "https://example.com/video"
-    assert texts[5] == "Program - Test Title st/rc"
+    assert texts[5] == "Program - Test Title"
     with zipfile.ZipFile(output_path) as zf:
         xml_text = zf.read("word/document.xml")
     ET.fromstring(xml_text)

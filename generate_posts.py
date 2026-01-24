@@ -36,6 +36,10 @@ def normalize_title(title_line: str) -> str:
     return title
 
 
+def _clean_title_for_display(title_line: str) -> str:
+    return TRANSLATOR_TAG_RE.sub("", title_line).strip()
+
+
 def _extract_reference(lines: list[str], start_idx: int) -> tuple[str, str]:
     for idx in range(start_idx, len(lines)):
         line = lines[idx]
@@ -79,10 +83,10 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
             entries.append(
                 {
                     "filename_title": normalize_title(title_line),
-                    "header_title": title_line,
+                    "header_title": _clean_title_for_display(title_line),
                     "header_url": url_line,
                     "video_url": url_line,
-                    "video_title": title_line,
+                    "video_title": _clean_title_for_display(title_line),
                     "ref_url": ref_url,
                     "ref_title": ref_title,
                 }
