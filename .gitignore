@@ -2,3 +2,4 @@ output.docx
 !templates/post_template.docx
 __pycache__/
 *.pyc
+outputs/
