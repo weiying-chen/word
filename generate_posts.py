@@ -31,10 +31,14 @@ def normalize_title(title_line: str) -> str:
     return title
 
 
-def extract_post_titles(schedule_path: Path) -> list[str]:
+def _clean_header_title(title_line: str) -> str:
+    return TRANSLATOR_TAG_RE.sub("", title_line).strip()
+
+
+def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
     doc = Document(str(schedule_path))
     lines = iter_non_empty_paragraphs(doc)
-    titles: list[str] = []
+    entries: list[dict[str, str]] = []
     in_program_section = False
 
     for idx, line in enumerate(lines):
@@ -54,17 +58,33 @@ def extract_post_titles(schedule_path: Path) -> list[str]:
         if idx + 1 >= len(lines):
             continue
         title_line = lines[idx + 1]
+        url_line = lines[idx + 2] if idx + 2 < len(lines) else ""
+        if not url_line.startswith("http"):
+            url_line = ""
         if person == "alex":
-            titles.append(normalize_title(title_line))
+            entries.append(
+                {
+                    "filename_title": normalize_title(title_line),
+                    "header_title": _clean_header_title(title_line),
+                    "header_url": url_line,
+                }
+            )
 
-    return titles
+    return entries
 
 
-def clear_document(doc: Document) -> None:
-    for paragraph in list(doc.paragraphs):
-        element = paragraph._element
-        element.getparent().remove(element)
-    doc.add_paragraph("")
+def extract_post_titles(schedule_path: Path) -> list[str]:
+    return [entry["filename_title"] for entry in extract_post_entries(schedule_path)]
+
+
+def replace_placeholders(doc: Document, mapping: dict[str, str]) -> None:
+    for paragraph in doc.paragraphs:
+        text = paragraph.text
+        for placeholder, value in mapping.items():
+            if placeholder in text:
+                text = text.replace(placeholder, value)
+        if text != paragraph.text:
+            paragraph.text = text
 
 
 def make_unique_path(base: Path) -> Path:
@@ -87,13 +107,19 @@ def generate_docs(
     filename_prefix: str,
     filename_suffix: str,
 ) -> list[Path]:
-    titles = extract_post_titles(schedule_path)
+    entries = extract_post_entries(schedule_path)
     output_paths: list[Path] = []
-    for title in titles:
-        filename = f"{filename_prefix}{title}{filename_suffix}.docx"
+    for entry in entries:
+        filename = f"{filename_prefix}{entry['filename_title']}{filename_suffix}.docx"
         output_path = make_unique_path(output_dir / filename)
         doc = Document(str(template_path))
-        clear_document(doc)
+        replace_placeholders(
+            doc,
+            {
+                "{{HEADER_TITLE}}": entry["header_title"],
+                "{{HEADER_URL}}": entry["header_url"],
+            },
+        )
         doc.save(str(output_path))
         output_paths.append(output_path)
     return output_paths
