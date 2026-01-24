@@ -1,4 +1,4 @@
 output.docx
-!templates/output.docx
+!templates/post_template.docx
 __pycache__/
 *.pyc

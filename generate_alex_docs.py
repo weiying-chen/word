@@ -110,7 +110,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--template",
-        default="templates/output.docx",
+        default="templates/post_template.docx",
         help="Path to the base DOCX template with shared styles.",
     )
     parser.add_argument(
