@@ -73,7 +73,9 @@ def find_thumbnail_anchor(root: ET.Element, label_idx: int, next_label_idx: int,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify generated output.docx.")
-    parser.add_argument("--output", default="output.docx", help="Generated docx.")
+    parser.add_argument(
+        "--output", default="outputs/output.docx", help="Generated docx."
+    )
     args = parser.parse_args()
 
     output_path = Path(args.output)

@@ -103,7 +103,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Render meta.docx from JSON data.")
     parser.add_argument(
         "--template",
-        default="meta_template.docx",
+        default="templates/meta_template.docx",
         help="Path to the meta DOCX template.",
     )
     parser.add_argument(
@@ -113,7 +113,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default="meta.docx",
+        default="outputs/meta.docx",
         help="Path to write the rendered meta DOCX.",
     )
     args = parser.parse_args()
