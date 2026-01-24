@@ -31,7 +31,7 @@ def normalize_title(title_line: str) -> str:
     return title
 
 
-def extract_alex_titles(schedule_path: Path) -> list[str]:
+def extract_post_titles(schedule_path: Path) -> list[str]:
     doc = Document(str(schedule_path))
     lines = iter_non_empty_paragraphs(doc)
     titles: list[str] = []
@@ -87,7 +87,7 @@ def generate_docs(
     filename_prefix: str,
     filename_suffix: str,
 ) -> list[Path]:
-    titles = extract_alex_titles(schedule_path)
+    titles = extract_post_titles(schedule_path)
     output_paths: list[Path] = []
     for title in titles:
         filename = f"{filename_prefix}{title}{filename_suffix}.docx"
@@ -101,7 +101,7 @@ def generate_docs(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate empty docs for alex entries from a schedule DOCX."
+        description="Generate empty post docs from alex entries in a schedule DOCX."
     )
     parser.add_argument(
         "--schedule",

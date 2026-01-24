@@ -5,7 +5,7 @@ from docx import Document
 import zipfile
 import xml.etree.ElementTree as ET
 
-from generate_alex_docs import extract_alex_titles, generate_docs, normalize_title
+from generate_posts import extract_post_titles, generate_docs, normalize_title
 
 
 def _write_docx(path: Path, paragraphs: list[str]) -> None:
@@ -20,7 +20,7 @@ def test_normalize_title_strips_translator_tag() -> None:
     assert normalize_title(title) == "大愛醫生館 怎麼坐才算有“坐相”？"
 
 
-def test_extract_alex_titles_from_schedule(tmp_path: Path) -> None:
+def test_extract_post_titles_from_schedule(tmp_path: Path) -> None:
     schedule_path = tmp_path / "schedule.docx"
     _write_docx(
         schedule_path,
@@ -43,7 +43,7 @@ def test_extract_alex_titles_from_schedule(tmp_path: Path) -> None:
         ],
     )
 
-    titles = extract_alex_titles(schedule_path)
+    titles = extract_post_titles(schedule_path)
     assert titles == [
         "大愛醫生館 怎麼坐才算有“坐相”？",
         "大愛真健康 5分鐘高效有氧 | 上下肢肌耐力 | 肩腿| 背腿 | 核心",
