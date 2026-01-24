@@ -7,6 +7,11 @@ import re
 from pathlib import Path
 
 from docx import Document
+from docx.enum.text import WD_COLOR_INDEX
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.shared import Pt
 
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
@@ -31,8 +36,16 @@ def normalize_title(title_line: str) -> str:
     return title
 
 
-def _clean_header_title(title_line: str) -> str:
-    return TRANSLATOR_TAG_RE.sub("", title_line).strip()
+def _extract_reference(lines: list[str], start_idx: int) -> tuple[str, str]:
+    for idx in range(start_idx, len(lines)):
+        line = lines[idx]
+        if PERSON_LINE_RE.match(line) or STOP_SECTION_RE.match(line):
+            break
+        if line.strip() == "搭配":
+            ref_url = lines[idx + 1] if idx + 1 < len(lines) else ""
+            ref_title = lines[idx + 2] if idx + 2 < len(lines) else ""
+            return ref_url, ref_title
+    return "", ""
 
 
 def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
@@ -62,11 +75,16 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
         if not url_line.startswith("http"):
             url_line = ""
         if person == "alex":
+            ref_url, ref_title = _extract_reference(lines, idx + 1)
             entries.append(
                 {
                     "filename_title": normalize_title(title_line),
-                    "header_title": _clean_header_title(title_line),
+                    "header_title": title_line,
                     "header_url": url_line,
+                    "video_url": url_line,
+                    "video_title": title_line,
+                    "ref_url": ref_url,
+                    "ref_title": ref_title,
                 }
             )
 
@@ -77,12 +95,71 @@ def extract_post_titles(schedule_path: Path) -> list[str]:
     return [entry["filename_title"] for entry in extract_post_entries(schedule_path)]
 
 
+def clear_paragraph(paragraph) -> None:
+    for run in paragraph.runs:
+        run._element.getparent().remove(run._element)
+
+
+def add_highlighted_run(paragraph, text: str) -> None:
+    run = paragraph.add_run(text)
+    run.font.size = Pt(10)
+    run.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
+
+
+def add_highlighted_hyperlink(paragraph, text: str, url: str) -> None:
+    part = paragraph.part
+    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+
+    h_run = OxmlElement("w:r")
+    r_pr = OxmlElement("w:rPr")
+    r_style = OxmlElement("w:rStyle")
+    r_style.set(qn("w:val"), "Hyperlink")
+    r_pr.append(r_style)
+    r_color = OxmlElement("w:color")
+    r_color.set(qn("w:val"), "0563C1")
+    r_pr.append(r_color)
+    r_highlight = OxmlElement("w:highlight")
+    r_highlight.set(qn("w:val"), "cyan")
+    r_pr.append(r_highlight)
+    r_sz = OxmlElement("w:sz")
+    r_sz.set(qn("w:val"), "20")
+    r_pr.append(r_sz)
+    r_u = OxmlElement("w:u")
+    r_u.set(qn("w:val"), "single")
+    r_pr.append(r_u)
+    h_run.append(r_pr)
+
+    t = OxmlElement("w:t")
+    t.text = text
+    h_run.append(t)
+
+    hyperlink.append(h_run)
+    paragraph._p.append(hyperlink)
+
+
 def replace_placeholders(doc: Document, mapping: dict[str, str]) -> None:
+    highlight_keys = {"{{REF_TITLE}}", "{{VIDEO_TITLE}}"}
+    hyperlink_keys = {"{{HEADER_URL}}", "{{REF_URL}}", "{{VIDEO_URL}}"}
+
     for paragraph in doc.paragraphs:
         text = paragraph.text
         for placeholder, value in mapping.items():
-            if placeholder in text:
-                text = text.replace(placeholder, value)
+            if placeholder not in text:
+                continue
+            if placeholder in hyperlink_keys and value:
+                clear_paragraph(paragraph)
+                add_highlighted_hyperlink(paragraph, value, value)
+                text = paragraph.text
+                continue
+            if placeholder in highlight_keys and value:
+                clear_paragraph(paragraph)
+                add_highlighted_run(paragraph, value)
+                text = paragraph.text
+                continue
+            text = text.replace(placeholder, value)
         if text != paragraph.text:
             paragraph.text = text
 
@@ -118,6 +195,10 @@ def generate_docs(
             {
                 "{{HEADER_TITLE}}": entry["header_title"],
                 "{{HEADER_URL}}": entry["header_url"],
+                "{{REF_URL}}": entry["ref_url"],
+                "{{REF_TITLE}}": entry["ref_title"],
+                "{{VIDEO_URL}}": entry["video_url"],
+                "{{VIDEO_TITLE}}": entry["video_title"],
             },
         )
         doc.save(str(output_path))
