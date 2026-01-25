@@ -215,9 +215,13 @@ def replace_placeholders(
         "{{VIDEO_DESC_EN}}",
         "{{VIDEO_DESC_ZH}}",
     }
+    indent_labels = {"參考資料：", "英文翻譯：", "要用的影片："}
 
     for paragraph in doc.paragraphs:
         text = paragraph.text
+        if text.strip() in indent_labels:
+            paragraph.paragraph_format.left_indent = Inches(indent_inches)
+            paragraph.paragraph_format.first_line_indent = 0
         for placeholder, value in mapping.items():
             if placeholder not in text:
                 continue
