@@ -2,7 +2,7 @@ from pathlib import Path
 
 from docx import Document
 
-from generate_posts import extract_post_titles, normalize_title
+from generate_posts import extract_post_titles, normalize_title, _build_hashtags
 
 
 def _write_docx(path: Path, paragraphs: list[str]) -> None:
@@ -45,3 +45,10 @@ def test_extract_post_titles_from_schedule(tmp_path: Path) -> None:
         "大愛醫生館 怎麼坐才算有“坐相”？",
         "大愛真健康 5分鐘高效有氧 | 上下肢肌耐力 | 肩腿| 背腿 | 核心",
     ]
+
+
+def test_build_hashtags_strips_quotes_and_spaces() -> None:
+    program = "大愛醫生館"
+    title = "怎麼坐才算有“坐相”？"
+    assert _build_hashtags(program, title, pascal_case=False) == "#大愛醫生館 #怎麼坐才算有坐相"
+    assert _build_hashtags(program, title, pascal_case=True) == "#大愛醫生館 #怎麼坐才算有坐相"

@@ -18,6 +18,8 @@ PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
 PROGRAM_SECTION_RE = re.compile(r"^節目.*則")
 STOP_SECTION_RE = re.compile(r"^(?:-+|FB小編文|本周節日)")
 TRANSLATOR_TAG_RE = re.compile(r"\s*[A-Za-z]+/[A-Za-z]+\s*$")
+CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+QUOTE_CHARS = "\"'“”‘’"
 
 
 def iter_non_empty_paragraphs(doc: Document) -> list[str]:
@@ -38,6 +40,41 @@ def normalize_title(title_line: str) -> str:
 
 def _clean_title_for_display(title_line: str) -> str:
     return TRANSLATOR_TAG_RE.sub("", title_line).strip()
+
+
+def _strip_quotes(text: str) -> str:
+    return text.translate(str.maketrans("", "", QUOTE_CHARS))
+
+
+def _is_cjk(text: str) -> bool:
+    return bool(CJK_RE.search(text))
+
+
+def _split_program_title(title_line: str) -> tuple[str, str]:
+    cleaned = _clean_title_for_display(title_line)
+    if " - " in cleaned:
+        program, title = cleaned.split(" - ", 1)
+        return program.strip(), title.strip()
+    return cleaned.strip(), cleaned.strip()
+
+
+def _normalize_hashtag(text: str, pascal_case: bool) -> str:
+    stripped = _strip_quotes(text)
+    if _is_cjk(stripped):
+        # Keep CJK and alphanumerics, strip other punctuation/spaces.
+        return "".join(ch for ch in stripped if ch.isalnum() or _is_cjk(ch))
+    cleaned = "".join(ch if ch.isalnum() else " " for ch in stripped)
+    words = [word for word in cleaned.split() if word]
+    if pascal_case:
+        return "".join(word[:1].upper() + word[1:] for word in words)
+    return "".join(words)
+
+
+def _build_hashtags(program: str, title: str, pascal_case: bool) -> str:
+    program_tag = _normalize_hashtag(program, pascal_case=pascal_case)
+    title_tag = _normalize_hashtag(title, pascal_case=pascal_case)
+    tags = [tag for tag in (program_tag, title_tag) if tag]
+    return " ".join(f"#{tag}" for tag in tags)
 
 
 def _extract_reference(lines: list[str], start_idx: int) -> tuple[str, str]:
@@ -80,6 +117,7 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
             url_line = ""
         if person == "alex":
             ref_url, ref_title = _extract_reference(lines, idx + 1)
+            program_name, episode_title = _split_program_title(title_line)
             entries.append(
                 {
                     "filename_title": normalize_title(title_line),
@@ -89,6 +127,12 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
                     "video_title": _clean_title_for_display(title_line),
                     "ref_url": ref_url,
                     "ref_title": ref_title,
+                    "hashtags_en": _build_hashtags(
+                        program_name, episode_title, pascal_case=True
+                    ),
+                    "hashtags_zh": _build_hashtags(
+                        program_name, episode_title, pascal_case=False
+                    ),
                 }
             )
 
@@ -231,6 +275,8 @@ def generate_docs(
                 "{{REF_TITLE}}": entry["ref_title"],
                 "{{VIDEO_URL}}": entry["video_url"],
                 "{{VIDEO_TITLE}}": entry["video_title"],
+                "{{HASHTAGS_EN}}": entry["hashtags_en"],
+                "{{HASHTAGS_ZH}}": entry["hashtags_zh"],
             },
             default_tab_stop,
         )
@@ -284,3 +330,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+import string
