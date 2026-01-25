@@ -130,31 +130,15 @@ def extract_from_docx(path: Path) -> dict:
     }
 
 
-def build_prompt(payload: dict) -> str:
-    return "\n".join(
-        [
-            "You are given JSON. Fill only the *_en fields with English translations/writing.",
-            "Do not change the structure or any *_zh fields.",
-            "Output JSON only, no extra text.",
-            "",
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            "",
-        ]
-    )
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Extract meta request JSON and a GPT prompt from main.docx."
+        description="Extract meta request JSON from main.docx."
     )
     parser.add_argument("--source", default="main.docx", help="Path to main.docx.")
     parser.add_argument(
         "--json-out",
         default="",
         help="Optional path to write JSON (leave empty to skip).",
-    )
-    parser.add_argument(
-        "--prompt-out", default="meta_prompt.txt", help="Where to write prompt text."
     )
     args = parser.parse_args()
 
@@ -165,9 +149,6 @@ def main() -> None:
         json_out.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
-
-    prompt_out = Path(args.prompt_out)
-    prompt_out.write_text(build_prompt(payload), encoding="utf-8")
 
 
 if __name__ == "__main__":
