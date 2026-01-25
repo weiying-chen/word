@@ -11,7 +11,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
@@ -99,6 +99,17 @@ def extract_post_titles(schedule_path: Path) -> list[str]:
     return [entry["filename_title"] for entry in extract_post_entries(schedule_path)]
 
 
+def get_default_tab_stop_inches(doc: Document) -> float:
+    settings = doc.part.settings.element
+    node = settings.find(qn("w:defaultTabStop"))
+    if node is None:
+        return 0.5
+    value = node.get(qn("w:val"))
+    if not value:
+        return 0.5
+    return int(value) / 1440
+
+
 def clear_paragraph(paragraph) -> None:
     for run in paragraph.runs:
         run._element.getparent().remove(run._element)
@@ -144,15 +155,31 @@ def add_highlighted_hyperlink(paragraph, text: str, url: str) -> None:
     paragraph._p.append(hyperlink)
 
 
-def replace_placeholders(doc: Document, mapping: dict[str, str]) -> None:
+def replace_placeholders(
+    doc: Document, mapping: dict[str, str], indent_inches: float
+) -> None:
     highlight_keys = {"{{REF_TITLE}}", "{{VIDEO_TITLE}}"}
     hyperlink_keys = {"{{HEADER_URL}}", "{{REF_URL}}", "{{VIDEO_URL}}"}
+    indent_keys = {
+        "{{REF_URL}}",
+        "{{REF_TITLE}}",
+        "{{REF_SUMMARY_ZH}}",
+        "{{REF_TITLE_EN}}",
+        "{{REF_SUMMARY_EN}}",
+        "{{VIDEO_URL}}",
+        "{{VIDEO_TITLE}}",
+        "{{VIDEO_DESC_EN}}",
+        "{{VIDEO_DESC_ZH}}",
+    }
 
     for paragraph in doc.paragraphs:
         text = paragraph.text
         for placeholder, value in mapping.items():
             if placeholder not in text:
                 continue
+            if placeholder in indent_keys:
+                paragraph.paragraph_format.left_indent = Inches(indent_inches)
+                paragraph.paragraph_format.first_line_indent = 0
             if placeholder in hyperlink_keys and value:
                 clear_paragraph(paragraph)
                 add_highlighted_hyperlink(paragraph, value, value)
@@ -194,6 +221,7 @@ def generate_docs(
         filename = f"{filename_prefix}{entry['filename_title']}{filename_suffix}.docx"
         output_path = make_unique_path(output_dir / filename)
         doc = Document(str(template_path))
+        default_tab_stop = get_default_tab_stop_inches(doc)
         replace_placeholders(
             doc,
             {
@@ -204,6 +232,7 @@ def generate_docs(
                 "{{VIDEO_URL}}": entry["video_url"],
                 "{{VIDEO_TITLE}}": entry["video_title"],
             },
+            default_tab_stop,
         )
         doc.save(str(output_path))
         output_paths.append(output_path)
