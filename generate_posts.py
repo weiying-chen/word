@@ -241,6 +241,11 @@ def replace_placeholders(
             text = text.replace(placeholder, value)
         if text != paragraph.text:
             paragraph.text = text
+        for placeholder in indent_keys:
+            if placeholder in paragraph.text:
+                paragraph.paragraph_format.left_indent = Inches(indent_inches)
+                paragraph.paragraph_format.first_line_indent = 0
+                break
 
 
 def make_unique_path(base: Path) -> Path:
