@@ -5,7 +5,7 @@ from pathlib import Path
 
 from docx import Document
 
-from render_meta import render_meta
+from meta.render_meta import render_meta
 
 
 class RenderMetaTests(unittest.TestCase):

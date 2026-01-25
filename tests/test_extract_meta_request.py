@@ -4,7 +4,7 @@ from pathlib import Path
 
 from docx import Document
 
-from extract_meta_request import extract_from_docx
+from meta.extract_meta_request import extract_from_docx
 
 
 class ExtractMetaRequestTests(unittest.TestCase):
