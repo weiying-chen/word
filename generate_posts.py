@@ -459,6 +459,21 @@ def apply_source_style(paragraph) -> None:
         run.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
 
 
+def sync_empty_paragraph_indents(doc: Document) -> None:
+    last_left = None
+    last_first = None
+    for paragraph in doc.paragraphs:
+        if paragraph.text.strip():
+            fmt = paragraph.paragraph_format
+            last_left = fmt.left_indent
+            last_first = fmt.first_line_indent
+            continue
+        if last_left is None and last_first is None:
+            continue
+        paragraph.paragraph_format.left_indent = last_left
+        paragraph.paragraph_format.first_line_indent = last_first
+
+
 
 def replace_placeholders(
     doc: Document,
@@ -576,6 +591,7 @@ def generate_docs(
             default_tab_stop,
             hyperlink_targets=hyperlink_targets,
         )
+        sync_empty_paragraph_indents(doc)
         doc.save(str(output_path))
         output_paths.append(output_path)
     return output_paths
