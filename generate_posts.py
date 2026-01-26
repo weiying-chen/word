@@ -416,6 +416,28 @@ def add_highlighted_hyperlink(paragraph, text: str, url: str) -> None:
     paragraph._p.append(hyperlink)
 
 
+def add_plain_hyperlink(paragraph, text: str, url: str) -> None:
+    part = paragraph.part
+    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+
+    h_run = OxmlElement("w:r")
+    r_pr = OxmlElement("w:rPr")
+    r_style = OxmlElement("w:rStyle")
+    r_style.set(qn("w:val"), "a9")
+    r_pr.append(r_style)
+    h_run.append(r_pr)
+
+    t = OxmlElement("w:t")
+    t.text = text
+    h_run.append(t)
+
+    hyperlink.append(h_run)
+    paragraph._p.append(hyperlink)
+
+
 def replace_placeholders(
     doc: Document,
     mapping: dict[str, str],
@@ -424,6 +446,7 @@ def replace_placeholders(
 ) -> None:
     highlight_keys = {"{{REF_TITLE}}", "{{VIDEO_TITLE}}"}
     hyperlink_keys = {"{{HEADER_URL}}", "{{REF_URL}}", "{{VIDEO_URL}}"}
+    plain_hyperlink_keys = {"{{HEADER_URL}}"}
     indent_keys = {
         "{{REF_URL}}",
         "{{REF_TITLE}}",
@@ -453,7 +476,10 @@ def replace_placeholders(
                 if hyperlink_targets:
                     target = hyperlink_targets.get(placeholder) or value
                 clear_paragraph(paragraph)
-                add_highlighted_hyperlink(paragraph, value, target)
+                if placeholder in plain_hyperlink_keys:
+                    add_plain_hyperlink(paragraph, value, target)
+                else:
+                    add_highlighted_hyperlink(paragraph, value, target)
                 text = paragraph.text
                 continue
             if placeholder in highlight_keys and value:
