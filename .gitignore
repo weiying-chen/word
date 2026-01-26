@@ -3,3 +3,4 @@ output.docx
 __pycache__/
 *.pyc
 outputs/
+.venv/

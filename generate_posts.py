@@ -18,8 +18,13 @@ PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
 PROGRAM_SECTION_RE = re.compile(r"^節目.*則")
 STOP_SECTION_RE = re.compile(r"^(?:-+|FB小編文|本周節日)")
 TRANSLATOR_TAG_RE = re.compile(r"\s*[A-Za-z]+/[A-Za-z]+\s*$")
+BLOCK_INDEX_RE = re.compile(r"^\d+\s*$")
+YYMD_DATE_RE = re.compile(r"^(?P<yy>\d{2})/(?P<mm>\d{1,2})/(?P<dd>\d{1,2})$")
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 QUOTE_CHARS = "\"'“”‘’"
+ALEX_REF_LABELS = {"參考資料:", "參考資料："}
+ALEX_VIDEO_LABELS = {"要用的影片:", "要用的影片："}
+PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
 
 
 def iter_non_empty_paragraphs(doc: Document) -> list[str]:
@@ -58,6 +63,47 @@ def _split_program_title(title_line: str) -> tuple[str, str]:
     return cleaned.strip(), cleaned.strip()
 
 
+def _strip_trailing_filename_punct(text: str) -> str:
+    return text.rstrip(" \t\r\n。．.？?！!：:;；,，")
+
+
+def _clean_filename_component(text: str) -> str:
+    cleaned = TRANSLATOR_TAG_RE.sub("", text).strip()
+    cleaned = cleaned.replace("/", "")
+    cleaned = cleaned.replace("|", " ")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return _strip_trailing_filename_punct(cleaned)
+
+
+def build_filename_title_from_title_line(title_line: str) -> str:
+    matches = PAREN_TITLE_RE.findall(title_line)
+    cjk_parenthetical: str | None = None
+    for inner in reversed(matches):
+        if _is_cjk(inner):
+            cjk_parenthetical = inner.strip()
+            break
+
+    source = cjk_parenthetical or _clean_title_for_display(title_line)
+    if " - " in source:
+        program, episode = (part.strip() for part in source.split(" - ", 1))
+    else:
+        program, episode = source.strip(), source.strip()
+
+    program = _clean_filename_component(program)
+    episode = _clean_filename_component(episode)
+    if program and episode and program != episode:
+        return f"{program} {episode}".strip()
+    return (program or episode).strip()
+
+
+def _preferred_filename_title(title_line: str) -> str:
+    matches = PAREN_TITLE_RE.findall(title_line)
+    for inner in reversed(matches):
+        if _is_cjk(inner):
+            return inner.strip()
+    return title_line.strip()
+
+
 def _normalize_hashtag(text: str, pascal_case: bool) -> str:
     stripped = _strip_quotes(text)
     if _is_cjk(stripped):
@@ -89,9 +135,106 @@ def _extract_reference(lines: list[str], start_idx: int) -> tuple[str, str]:
     return "", ""
 
 
+def _parse_yymd_date_prefix(text: str) -> str | None:
+    match = YYMD_DATE_RE.match(text.strip())
+    if not match:
+        return None
+    yy = int(match.group("yy"))
+    mm = int(match.group("mm"))
+    dd = int(match.group("dd"))
+    if not (1 <= mm <= 12 and 1 <= dd <= 31):
+        return None
+    return f"{yy:02d}{mm:02d}{dd:02d}"
+
+
+def _detect_schedule_format(lines: list[str]) -> str:
+    if any(PROGRAM_SECTION_RE.match(line) for line in lines):
+        return "schedule"
+    has_ref = any(line.strip() in ALEX_REF_LABELS for line in lines)
+    has_video = any(line.strip() in ALEX_VIDEO_LABELS for line in lines)
+    if has_ref and has_video:
+        return "alex_blocks"
+    return "schedule"
+
+
+def extract_post_entries_from_alex_blocks(schedule_path: Path) -> list[dict[str, str]]:
+    doc = Document(str(schedule_path))
+    lines = iter_non_empty_paragraphs(doc)
+
+    block_starts: list[int] = [
+        idx for idx, line in enumerate(lines) if BLOCK_INDEX_RE.match(line.strip())
+    ]
+    entries: list[dict[str, str]] = []
+
+    for pos, start_idx in enumerate(block_starts):
+        end_idx = block_starts[pos + 1] if pos + 1 < len(block_starts) else len(lines)
+        if end_idx - start_idx <= 1:
+            continue
+        block = lines[start_idx:end_idx]
+
+        ref_url = ""
+        ref_title = ""
+        date_prefix = ""
+        video_url = ""
+        video_title = ""
+        video_desc_en = ""
+        video_desc_zh = ""
+
+        for idx, line in enumerate(block):
+            label = line.strip()
+            if label in ALEX_REF_LABELS:
+                if idx + 1 < len(block):
+                    ref_url = block[idx + 1].strip()
+                cursor = idx + 2
+                if cursor < len(block):
+                    possible_date = _parse_yymd_date_prefix(block[cursor])
+                    if possible_date:
+                        date_prefix = possible_date
+                        cursor += 1
+                if cursor < len(block):
+                    ref_title = block[cursor].strip()
+            elif label in ALEX_VIDEO_LABELS:
+                if idx + 1 < len(block):
+                    video_url = block[idx + 1].strip()
+                if idx + 2 < len(block):
+                    video_title = block[idx + 2].strip()
+                if idx + 3 < len(block):
+                    video_desc_en = block[idx + 3].strip()
+                if idx + 4 < len(block):
+                    video_desc_zh = block[idx + 4].strip()
+
+        if not video_title:
+            continue
+
+        program_name, episode_title = _split_program_title(video_title)
+        filename_title = build_filename_title_from_title_line(video_title)
+        entry: dict[str, str] = {
+            "filename_title": filename_title,
+            "header_title": _clean_title_for_display(video_title),
+            "header_url": video_url,
+            "video_url": video_url,
+            "video_title": _clean_title_for_display(video_title),
+            "video_desc_en": video_desc_en,
+            "video_desc_zh": video_desc_zh,
+            "ref_url": ref_url,
+            "ref_title": ref_title,
+            "hashtags_en": _build_hashtags(program_name, episode_title, pascal_case=True),
+            "hashtags_zh": _build_hashtags(program_name, episode_title, pascal_case=False),
+        }
+        if date_prefix:
+            entry["filename_prefix_override"] = f"{date_prefix}_"
+        entries.append(entry)
+
+    return entries
+
+
 def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
     doc = Document(str(schedule_path))
     lines = iter_non_empty_paragraphs(doc)
+    schedule_format = _detect_schedule_format(lines)
+    if schedule_format == "alex_blocks":
+        return extract_post_entries_from_alex_blocks(schedule_path)
+
     entries: list[dict[str, str]] = []
     in_program_section = False
 
@@ -120,7 +263,7 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
             program_name, episode_title = _split_program_title(title_line)
             entries.append(
                 {
-                    "filename_title": normalize_title(title_line),
+                    "filename_title": build_filename_title_from_title_line(title_line),
                     "header_title": _clean_title_for_display(title_line),
                     "header_url": url_line,
                     "video_url": url_line,
@@ -271,22 +414,30 @@ def generate_docs(
     entries = extract_post_entries(schedule_path)
     output_paths: list[Path] = []
     for entry in entries:
-        filename = f"{filename_prefix}{entry['filename_title']}{filename_suffix}.docx"
+        entry_prefix = entry.get("filename_prefix_override", filename_prefix)
+        filename = f"{entry_prefix}{entry['filename_title']}{filename_suffix}.docx"
         output_path = make_unique_path(output_dir / filename)
         doc = Document(str(template_path))
         default_tab_stop = get_default_tab_stop_inches(doc)
+        mapping = {
+            "{{HEADER_TITLE}}": entry["header_title"],
+            "{{HEADER_URL}}": entry["header_url"],
+            "{{REF_URL}}": entry["ref_url"],
+            "{{REF_TITLE}}": entry["ref_title"],
+            "{{VIDEO_URL}}": entry["video_url"],
+            "{{VIDEO_TITLE}}": entry["video_title"],
+            "{{HASHTAGS_EN}}": entry["hashtags_en"],
+            "{{HASHTAGS_ZH}}": entry["hashtags_zh"],
+        }
+        video_desc_en = entry.get("video_desc_en", "").strip()
+        if video_desc_en:
+            mapping["{{VIDEO_DESC_EN}}"] = video_desc_en
+        video_desc_zh = entry.get("video_desc_zh", "").strip()
+        if video_desc_zh:
+            mapping["{{VIDEO_DESC_ZH}}"] = video_desc_zh
         replace_placeholders(
             doc,
-            {
-                "{{HEADER_TITLE}}": entry["header_title"],
-                "{{HEADER_URL}}": entry["header_url"],
-                "{{REF_URL}}": entry["ref_url"],
-                "{{REF_TITLE}}": entry["ref_title"],
-                "{{VIDEO_URL}}": entry["video_url"],
-                "{{VIDEO_TITLE}}": entry["video_title"],
-                "{{HASHTAGS_EN}}": entry["hashtags_en"],
-                "{{HASHTAGS_ZH}}": entry["hashtags_zh"],
-            },
+            mapping,
             default_tab_stop,
         )
         doc.save(str(output_path))

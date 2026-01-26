@@ -42,9 +42,31 @@ def test_extract_post_titles_from_schedule(tmp_path: Path) -> None:
 
     titles = extract_post_titles(schedule_path)
     assert titles == [
-        "大愛醫生館 怎麼坐才算有“坐相”？",
-        "大愛真健康 5分鐘高效有氧 | 上下肢肌耐力 | 肩腿| 背腿 | 核心",
+        "大愛醫生館 怎麼坐才算有“坐相”",
+        "大愛真健康 5分鐘高效有氧 上下肢肌耐力 肩腿 背腿 核心",
     ]
+
+
+def test_extract_post_titles_from_alex_blocks(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "alex_blocks.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "1",
+            "參考資料:",
+            "https://example.com/news",
+            "26/1/23",
+            "新聞標題",
+            "要用的影片:",
+            "https://example.com/video",
+            "Program - Test Title (大愛醫生館 - 中文標題)",
+            "English prompt line",
+            "中文提示",
+        ],
+    )
+
+    titles = extract_post_titles(schedule_path)
+    assert titles == ["大愛醫生館 中文標題"]
 
 
 def test_build_hashtags_strips_quotes_and_spaces() -> None:
