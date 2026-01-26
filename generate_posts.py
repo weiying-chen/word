@@ -27,13 +27,34 @@ ALEX_VIDEO_LABELS = {"要用的影片:", "要用的影片："}
 PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
 
 
-def iter_non_empty_paragraphs(doc: Document) -> list[str]:
+def _extract_hyperlink_target(paragraph) -> str | None:
+    for hyperlink in paragraph._p.findall(".//w:hyperlink", paragraph._p.nsmap):
+        r_id = hyperlink.get(qn("r:id"))
+        if not r_id:
+            continue
+        rel = paragraph.part.rels.get(r_id)
+        if rel is None:
+            continue
+        target = getattr(rel, "target_ref", None)
+        if target and isinstance(target, str):
+            return target
+    return None
+
+
+def iter_non_empty_paragraphs(doc: Document) -> tuple[list[str], list[str | None]]:
     lines: list[str] = []
+    url_targets: list[str | None] = []
     for paragraph in doc.paragraphs:
         text = paragraph.text.strip()
-        if text:
-            lines.append(text)
-    return lines
+        if not text:
+            continue
+        lines.append(text)
+        if text.startswith("http"):
+            target = _extract_hyperlink_target(paragraph)
+            url_targets.append(target.strip() if target and target.startswith("http") else None)
+        else:
+            url_targets.append(None)
+    return lines, url_targets
 
 
 def normalize_title(title_line: str) -> str:
@@ -96,6 +117,31 @@ def build_filename_title_from_title_line(title_line: str) -> str:
     return (program or episode).strip()
 
 
+def _strip_parenthetical(text: str) -> str:
+    return re.sub(r"[\(（][^()（）]+[\)）]", "", text).strip()
+
+
+def build_hashtags_from_title_line(title_line: str) -> tuple[str, str]:
+    display = _clean_title_for_display(title_line)
+    matches = PAREN_TITLE_RE.findall(display)
+    cjk_parenthetical: str | None = None
+    for inner in reversed(matches):
+        if _is_cjk(inner):
+            cjk_parenthetical = inner.strip()
+            break
+
+    en_source = _strip_parenthetical(display)
+    en_program, en_title = _split_program_title(en_source)
+    hashtags_en = _build_hashtags(en_program, en_title, pascal_case=True)
+
+    if cjk_parenthetical:
+        zh_program, zh_title = _split_program_title(cjk_parenthetical)
+    else:
+        zh_program, zh_title = _split_program_title(display)
+    hashtags_zh = _build_hashtags(zh_program, zh_title, pascal_case=False)
+    return hashtags_en, hashtags_zh
+
+
 def _preferred_filename_title(title_line: str) -> str:
     matches = PAREN_TITLE_RE.findall(title_line)
     for inner in reversed(matches):
@@ -123,16 +169,23 @@ def _build_hashtags(program: str, title: str, pascal_case: bool) -> str:
     return " ".join(f"#{tag}" for tag in tags)
 
 
-def _extract_reference(lines: list[str], start_idx: int) -> tuple[str, str]:
+def _extract_reference(
+    lines: list[str], url_targets: list[str | None], start_idx: int
+) -> tuple[str, str, str]:
     for idx in range(start_idx, len(lines)):
         line = lines[idx]
         if PERSON_LINE_RE.match(line) or STOP_SECTION_RE.match(line):
             break
         if line.strip() == "搭配":
             ref_url = lines[idx + 1] if idx + 1 < len(lines) else ""
+            ref_url_target = (
+                url_targets[idx + 1].strip()
+                if idx + 1 < len(url_targets) and url_targets[idx + 1]
+                else ""
+            )
             ref_title = lines[idx + 2] if idx + 2 < len(lines) else ""
-            return ref_url, ref_title
-    return "", ""
+            return ref_url, ref_title, ref_url_target
+    return "", "", ""
 
 
 def _parse_yymd_date_prefix(text: str) -> str | None:
@@ -159,7 +212,7 @@ def _detect_schedule_format(lines: list[str]) -> str:
 
 def extract_post_entries_from_alex_blocks(schedule_path: Path) -> list[dict[str, str]]:
     doc = Document(str(schedule_path))
-    lines = iter_non_empty_paragraphs(doc)
+    lines, url_targets = iter_non_empty_paragraphs(doc)
 
     block_starts: list[int] = [
         idx for idx, line in enumerate(lines) if BLOCK_INDEX_RE.match(line.strip())
@@ -171,11 +224,14 @@ def extract_post_entries_from_alex_blocks(schedule_path: Path) -> list[dict[str,
         if end_idx - start_idx <= 1:
             continue
         block = lines[start_idx:end_idx]
+        block_targets = url_targets[start_idx:end_idx]
 
         ref_url = ""
         ref_title = ""
+        ref_url_target = ""
         date_prefix = ""
         video_url = ""
+        video_url_target = ""
         video_title = ""
         video_desc_en = ""
         video_desc_zh = ""
@@ -185,6 +241,11 @@ def extract_post_entries_from_alex_blocks(schedule_path: Path) -> list[dict[str,
             if label in ALEX_REF_LABELS:
                 if idx + 1 < len(block):
                     ref_url = block[idx + 1].strip()
+                    ref_url_target = (
+                        block_targets[idx + 1].strip()
+                        if block_targets[idx + 1]
+                        else ""
+                    )
                 cursor = idx + 2
                 if cursor < len(block):
                     possible_date = _parse_yymd_date_prefix(block[cursor])
@@ -196,6 +257,11 @@ def extract_post_entries_from_alex_blocks(schedule_path: Path) -> list[dict[str,
             elif label in ALEX_VIDEO_LABELS:
                 if idx + 1 < len(block):
                     video_url = block[idx + 1].strip()
+                    video_url_target = (
+                        block_targets[idx + 1].strip()
+                        if block_targets[idx + 1]
+                        else ""
+                    )
                 if idx + 2 < len(block):
                     video_title = block[idx + 2].strip()
                 if idx + 3 < len(block):
@@ -207,19 +273,23 @@ def extract_post_entries_from_alex_blocks(schedule_path: Path) -> list[dict[str,
             continue
 
         program_name, episode_title = _split_program_title(video_title)
+        hashtags_en, hashtags_zh = build_hashtags_from_title_line(video_title)
         filename_title = build_filename_title_from_title_line(video_title)
         entry: dict[str, str] = {
             "filename_title": filename_title,
             "header_title": _clean_title_for_display(video_title),
             "header_url": video_url,
+            "header_url_target": video_url_target,
             "video_url": video_url,
+            "video_url_target": video_url_target,
             "video_title": _clean_title_for_display(video_title),
             "video_desc_en": video_desc_en,
             "video_desc_zh": video_desc_zh,
             "ref_url": ref_url,
+            "ref_url_target": ref_url_target,
             "ref_title": ref_title,
-            "hashtags_en": _build_hashtags(program_name, episode_title, pascal_case=True),
-            "hashtags_zh": _build_hashtags(program_name, episode_title, pascal_case=False),
+            "hashtags_en": hashtags_en,
+            "hashtags_zh": hashtags_zh,
         }
         if date_prefix:
             entry["filename_prefix_override"] = f"{date_prefix}_"
@@ -230,7 +300,7 @@ def extract_post_entries_from_alex_blocks(schedule_path: Path) -> list[dict[str,
 
 def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
     doc = Document(str(schedule_path))
-    lines = iter_non_empty_paragraphs(doc)
+    lines, url_targets = iter_non_empty_paragraphs(doc)
     schedule_format = _detect_schedule_format(lines)
     if schedule_format == "alex_blocks":
         return extract_post_entries_from_alex_blocks(schedule_path)
@@ -256,26 +326,30 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
             continue
         title_line = lines[idx + 1]
         url_line = lines[idx + 2] if idx + 2 < len(lines) else ""
+        url_target = url_targets[idx + 2] if idx + 2 < len(url_targets) else None
         if not url_line.startswith("http"):
             url_line = ""
+            url_target = None
         if person == "alex":
-            ref_url, ref_title = _extract_reference(lines, idx + 1)
+            ref_url, ref_title, ref_url_target = _extract_reference(
+                lines, url_targets, idx + 1
+            )
             program_name, episode_title = _split_program_title(title_line)
+            hashtags_en, hashtags_zh = build_hashtags_from_title_line(title_line)
             entries.append(
                 {
                     "filename_title": build_filename_title_from_title_line(title_line),
                     "header_title": _clean_title_for_display(title_line),
                     "header_url": url_line,
+                    "header_url_target": url_target or "",
                     "video_url": url_line,
+                    "video_url_target": url_target or "",
                     "video_title": _clean_title_for_display(title_line),
                     "ref_url": ref_url,
+                    "ref_url_target": ref_url_target,
                     "ref_title": ref_title,
-                    "hashtags_en": _build_hashtags(
-                        program_name, episode_title, pascal_case=True
-                    ),
-                    "hashtags_zh": _build_hashtags(
-                        program_name, episode_title, pascal_case=False
-                    ),
+                    "hashtags_en": hashtags_en,
+                    "hashtags_zh": hashtags_zh,
                 }
             )
 
@@ -343,7 +417,10 @@ def add_highlighted_hyperlink(paragraph, text: str, url: str) -> None:
 
 
 def replace_placeholders(
-    doc: Document, mapping: dict[str, str], indent_inches: float
+    doc: Document,
+    mapping: dict[str, str],
+    indent_inches: float,
+    hyperlink_targets: dict[str, str] | None = None,
 ) -> None:
     highlight_keys = {"{{REF_TITLE}}", "{{VIDEO_TITLE}}"}
     hyperlink_keys = {"{{HEADER_URL}}", "{{REF_URL}}", "{{VIDEO_URL}}"}
@@ -372,8 +449,11 @@ def replace_placeholders(
                 paragraph.paragraph_format.left_indent = Inches(indent_inches)
                 paragraph.paragraph_format.first_line_indent = 0
             if placeholder in hyperlink_keys and value:
+                target = value
+                if hyperlink_targets:
+                    target = hyperlink_targets.get(placeholder) or value
                 clear_paragraph(paragraph)
-                add_highlighted_hyperlink(paragraph, value, value)
+                add_highlighted_hyperlink(paragraph, value, target)
                 text = paragraph.text
                 continue
             if placeholder in highlight_keys and value:
@@ -429,6 +509,11 @@ def generate_docs(
             "{{HASHTAGS_EN}}": entry["hashtags_en"],
             "{{HASHTAGS_ZH}}": entry["hashtags_zh"],
         }
+        hyperlink_targets = {
+            "{{HEADER_URL}}": entry.get("header_url_target", ""),
+            "{{REF_URL}}": entry.get("ref_url_target", ""),
+            "{{VIDEO_URL}}": entry.get("video_url_target", ""),
+        }
         video_desc_en = entry.get("video_desc_en", "").strip()
         if video_desc_en:
             mapping["{{VIDEO_DESC_EN}}"] = video_desc_en
@@ -439,6 +524,7 @@ def generate_docs(
             doc,
             mapping,
             default_tab_stop,
+            hyperlink_targets=hyperlink_targets,
         )
         doc.save(str(output_path))
         output_paths.append(output_path)
