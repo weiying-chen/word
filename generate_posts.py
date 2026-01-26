@@ -426,8 +426,14 @@ def add_plain_hyperlink(paragraph, text: str, url: str) -> None:
     h_run = OxmlElement("w:r")
     r_pr = OxmlElement("w:rPr")
     r_style = OxmlElement("w:rStyle")
-    r_style.set(qn("w:val"), "a9")
+    r_style.set(qn("w:val"), "Hyperlink")
     r_pr.append(r_style)
+    r_color = OxmlElement("w:color")
+    r_color.set(qn("w:val"), "0563C1")
+    r_pr.append(r_color)
+    r_u = OxmlElement("w:u")
+    r_u.set(qn("w:val"), "single")
+    r_pr.append(r_u)
     h_run.append(r_pr)
 
     t = OxmlElement("w:t")
@@ -436,6 +442,22 @@ def add_plain_hyperlink(paragraph, text: str, url: str) -> None:
 
     hyperlink.append(h_run)
     paragraph._p.append(hyperlink)
+
+
+def replace_in_runs(paragraph, placeholder: str, value: str) -> bool:
+    changed = False
+    for run in paragraph.runs:
+        if placeholder in run.text:
+            run.text = run.text.replace(placeholder, value)
+            changed = True
+    return changed
+
+
+def apply_source_style(paragraph) -> None:
+    for run in paragraph.runs:
+        run.font.size = Pt(10)
+        run.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
+
 
 
 def replace_placeholders(
@@ -461,12 +483,12 @@ def replace_placeholders(
     indent_labels = {"參考資料：", "英文翻譯：", "要用的影片："}
 
     for paragraph in doc.paragraphs:
-        text = paragraph.text
-        if text.strip() in indent_labels:
+        paragraph_text = paragraph.text
+        if paragraph_text.strip() in indent_labels:
             paragraph.paragraph_format.left_indent = Inches(indent_inches)
             paragraph.paragraph_format.first_line_indent = 0
         for placeholder, value in mapping.items():
-            if placeholder not in text:
+            if placeholder not in paragraph_text:
                 continue
             if placeholder in indent_keys:
                 paragraph.paragraph_format.left_indent = Inches(indent_inches)
@@ -480,16 +502,18 @@ def replace_placeholders(
                     add_plain_hyperlink(paragraph, value, target)
                 else:
                     add_highlighted_hyperlink(paragraph, value, target)
-                text = paragraph.text
+                paragraph_text = paragraph.text
                 continue
             if placeholder in highlight_keys and value:
                 clear_paragraph(paragraph)
                 add_highlighted_run(paragraph, value)
-                text = paragraph.text
+                paragraph_text = paragraph.text
                 continue
-            text = text.replace(placeholder, value)
-        if text != paragraph.text:
-            paragraph.text = text
+            if not replace_in_runs(paragraph, placeholder, value):
+                paragraph.text = paragraph.text.replace(placeholder, value)
+            if placeholder in indent_keys and paragraph_text.strip() not in indent_labels:
+                apply_source_style(paragraph)
+            paragraph_text = paragraph.text
         for placeholder in indent_keys:
             if placeholder in paragraph.text:
                 paragraph.paragraph_format.left_indent = Inches(indent_inches)
