@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from docx import Document
+from docx.shared import Inches
 
 import zipfile
 import xml.etree.ElementTree as ET
@@ -125,3 +126,155 @@ def test_generated_docx_from_alex_blocks_uses_date_prefix(tmp_path: Path) -> Non
     assert texts[5] == "Program - Test Title (大愛醫生館 - 測試標題)"
     assert texts[6] == "English prompt"
     assert texts[7] == "中文提示"
+
+
+def test_generated_docx_has_highlighted_ref_hyperlink(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "節目1則",
+            "1. alex",
+            "Program - Test Title st/rc",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "News title",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{REF_URL}}",
+        ],
+    )
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+    output_path = output_paths[0]
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = ET.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    url_paragraph = None
+    for p in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in p.findall(".//w:t", ns))
+        if "https://example.com/news" in text:
+            url_paragraph = p
+            break
+
+    assert url_paragraph is not None
+    hyperlinks = url_paragraph.findall("w:hyperlink", ns)
+    assert len(hyperlinks) == 1
+    h_runs = hyperlinks[0].findall("w:r", ns)
+    assert h_runs
+    h_rpr = h_runs[0].find("w:rPr", ns)
+    h_highlight = h_rpr.find("w:highlight", ns)
+    h_size = h_rpr.find("w:sz", ns)
+    assert h_highlight.get("{%s}val" % ns["w"]) == "cyan"
+    assert h_size.get("{%s}val" % ns["w"]) == "20"
+
+
+def test_generated_docx_syncs_empty_paragraph_indent(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "節目1則",
+            "1. alex",
+            "Program - Test Title st/rc",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "News title",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{VIDEO_TITLE}}",
+            "",
+            "{{VIDEO_DESC_EN}}",
+        ],
+    )
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+    output_path = output_paths[0]
+    doc = Document(str(output_path))
+
+    video_title = doc.paragraphs[0]
+    empty_para = doc.paragraphs[1]
+    assert video_title.text.strip()
+    assert empty_para.text.strip() == ""
+    assert empty_para.paragraph_format.left_indent == video_title.paragraph_format.left_indent
+    assert empty_para.paragraph_format.first_line_indent == video_title.paragraph_format.first_line_indent
+    assert empty_para.paragraph_format.left_indent == Inches(0.5)
+
+
+def test_generated_docx_sets_source_indent_for_labels(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "節目1則",
+            "1. alex",
+            "Program - Test Title st/rc",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "News title",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "要用的影片：",
+            "{{VIDEO_URL}}",
+        ],
+    )
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+    output_path = output_paths[0]
+    doc = Document(str(output_path))
+
+    label_para = doc.paragraphs[0]
+    url_para = doc.paragraphs[1]
+    assert label_para.text.strip() == "要用的影片："
+    assert url_para.text.strip() == "https://example.com/video"
+    assert label_para.paragraph_format.left_indent == Inches(0.5)
+    assert label_para.paragraph_format.first_line_indent == 0
+    assert url_para.paragraph_format.left_indent == Inches(0.5)
+    assert url_para.paragraph_format.first_line_indent == 0

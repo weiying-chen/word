@@ -10,12 +10,19 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.text.paragraph import Paragraph
 from docx.oxml.ns import qn
-from docx.opc.constants import RELATIONSHIP_TYPE as RT
-from docx.shared import RGBColor, Inches, Pt
+from docx.shared import RGBColor, Inches
+
+from docx_utils import (
+    add_highlighted_run,
+    add_hyperlink,
+    clear_paragraph,
+    get_default_tab_stop_inches,
+    set_source_indent,
+)
 
 
 PLACEHOLDER_KEYS = [
@@ -144,14 +151,11 @@ def replace_body_paragraph(
         if not text:
             return
         if source_line:
-            add_source_prefix(target, source_indent_inches)
+            set_source_indent(target, source_indent_inches)
             if is_url:
-                add_source_hyperlink(target, text, text)
+                add_hyperlink(target, text, text, highlight=True)
                 return
-            run = target.add_run()
-            run.font.size = Pt(10)
-            run.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
-            run.add_text(text)
+            run = add_highlighted_run(target, text)
             apply_symbol_font(run)
         else:
             run = target.add_run(text)
@@ -179,79 +183,6 @@ def replace_body_paragraph(
 def remove_paragraph(paragraph) -> None:
     element = paragraph._element
     element.getparent().remove(element)
-
-
-def clear_paragraph(paragraph) -> None:
-    for run in paragraph.runs:
-        run._element.getparent().remove(run._element)
-
-
-def add_hyperlink(paragraph, text: str, url: str) -> None:
-    part = paragraph.part
-    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
-
-    hyperlink = OxmlElement("w:hyperlink")
-    hyperlink.set(qn("r:id"), r_id)
-
-    run = OxmlElement("w:r")
-    r_pr = OxmlElement("w:rPr")
-    r_style = OxmlElement("w:rStyle")
-    r_style.set(qn("w:val"), "Hyperlink")
-    r_pr.append(r_style)
-    r_color = OxmlElement("w:color")
-    r_color.set(qn("w:val"), "0563C1")
-    r_pr.append(r_color)
-    r_underline = OxmlElement("w:u")
-    r_underline.set(qn("w:val"), "single")
-    r_pr.append(r_underline)
-    run.append(r_pr)
-
-    t = OxmlElement("w:t")
-    t.text = text
-    run.append(t)
-
-    hyperlink.append(run)
-    paragraph._p.append(hyperlink)
-
-
-def add_source_prefix(paragraph, indent_inches: float) -> None:
-    paragraph.paragraph_format.left_indent = Inches(indent_inches)
-    paragraph.paragraph_format.first_line_indent = 0
-
-
-def add_source_hyperlink(paragraph, text: str, url: str) -> None:
-
-    part = paragraph.part
-    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
-
-    hyperlink = OxmlElement("w:hyperlink")
-    hyperlink.set(qn("r:id"), r_id)
-
-    h_run = OxmlElement("w:r")
-    r_pr = OxmlElement("w:rPr")
-    r_style = OxmlElement("w:rStyle")
-    r_style.set(qn("w:val"), "Hyperlink")
-    r_pr.append(r_style)
-    r_color = OxmlElement("w:color")
-    r_color.set(qn("w:val"), "0563C1")
-    r_pr.append(r_color)
-    r_highlight = OxmlElement("w:highlight")
-    r_highlight.set(qn("w:val"), "cyan")
-    r_pr.append(r_highlight)
-    r_sz = OxmlElement("w:sz")
-    r_sz.set(qn("w:val"), "20")
-    r_pr.append(r_sz)
-    r_u = OxmlElement("w:u")
-    r_u.set(qn("w:val"), "single")
-    r_pr.append(r_u)
-    h_run.append(r_pr)
-
-    t = OxmlElement("w:t")
-    t.text = text
-    h_run.append(t)
-
-    hyperlink.append(h_run)
-    paragraph._p.append(hyperlink)
 
 
 def ensure_time_range_style(doc: Document):
@@ -285,17 +216,6 @@ def _get_section_metrics(doc: Document):
         "right_margin": section.right_margin,
         "usable_width": section.page_width - section.left_margin - section.right_margin,
     }
-
-
-def get_default_tab_stop_inches(doc: Document) -> float:
-    settings = doc.part.settings.element
-    node = settings.find(qn("w:defaultTabStop"))
-    if node is None:
-        return 0.5
-    value = node.get(qn("w:val"))
-    if not value:
-        return 0.5
-    return int(value) / 1440
 
 
 def apply_default_margins(doc: Document) -> None:

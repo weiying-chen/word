@@ -7,11 +7,16 @@ import re
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_COLOR_INDEX
-from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.opc.constants import RELATIONSHIP_TYPE as RT
-from docx.shared import Inches, Pt
+
+from docx_utils import (
+    add_highlighted_run,
+    add_hyperlink,
+    apply_highlight_to_runs,
+    clear_paragraph,
+    get_default_tab_stop_inches,
+    set_source_indent,
+)
 
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
@@ -360,90 +365,6 @@ def extract_post_titles(schedule_path: Path) -> list[str]:
     return [entry["filename_title"] for entry in extract_post_entries(schedule_path)]
 
 
-def get_default_tab_stop_inches(doc: Document) -> float:
-    settings = doc.part.settings.element
-    node = settings.find(qn("w:defaultTabStop"))
-    if node is None:
-        return 0.5
-    value = node.get(qn("w:val"))
-    if not value:
-        return 0.5
-    return int(value) / 1440
-
-
-def clear_paragraph(paragraph) -> None:
-    for run in paragraph.runs:
-        run._element.getparent().remove(run._element)
-
-
-def add_highlighted_run(paragraph, text: str) -> None:
-    run = paragraph.add_run(text)
-    run.font.size = Pt(10)
-    run.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
-
-
-def add_highlighted_hyperlink(paragraph, text: str, url: str) -> None:
-    part = paragraph.part
-    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
-
-    hyperlink = OxmlElement("w:hyperlink")
-    hyperlink.set(qn("r:id"), r_id)
-
-    h_run = OxmlElement("w:r")
-    r_pr = OxmlElement("w:rPr")
-    r_style = OxmlElement("w:rStyle")
-    r_style.set(qn("w:val"), "Hyperlink")
-    r_pr.append(r_style)
-    r_color = OxmlElement("w:color")
-    r_color.set(qn("w:val"), "0563C1")
-    r_pr.append(r_color)
-    r_highlight = OxmlElement("w:highlight")
-    r_highlight.set(qn("w:val"), "cyan")
-    r_pr.append(r_highlight)
-    r_sz = OxmlElement("w:sz")
-    r_sz.set(qn("w:val"), "20")
-    r_pr.append(r_sz)
-    r_u = OxmlElement("w:u")
-    r_u.set(qn("w:val"), "single")
-    r_pr.append(r_u)
-    h_run.append(r_pr)
-
-    t = OxmlElement("w:t")
-    t.text = text
-    h_run.append(t)
-
-    hyperlink.append(h_run)
-    paragraph._p.append(hyperlink)
-
-
-def add_plain_hyperlink(paragraph, text: str, url: str) -> None:
-    part = paragraph.part
-    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
-
-    hyperlink = OxmlElement("w:hyperlink")
-    hyperlink.set(qn("r:id"), r_id)
-
-    h_run = OxmlElement("w:r")
-    r_pr = OxmlElement("w:rPr")
-    r_style = OxmlElement("w:rStyle")
-    r_style.set(qn("w:val"), "Hyperlink")
-    r_pr.append(r_style)
-    r_color = OxmlElement("w:color")
-    r_color.set(qn("w:val"), "0563C1")
-    r_pr.append(r_color)
-    r_u = OxmlElement("w:u")
-    r_u.set(qn("w:val"), "single")
-    r_pr.append(r_u)
-    h_run.append(r_pr)
-
-    t = OxmlElement("w:t")
-    t.text = text
-    h_run.append(t)
-
-    hyperlink.append(h_run)
-    paragraph._p.append(hyperlink)
-
-
 def replace_in_runs(paragraph, placeholder: str, value: str) -> bool:
     changed = False
     for run in paragraph.runs:
@@ -454,9 +375,7 @@ def replace_in_runs(paragraph, placeholder: str, value: str) -> bool:
 
 
 def apply_source_style(paragraph) -> None:
-    for run in paragraph.runs:
-        run.font.size = Pt(10)
-        run.font.highlight_color = WD_COLOR_INDEX.TURQUOISE
+    apply_highlight_to_runs(paragraph)
 
 
 def sync_empty_paragraph_indents(doc: Document) -> None:
@@ -500,23 +419,21 @@ def replace_placeholders(
     for paragraph in doc.paragraphs:
         paragraph_text = paragraph.text
         if paragraph_text.strip() in indent_labels:
-            paragraph.paragraph_format.left_indent = Inches(indent_inches)
-            paragraph.paragraph_format.first_line_indent = 0
+            set_source_indent(paragraph, indent_inches)
         for placeholder, value in mapping.items():
             if placeholder not in paragraph_text:
                 continue
             if placeholder in indent_keys:
-                paragraph.paragraph_format.left_indent = Inches(indent_inches)
-                paragraph.paragraph_format.first_line_indent = 0
+                set_source_indent(paragraph, indent_inches)
             if placeholder in hyperlink_keys and value:
                 target = value
                 if hyperlink_targets:
                     target = hyperlink_targets.get(placeholder) or value
                 clear_paragraph(paragraph)
                 if placeholder in plain_hyperlink_keys:
-                    add_plain_hyperlink(paragraph, value, target)
+                    add_hyperlink(paragraph, value, target, highlight=False)
                 else:
-                    add_highlighted_hyperlink(paragraph, value, target)
+                    add_hyperlink(paragraph, value, target, highlight=True)
                 paragraph_text = paragraph.text
                 continue
             if placeholder in highlight_keys and value:
@@ -531,8 +448,7 @@ def replace_placeholders(
             paragraph_text = paragraph.text
         for placeholder in indent_keys:
             if placeholder in paragraph.text:
-                paragraph.paragraph_format.left_indent = Inches(indent_inches)
-                paragraph.paragraph_format.first_line_indent = 0
+                set_source_indent(paragraph, indent_inches)
                 break
 
 
