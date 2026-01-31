@@ -314,6 +314,22 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
     source_indent_inches = get_default_tab_stop_inches(doc)
     metrics = _get_section_metrics(doc)
 
+    def _next_paragraph(paragraph: Paragraph) -> Paragraph | None:
+        next_elm = paragraph._p.getnext()
+        while next_elm is not None and next_elm.tag != qn("w:p"):
+            next_elm = next_elm.getnext()
+        if next_elm is None:
+            return None
+        return Paragraph(next_elm, paragraph._parent)
+
+    def _ensure_blank_after_labels(doc_obj: Document, labels: set[str]) -> None:
+        for para in list(doc_obj.paragraphs):
+            if para.text.strip() not in labels:
+                continue
+            next_para = _next_paragraph(para)
+            if next_para is None or next_para.text.strip():
+                insert_paragraph_after(para, "")
+
     for paragraph in list(doc.paragraphs):
         if "{{INTRO}}" in paragraph.text:
             intro = data.get("INTRO", "")
@@ -365,9 +381,11 @@ def fill_template(template_path: Path, input_path: Path, output_path: Path) -> N
                     clear_paragraph(paragraph)
                     run = paragraph.add_run(value)
                     run.style = time_range_style
+                    insert_paragraph_after(paragraph, "")
                 else:
                     replace_placeholder(paragraph, placeholder, value)
                 break
+    _ensure_blank_after_labels(doc, {"簡介：", "簡介:", "字幕：", "字幕:"})
 
     doc.save(str(output_path))
     fix_docx_namespaces(output_path)
