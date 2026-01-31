@@ -11,6 +11,7 @@ from pathlib import Path
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.text.paragraph import Paragraph
 from docx.oxml.ns import qn
@@ -42,6 +43,10 @@ TIME_RANGE_LINE_RE = re.compile(
     r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
 SYMBOL_FONT_NAME = ""
+HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
+SOURCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
+SOURCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
+SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 
 
 def parse_input(path: Path) -> dict[str, str]:
@@ -147,16 +152,51 @@ def replace_body_paragraph(
     current = paragraph
     in_source_block = False
 
+    def _add_source_runs(target, text: str) -> None:
+        parts: list[tuple[str, bool]] = []
+        last_idx = 0
+        for match in HIGHLIGHT_MARKER_RE.finditer(text):
+            if match.start() > last_idx:
+                parts.append((text[last_idx : match.start()], False))
+            parts.append((match.group(1), True))
+            last_idx = match.end()
+        if last_idx < len(text):
+            parts.append((text[last_idx:], False))
+
+        if not parts:
+            run = add_highlighted_run(
+                target, text, highlight_color=SOURCE_HIGHLIGHT_DEFAULT
+            )
+            apply_symbol_font(run)
+            return
+
+        for part_text, marked in parts:
+            if not part_text:
+                continue
+            run = add_highlighted_run(
+                target,
+                part_text,
+                highlight_color=(
+                    SOURCE_HIGHLIGHT_MARKED if marked else SOURCE_HIGHLIGHT_DEFAULT
+                ),
+            )
+            apply_symbol_font(run)
+
     def write_line(target, text: str, source_line: bool, is_url: bool) -> None:
         if not text:
             return
         if source_line:
             set_source_indent(target, source_indent_inches)
             if is_url:
-                add_hyperlink(target, text, text, highlight=True)
+                add_hyperlink(
+                    target,
+                    text,
+                    text,
+                    highlight=True,
+                    highlight_color="cyan",
+                )
                 return
-            run = add_highlighted_run(target, text)
-            apply_symbol_font(run)
+            _add_source_runs(target, text)
         else:
             run = target.add_run(text)
             apply_symbol_font(run)
@@ -168,13 +208,14 @@ def replace_body_paragraph(
         if TIME_RANGE_LINE_RE.match(line):
             in_source_block = False
 
-        is_url = SOURCE_URL_RE.match(line)
+        cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line)
+        is_url = SOURCE_URL_RE.match(cleaned_line)
         if is_url:
             in_source_block = True
 
         write_line(
             current,
-            line,
+            cleaned_line if is_url else line,
             in_source_block and not TIME_RANGE_LINE_RE.match(line),
             bool(is_url),
         )

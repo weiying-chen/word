@@ -22,7 +22,7 @@ This is the second translation line.
 
 https://example.com/source?utm=long-source-url-test&ref=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&extra=more-text-to-force-wrapping
 This is a source paragraph that should be highlighted and indented.
-Here is a second source line in the same block.
+Here is a *green-highlight* segment in the same block.
 
 00:00:04:00	00:00:06:00	This is the third subtitle line.
 This is the third translation line.
