@@ -5,6 +5,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 
+from datetime import date
+
 from generate_posts import (
     extract_post_entries,
     extract_post_titles,
@@ -91,6 +93,29 @@ def test_extract_post_titles_from_alex_blocks(tmp_path: Path) -> None:
 
     titles = extract_post_titles(schedule_path)
     assert titles == ["大愛醫生館 中文標題"]
+
+
+def test_blocks_date_prefix_and_multiline_ref(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "blocks.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "1",
+            "參考資料:",
+            "https://example.com/news",
+            "1/27",
+            "News title",
+            "Extra line",
+            "要用的影片:",
+            "https://example.com/video",
+            "Program - Test Title (大愛醫生館 - 中文標題)",
+        ],
+    )
+
+    entries = extract_post_entries(schedule_path)
+    assert entries[0]["ref_title"] == "News title\nExtra line"
+    expected_prefix = f"{date.today().year % 100:02d}0127_"
+    assert entries[0]["filename_prefix_override"] == expected_prefix
 
 
 def test_extracts_full_url_from_truncated_hyperlink(tmp_path: Path) -> None:

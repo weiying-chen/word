@@ -99,6 +99,20 @@ def test_generate_subs_inserts_blank_after_labels(tmp_path: Path) -> None:
     assert doc.paragraphs[2].text.strip() == "Line after label."
 
 
+def test_generate_subs_inserts_blank_after_last_label(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+    doc = Document(output_path)
+    assert doc.paragraphs[0].text.strip() == "字幕："
+    assert not doc.paragraphs[1].text.strip()
+
+
 def test_source_block_highlight_and_link(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     input_path = tmp_path / "input.txt"
