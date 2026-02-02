@@ -185,7 +185,13 @@ def _normalize_hashtag(text: str, pascal_case: bool) -> str:
 def _build_hashtags(program: str, title: str, pascal_case: bool) -> str:
     program_tag = _normalize_hashtag(program, pascal_case=pascal_case)
     title_tag = _normalize_hashtag(title, pascal_case=pascal_case)
-    tags = [tag for tag in (program_tag, title_tag) if tag]
+    tags = []
+    for tag in (program_tag, title_tag):
+        if not tag:
+            continue
+        if tags and tags[-1] == tag:
+            continue
+        tags.append(tag)
     return " ".join(f"#{tag}" for tag in tags)
 
 
