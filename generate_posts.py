@@ -211,11 +211,11 @@ def _detect_schedule_format(lines: list[str]) -> str:
     has_ref = any(line.strip() in ALEX_REF_LABELS for line in lines)
     has_video = any(line.strip() in ALEX_VIDEO_LABELS for line in lines)
     if has_ref and has_video:
-        return "alex_blocks"
+        return "blocks"
     return "schedule"
 
 
-def extract_post_entries_from_alex_blocks(schedule_path: Path) -> list[dict[str, str]]:
+def extract_post_entries_from_blocks(schedule_path: Path) -> list[dict[str, str]]:
     doc = Document(str(schedule_path))
     lines, url_targets = iter_non_empty_paragraphs(doc)
 
@@ -307,8 +307,8 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
     doc = Document(str(schedule_path))
     lines, url_targets = iter_non_empty_paragraphs(doc)
     schedule_format = _detect_schedule_format(lines)
-    if schedule_format == "alex_blocks":
-        return extract_post_entries_from_alex_blocks(schedule_path)
+    if schedule_format == "blocks":
+        return extract_post_entries_from_blocks(schedule_path)
 
     entries: list[dict[str, str]] = []
     in_program_section = False
