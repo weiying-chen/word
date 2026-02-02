@@ -271,8 +271,10 @@ def test_generated_docx_sets_source_indent_for_labels(tmp_path: Path) -> None:
     doc = Document(str(output_path))
 
     label_para = doc.paragraphs[0]
-    url_para = doc.paragraphs[1]
+    blank_para = doc.paragraphs[1]
+    url_para = doc.paragraphs[2]
     assert label_para.text.strip() == "要用的影片："
+    assert not blank_para.text.strip()
     assert url_para.text.strip() == "https://example.com/video"
     assert label_para.paragraph_format.left_indent == Inches(0.5)
     assert label_para.paragraph_format.first_line_indent == 0

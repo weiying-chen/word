@@ -305,7 +305,7 @@ def fix_docx_namespaces(path: Path) -> None:
     tmp_path.replace(path)
 
 
-def fill_template(template_path: Path, input_path: Path, output_path: Path) -> None:
+def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> None:
     data = parse_input(input_path)
     input_base = input_path.parent
     doc = Document(str(template_path))
@@ -395,7 +395,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    fill_template(Path(args.template), Path(args.input), Path(args.output))
+    generate_subs(Path(args.template), Path(args.input), Path(args.output))
 
 
 if __name__ == "__main__":

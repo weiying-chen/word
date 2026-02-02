@@ -4,7 +4,7 @@ import zipfile
 from docx import Document
 from lxml import etree
 
-import fill_template
+import generate_subs
 
 
 def _write_docx(path: Path, paragraphs: list[str]) -> None:
@@ -30,7 +30,7 @@ def test_parse_input_multiline_summary(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    data = fill_template.parse_input(input_path)
+    data = generate_subs.parse_input(input_path)
     assert data["SUMMARY"] == "First summary line.\nSecond summary line."
 
 
@@ -51,12 +51,12 @@ def test_parse_input_multiline_intro_body(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    data = fill_template.parse_input(input_path)
+    data = generate_subs.parse_input(input_path)
     assert data["INTRO"] == "Intro line one.\nIntro line two."
     assert data["BODY"] == "Body line one.\nBody line two."
 
 
-def test_fill_template_removes_empty_summary_paragraph(tmp_path: Path) -> None:
+def test_generate_subs_removes_empty_summary_paragraph(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
@@ -64,13 +64,13 @@ def test_fill_template_removes_empty_summary_paragraph(tmp_path: Path) -> None:
     _write_docx(template_path, ["{{SUMMARY}}", "After summary."])
     input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
 
-    fill_template.fill_template(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, input_path, output_path)
     doc = Document(output_path)
     texts = [p.text for p in doc.paragraphs if p.text]
     assert texts == ["After summary."]
 
 
-def test_fill_template_removes_empty_time_range_paragraph(tmp_path: Path) -> None:
+def test_generate_subs_removes_empty_time_range_paragraph(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
@@ -78,10 +78,25 @@ def test_fill_template_removes_empty_time_range_paragraph(tmp_path: Path) -> Non
     _write_docx(template_path, ["{{TIME_RANGE}}", "After time range."])
     input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
 
-    fill_template.fill_template(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, input_path, output_path)
     doc = Document(output_path)
     texts = [p.text for p in doc.paragraphs if p.text]
     assert texts == ["After time range."]
+
+
+def test_generate_subs_inserts_blank_after_labels(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["簡介：", "Line after label."])
+    input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+    doc = Document(output_path)
+    assert doc.paragraphs[0].text.strip() == "簡介："
+    assert not doc.paragraphs[1].text.strip()
+    assert doc.paragraphs[2].text.strip() == "Line after label."
 
 
 def test_source_block_highlight_and_link(tmp_path: Path) -> None:
@@ -108,7 +123,7 @@ def test_source_block_highlight_and_link(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    fill_template.fill_template(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, input_path, output_path)
 
     with zipfile.ZipFile(output_path) as zf:
         doc = etree.fromstring(zf.read("word/document.xml"))
