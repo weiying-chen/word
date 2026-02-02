@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from datetime import date
 from pathlib import Path
 
 from docx import Document
@@ -25,11 +26,13 @@ STOP_SECTION_RE = re.compile(r"^(?:-+|FB小編文|本周節日)")
 TRANSLATOR_TAG_RE = re.compile(r"\s*[A-Za-z]+/[A-Za-z]+\s*$")
 BLOCK_INDEX_RE = re.compile(r"^\d+\s*$")
 YYMD_DATE_RE = re.compile(r"^(?P<yy>\d{2})/(?P<mm>\d{1,2})/(?P<dd>\d{1,2})$")
+MD_DATE_RE = re.compile(r"^(?P<mm>\d{1,2})/(?P<dd>\d{1,2})$")
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 QUOTE_CHARS = "\"'“”‘’"
 ALEX_REF_LABELS = {"參考資料:", "參考資料："}
 ALEX_VIDEO_LABELS = {"要用的影片:", "要用的影片："}
 PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
+DASH_SPLIT_RE = re.compile(r"\s*-\s*")
 
 
 def _extract_hyperlink_target(paragraph) -> str | None:
@@ -86,6 +89,17 @@ def _split_program_title(title_line: str) -> tuple[str, str]:
     if " - " in cleaned:
         program, title = cleaned.split(" - ", 1)
         return program.strip(), title.strip()
+    if "-" in cleaned:
+        parts = DASH_SPLIT_RE.split(cleaned, 1)
+        if len(parts) == 2:
+            left, right = (part.strip() for part in parts)
+            if left and right and (
+                " " in left
+                or " " in right
+                or _is_cjk(left)
+                or _is_cjk(right)
+            ):
+                return left, right
     return cleaned.strip(), cleaned.strip()
 
 
@@ -113,7 +127,7 @@ def build_filename_title_from_title_line(title_line: str) -> str:
     if " - " in source:
         program, episode = (part.strip() for part in source.split(" - ", 1))
     else:
-        program, episode = source.strip(), source.strip()
+        program, episode = _split_program_title(source)
 
     program = _clean_filename_component(program)
     episode = _clean_filename_component(episode)
@@ -193,15 +207,24 @@ def _extract_reference(
     return "", "", ""
 
 
-def _parse_yymd_date_prefix(text: str) -> str | None:
-    match = YYMD_DATE_RE.match(text.strip())
-    if not match:
+def _parse_date_prefix(text: str, default_year: int | None = None) -> str | None:
+    stripped = text.strip()
+    match = YYMD_DATE_RE.match(stripped)
+    if match:
+        yy = int(match.group("yy"))
+        mm = int(match.group("mm"))
+        dd = int(match.group("dd"))
+        if not (1 <= mm <= 12 and 1 <= dd <= 31):
+            return None
+        return f"{yy:02d}{mm:02d}{dd:02d}"
+    match = MD_DATE_RE.match(stripped)
+    if not match or default_year is None:
         return None
-    yy = int(match.group("yy"))
     mm = int(match.group("mm"))
     dd = int(match.group("dd"))
     if not (1 <= mm <= 12 and 1 <= dd <= 31):
         return None
+    yy = default_year % 100
     return f"{yy:02d}{mm:02d}{dd:02d}"
 
 
@@ -218,6 +241,7 @@ def _detect_schedule_format(lines: list[str]) -> str:
 def extract_post_entries_from_blocks(schedule_path: Path) -> list[dict[str, str]]:
     doc = Document(str(schedule_path))
     lines, url_targets = iter_non_empty_paragraphs(doc)
+    default_year = date.today().year
 
     block_starts: list[int] = [
         idx for idx, line in enumerate(lines) if BLOCK_INDEX_RE.match(line.strip())
@@ -251,14 +275,27 @@ def extract_post_entries_from_blocks(schedule_path: Path) -> list[dict[str, str]
                         if block_targets[idx + 1]
                         else ""
                     )
+                end_ref = next(
+                    (
+                        pos
+                        for pos in range(idx + 1, len(block))
+                        if block[pos].strip() in ALEX_VIDEO_LABELS
+                    ),
+                    len(block),
+                )
                 cursor = idx + 2
-                if cursor < len(block):
-                    possible_date = _parse_yymd_date_prefix(block[cursor])
+                if cursor < end_ref:
+                    possible_date = _parse_date_prefix(block[cursor], default_year)
                     if possible_date:
                         date_prefix = possible_date
                         cursor += 1
-                if cursor < len(block):
-                    ref_title = block[cursor].strip()
+                if cursor < end_ref:
+                    ref_lines = [
+                        text.strip()
+                        for text in block[cursor:end_ref]
+                        if text.strip()
+                    ]
+                    ref_title = "\n".join(ref_lines)
             elif label in ALEX_VIDEO_LABELS:
                 if idx + 1 < len(block):
                     video_url = block[idx + 1].strip()
