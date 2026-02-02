@@ -15,6 +15,7 @@ from docx_utils import (
     add_hyperlink,
     apply_highlight_to_runs,
     clear_paragraph,
+    ensure_blank_after_labels,
     get_default_tab_stop_inches,
     set_source_indent,
 )
@@ -544,6 +545,7 @@ def generate_docs(
             default_tab_stop,
             hyperlink_targets=hyperlink_targets,
         )
+        ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
         sync_empty_paragraph_indents(doc)
         doc.save(str(output_path))
         output_paths.append(output_path)

@@ -5,6 +5,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.shared import Inches, Pt
+from docx.text.paragraph import Paragraph
 
 
 def get_default_tab_stop_inches(doc) -> float:
@@ -26,6 +27,25 @@ def clear_paragraph(paragraph) -> None:
 def set_source_indent(paragraph, indent_inches: float) -> None:
     paragraph.paragraph_format.left_indent = Inches(indent_inches)
     paragraph.paragraph_format.first_line_indent = 0
+
+
+def ensure_blank_after_labels(doc, labels: set[str]) -> None:
+    for para in list(doc.paragraphs):
+        if para.text.strip() not in labels:
+            continue
+        next_elm = para._p.getnext()
+        while next_elm is not None and next_elm.tag != qn("w:p"):
+            next_elm = next_elm.getnext()
+        if next_elm is None:
+            new_p = OxmlElement("w:p")
+            para._p.addnext(new_p)
+            Paragraph(new_p, para._parent)
+            continue
+        next_para = Paragraph(next_elm, para._parent)
+        if next_para.text.strip():
+            new_p = OxmlElement("w:p")
+            para._p.addnext(new_p)
+            Paragraph(new_p, para._parent)
 
 
 def add_highlighted_run(
