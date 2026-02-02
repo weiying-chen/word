@@ -514,7 +514,7 @@ def generate_docs(
     output_paths: list[Path] = []
     for entry in entries:
         entry_prefix = entry.get("filename_prefix_override", filename_prefix)
-        filename = f"{entry_prefix}{entry['filename_title']}{filename_suffix}.docx"
+        filename = f"{entry_prefix}{entry['filename_title']}小編文{filename_suffix}.docx"
         output_path = make_unique_path(output_dir / filename)
         doc = Document(str(template_path))
         default_tab_stop = get_default_tab_stop_inches(doc)
