@@ -118,6 +118,55 @@ def test_blocks_date_prefix_and_multiline_ref(tmp_path: Path) -> None:
     assert entries[0]["filename_prefix_override"] == expected_prefix
 
 
+def test_bodhi_date_prefix(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "bodhi.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "菩提7則",
+            "1. alex",
+            "1/20首播 互愛共善造大福",
+            "https://www.daai.tv/master/life-wisdom/P90230145",
+            "--------------------------------",
+        ],
+    )
+
+    entries = extract_post_entries(schedule_path)
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry["video_title"] == "人間菩提 (1/20首播 互愛共善造大福)"
+    assert entry["ref_url"] == entry["video_url"]
+    assert entry["ref_title"] == ""
+    expected_prefix = f"{date.today().year % 100:02d}0120_"
+    assert entry["filename_prefix_override"] == expected_prefix
+
+
+def test_bodhi_section_does_not_leak(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "mixed.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "菩提7則",
+            "1. alex",
+            "1/20首播 互愛共善造大福",
+            "https://example.com/bodhi",
+            "節目1則",
+            "1. alex",
+            "Normal Show - Title",
+            "https://example.com/normal",
+            "搭配",
+            "https://example.com/news",
+            "News title",
+            "--------------------------------",
+        ],
+    )
+
+    entries = extract_post_entries(schedule_path)
+    assert len(entries) == 2
+    assert entries[0].get("reference_only")
+    assert not entries[1].get("reference_only")
+
+
 def test_extracts_full_url_from_truncated_hyperlink(tmp_path: Path) -> None:
     schedule_path = tmp_path / "alex_blocks_hyperlink.docx"
     doc = Document()

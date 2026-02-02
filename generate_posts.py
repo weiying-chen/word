@@ -23,11 +23,13 @@ from docx_utils import (
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
 PROGRAM_SECTION_RE = re.compile(r"^節目.*則")
+BODHI_SECTION_RE = re.compile(r"^菩提.*則")
 STOP_SECTION_RE = re.compile(r"^(?:-+|FB小編文|本周節日)")
 TRANSLATOR_TAG_RE = re.compile(r"\s*[A-Za-z]+/[A-Za-z]+\s*$")
 BLOCK_INDEX_RE = re.compile(r"^\d+\s*$")
 YYMD_DATE_RE = re.compile(r"^(?P<yy>\d{2})/(?P<mm>\d{1,2})/(?P<dd>\d{1,2})$")
 MD_DATE_RE = re.compile(r"^(?P<mm>\d{1,2})/(?P<dd>\d{1,2})$")
+BODHI_DATE_PREFIX_RE = re.compile(r"^(?P<mm>\d{1,2})/(?P<dd>\d{1,2})")
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 QUOTE_CHARS = "\"'“”‘’"
 ALEX_REF_LABELS = {"參考資料:", "參考資料："}
@@ -235,6 +237,22 @@ def _parse_date_prefix(text: str, default_year: int | None = None) -> str | None
     return f"{yy:02d}{mm:02d}{dd:02d}"
 
 
+def _extract_bodhi_date_prefix(title_line: str) -> tuple[str, str | None]:
+    stripped = title_line.strip()
+    match = BODHI_DATE_PREFIX_RE.match(stripped) if stripped else None
+    if not match:
+        return stripped, None
+    mm = int(match.group("mm"))
+    dd = int(match.group("dd"))
+    if not (1 <= mm <= 12 and 1 <= dd <= 31):
+        return stripped, None
+    rest = stripped[len(match.group(0)) :].lstrip()
+    if rest.startswith("首播"):
+        rest = rest[len("首播") :].lstrip()
+    cleaned_title = rest.strip() or stripped
+    return cleaned_title, f"{mm:02d}/{dd:02d}"
+
+
 def _detect_schedule_format(lines: list[str]) -> str:
     if any(PROGRAM_SECTION_RE.match(line) for line in lines):
         return "schedule"
@@ -356,11 +374,18 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
 
     entries: list[dict[str, str]] = []
     in_program_section = False
+    in_bodhi_section = False
 
     for idx, line in enumerate(lines):
+        if PROGRAM_SECTION_RE.match(line):
+            in_program_section = True
+            in_bodhi_section = False
+            continue
+        if BODHI_SECTION_RE.match(line):
+            in_program_section = True
+            in_bodhi_section = True
+            continue
         if not in_program_section:
-            if PROGRAM_SECTION_RE.match(line):
-                in_program_section = True
             continue
 
         if STOP_SECTION_RE.match(line):
@@ -380,6 +405,35 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
             url_line = ""
             url_target = None
         if person == "alex":
+            if in_bodhi_section:
+                raw_title = title_line.strip()
+                cleaned_title, date_prefix = _extract_bodhi_date_prefix(raw_title)
+                display_title = f"人間菩提 ({raw_title})"
+                hashtags_en, hashtags_zh = build_hashtags_from_title_line(display_title)
+                filename_title = "人間菩提"
+                entry = {
+                    "filename_title": filename_title,
+                    "header_title": _clean_title_for_display(display_title),
+                    "header_url": url_line,
+                    "header_url_target": url_target or "",
+                    "video_url": url_line,
+                    "video_url_target": url_target or "",
+                    "video_title": _clean_title_for_display(display_title),
+                    "ref_url": url_line,
+                    "ref_url_target": url_target or "",
+                    "ref_title": "",
+                    "hashtags_en": hashtags_en,
+                    "hashtags_zh": hashtags_zh,
+                    "reference_only": "true",
+                }
+                if date_prefix:
+                    parsed_prefix = _parse_date_prefix(
+                        date_prefix, default_year=date.today().year
+                    )
+                    if parsed_prefix:
+                        entry["filename_prefix_override"] = f"{parsed_prefix}_"
+                entries.append(entry)
+                continue
             ref_url, ref_title, ref_url_target = _extract_reference(
                 lines, url_targets, idx + 1
             )
@@ -437,6 +491,80 @@ def sync_empty_paragraph_indents(doc: Document) -> None:
         paragraph.paragraph_format.first_line_indent = last_first
 
 
+def remove_paragraph(paragraph) -> None:
+    element = paragraph._element
+    element.getparent().remove(element)
+
+
+def strip_reference_block(doc: Document, ref_url: str) -> None:
+    ref_label = "參考資料："
+    video_label = "要用的影片："
+    ref_url_idx = None
+    start_idx = None
+    end_idx = None
+    for idx, paragraph in enumerate(doc.paragraphs):
+        text = paragraph.text.strip()
+        if text == ref_label and start_idx is None:
+            start_idx = idx
+        if ref_url and text == ref_url and ref_url_idx is None:
+            ref_url_idx = idx
+        if text == video_label and end_idx is None:
+            end_idx = idx
+            break
+    if start_idx is None:
+        start_idx = ref_url_idx
+    if start_idx is None:
+        return
+    if end_idx is None:
+        end_idx = len(doc.paragraphs)
+
+    remove_indices = []
+    for idx in range(start_idx, end_idx):
+        if idx == ref_url_idx:
+            continue
+        remove_indices.append(idx)
+    for idx in reversed(remove_indices):
+        remove_paragraph(doc.paragraphs[idx])
+
+
+def strip_bodhi_video_labels(doc: Document) -> None:
+    remove_indices = []
+    for idx, paragraph in enumerate(doc.paragraphs):
+        text = paragraph.text.strip()
+        if text == "要用的影片：":
+            remove_indices.append(idx)
+        if text in {"{{VIDEO_DESC_EN}}", "{{VIDEO_DESC_ZH}}"}:
+            remove_indices.append(idx)
+    for idx in reversed(remove_indices):
+        remove_paragraph(doc.paragraphs[idx])
+
+
+def strip_bodhi_title_block(doc: Document) -> None:
+    remove_indices = []
+    for idx, paragraph in enumerate(doc.paragraphs):
+        text = paragraph.text.strip()
+        if text == "標題":
+            remove_indices.append(idx)
+        if text in {"{{TITLE_EN}}", "{{TITLE_ZH}}"}:
+            remove_indices.append(idx)
+    for idx in reversed(remove_indices):
+        remove_paragraph(doc.paragraphs[idx])
+
+
+def normalize_empty_paragraphs(doc: Document) -> None:
+    prev_empty = False
+    for paragraph in list(doc.paragraphs):
+        if paragraph.text.strip():
+            prev_empty = False
+            continue
+        fmt = paragraph.paragraph_format
+        fmt.left_indent = 0
+        fmt.first_line_indent = 0
+        fmt.right_indent = 0
+        if prev_empty:
+            remove_paragraph(paragraph)
+        else:
+            prev_empty = True
 
 def replace_placeholders(
     doc: Document,
@@ -534,6 +662,14 @@ def generate_docs(
             "{{HASHTAGS_EN}}": entry["hashtags_en"],
             "{{HASHTAGS_ZH}}": entry["hashtags_zh"],
         }
+        if entry.get("reference_only"):
+            mapping.update(
+                {
+                    "{{REF_SUMMARY_ZH}}": "",
+                    "{{REF_TITLE_EN}}": "",
+                    "{{REF_SUMMARY_EN}}": "",
+                }
+            )
         hyperlink_targets = {
             "{{HEADER_URL}}": entry.get("header_url_target", ""),
             "{{REF_URL}}": entry.get("ref_url_target", ""),
@@ -551,8 +687,14 @@ def generate_docs(
             default_tab_stop,
             hyperlink_targets=hyperlink_targets,
         )
-        ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
-        sync_empty_paragraph_indents(doc)
+        if entry.get("reference_only"):
+            strip_reference_block(doc, entry.get("ref_url", ""))
+            strip_bodhi_video_labels(doc)
+            strip_bodhi_title_block(doc)
+            normalize_empty_paragraphs(doc)
+        else:
+            ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
+            sync_empty_paragraph_indents(doc)
         doc.save(str(output_path))
         output_paths.append(output_path)
     return output_paths
