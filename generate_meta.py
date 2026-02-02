@@ -79,14 +79,14 @@ def apply_default_margins(doc: Document) -> None:
         section.right_margin = Inches(1.25)
 
 
-def render_meta(template_path: Path, payload_path: Path, output_path: Path) -> None:
+def generate_meta(template_path: Path, payload_path: Path, output_path: Path) -> None:
     data = load_payload(payload_path)
     doc = Document(str(template_path))
     apply_default_margins(doc)
 
     title_placeholder = find_paragraph_by_text(doc, TITLE_PLACEHOLDER)
     if title_placeholder:
-        title_placeholder.text = data.get("title_en") or data.get("title_zh", "")
+        title_placeholder.text = data.get("title_en", "")
 
     people_placeholder = find_paragraph_by_text(doc, PEOPLE_PLACEHOLDER)
     if people_placeholder:
@@ -94,7 +94,7 @@ def render_meta(template_path: Path, payload_path: Path, output_path: Path) -> N
 
     overview_placeholder = find_paragraph_by_text(doc, OVERVIEW_PLACEHOLDER)
     if overview_placeholder:
-        overview_placeholder.text = data.get("overview_en") or data.get("summary_zh", "")
+        overview_placeholder.text = data.get("overview_en", "")
 
     doc.save(str(output_path))
 
@@ -118,7 +118,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    render_meta(Path(args.template), Path(args.input), Path(args.output))
+    generate_meta(Path(args.template), Path(args.input), Path(args.output))
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from docx import Document
 
-from meta.render_meta import render_meta
+from generate_meta import generate_meta
 
 
 class RenderMetaTests(unittest.TestCase):
@@ -58,7 +58,7 @@ class RenderMetaTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            render_meta(template_path, payload_path, output_path)
+            generate_meta(template_path, payload_path, output_path)
 
             doc = Document(str(output_path))
             texts = [p.text for p in doc.paragraphs]
@@ -82,6 +82,35 @@ class RenderMetaTests(unittest.TestCase):
                 "English overview.",
             ],
         )
+
+    def test_missing_en_fields_render_empty(self) -> None:
+        payload = {
+            "title_zh": "中文標題",
+            "summary_zh": "中文摘要",
+            "people": [],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            payload_path = tmpdir_path / "meta_filled.json"
+            output_path = tmpdir_path / "meta.docx"
+
+            doc = Document()
+            doc.add_paragraph("{{TITLE_EN}}")
+            doc.add_paragraph("{{OVERVIEW_EN}}")
+            doc.save(str(template_path))
+            payload_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            generate_meta(template_path, payload_path, output_path)
+
+            doc = Document(str(output_path))
+            texts = [p.text for p in doc.paragraphs]
+
+        self.assertEqual(texts, ["", ""])
 
 
 if __name__ == "__main__":
