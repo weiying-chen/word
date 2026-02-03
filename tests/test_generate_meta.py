@@ -5,7 +5,7 @@ from pathlib import Path
 
 from docx import Document
 
-from generate_meta import generate_meta
+from generate_meta import default_output_path, generate_meta
 
 
 class RenderMetaTests(unittest.TestCase):
@@ -111,6 +111,13 @@ class RenderMetaTests(unittest.TestCase):
             texts = [p.text for p in doc.paragraphs]
 
         self.assertEqual(texts, ["", ""])
+
+
+def test_default_output_path_uses_source_stem(tmp_path: Path) -> None:
+    source = tmp_path / "約旦難民巴辛_final.docx"
+    output_dir = tmp_path / "outputs"
+    output = default_output_path(source, output_dir)
+    assert output == output_dir / "約旦難民巴辛_標題職銜_final.docx"
 
 
 if __name__ == "__main__":

@@ -79,6 +79,14 @@ def apply_default_margins(doc: Document) -> None:
         section.right_margin = Inches(1.25)
 
 
+def default_output_path(source_docx: Path, output_dir: Path) -> Path:
+    stem = source_docx.stem
+    if stem.endswith("_final"):
+        stem = stem[: -len("_final")]
+        return output_dir / f"{stem}_標題職銜_final.docx"
+    return output_dir / f"{stem}_標題職銜.docx"
+
+
 def generate_meta(template_path: Path, payload_path: Path, output_path: Path) -> None:
     data = load_payload(payload_path)
     doc = Document(str(template_path))
@@ -113,12 +121,21 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default="outputs/meta.docx",
+        default="",
         help="Path to write the rendered meta DOCX.",
+    )
+    parser.add_argument(
+        "--source-docx",
+        required=True,
+        help="Original source DOCX for naming the output.",
     )
     args = parser.parse_args()
 
-    generate_meta(Path(args.template), Path(args.input), Path(args.output))
+    output_path = Path(args.output) if args.output else default_output_path(
+        Path(args.source_docx), Path("outputs")
+    )
+
+    generate_meta(Path(args.template), Path(args.input), output_path)
 
 
 if __name__ == "__main__":
