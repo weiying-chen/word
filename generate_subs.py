@@ -48,6 +48,14 @@ HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
 SOURCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
 SOURCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
+BOX_DRAWING_HORIZONTAL = "\u2500"
+HYPHEN_MINUS = "-"
+
+
+def normalize_input_text(text: str) -> str:
+    if not text:
+        return text
+    return text.replace(BOX_DRAWING_HORIZONTAL, HYPHEN_MINUS)
 
 
 def parse_input(path: Path) -> dict[str, str]:
@@ -81,10 +89,10 @@ def parse_input(path: Path) -> dict[str, str]:
                         break
                 collected.append(next_line)
                 idx += 1
-            data[key] = "\n".join(collected).rstrip()
+            data[key] = normalize_input_text("\n".join(collected).rstrip())
             continue
 
-        data[key] = value
+        data[key] = normalize_input_text(value)
         idx += 1
 
     data.setdefault("BODY", "")

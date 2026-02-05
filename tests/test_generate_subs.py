@@ -113,6 +113,22 @@ def test_generate_subs_inserts_blank_after_last_label(tmp_path: Path) -> None:
     assert not doc.paragraphs[1].text.strip()
 
 
+def test_generate_subs_replaces_box_drawing_horizontal(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TITLE}}"])
+    input_path.write_text(
+        "TITLE: Tzu Chi's Journey ─ The Illness-Poverty Cycle\n",
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+    doc = Document(output_path)
+    assert doc.paragraphs[0].text == "Tzu Chi's Journey - The Illness-Poverty Cycle"
+
+
 def test_source_block_highlight_and_link(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     input_path = tmp_path / "input.txt"
