@@ -49,13 +49,13 @@ SOURCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
 SOURCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
-HYPHEN_MINUS = "-"
+SPACED_HYPHEN_MINUS = " - "
 
 
 def normalize_input_text(text: str) -> str:
     if not text:
         return text
-    return text.replace(BOX_DRAWING_HORIZONTAL, HYPHEN_MINUS)
+    return text.replace(BOX_DRAWING_HORIZONTAL, SPACED_HYPHEN_MINUS)
 
 
 def parse_input(path: Path) -> dict[str, str]:
