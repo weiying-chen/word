@@ -1,5 +1,6 @@
 from pathlib import Path
 import zipfile
+import warnings
 
 from docx import Document
 from lxml import etree
@@ -12,6 +13,24 @@ def _write_docx(path: Path, paragraphs: list[str]) -> None:
     for text in paragraphs:
         doc.add_paragraph(text)
     doc.save(path)
+
+
+def _assert_title_replaced_for_encoded_input(
+    tmp_path: Path,
+    encoded_text: bytes,
+    expected_title: str,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TITLE}}"])
+    input_path.write_bytes(encoded_text)
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    doc = Document(output_path)
+    assert doc.paragraphs[0].text == expected_title
 
 
 def test_parse_input_multiline_summary(tmp_path: Path) -> None:
@@ -54,6 +73,55 @@ def test_parse_input_multiline_intro_body(tmp_path: Path) -> None:
     data = generate_subs.parse_input(input_path)
     assert data["INTRO"] == "Intro line one.\nIntro line two."
     assert data["BODY"] == "Body line one.\nBody line two."
+
+
+def test_title_replacement_utf8_no_bom(tmp_path: Path) -> None:
+    _assert_title_replaced_for_encoded_input(
+        tmp_path,
+        "TITLE: UTF8 Title\n".encode("utf-8"),
+        "UTF8 Title",
+    )
+
+
+def test_title_replacement_utf8_bom(tmp_path: Path) -> None:
+    _assert_title_replaced_for_encoded_input(
+        tmp_path,
+        b"\xef\xbb\xbfTITLE: UTF8 BOM Title\n",
+        "UTF8 BOM Title",
+    )
+
+
+def test_title_replacement_utf16_le_bom(tmp_path: Path) -> None:
+    _assert_title_replaced_for_encoded_input(
+        tmp_path,
+        "TITLE: UTF16 BOM Title\n".encode("utf-16"),
+        "UTF16 BOM Title",
+    )
+
+
+def test_parse_input_fallback_encoding_warns_and_rewrites_utf8(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "input.txt"
+    input_path.write_bytes("TITLE: Café News\n".encode("cp1252"))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        data = generate_subs.parse_input(input_path)
+
+    assert data["TITLE"] == "Café News"
+    assert caught
+    assert "fallback encoding" in str(caught[0].message).lower()
+    assert "cp1252" in str(caught[0].message).lower()
+    assert input_path.read_bytes() == "TITLE: Café News\n".encode("utf-8")
+
+
+def test_title_replacement_fallback_encoding(tmp_path: Path) -> None:
+    _assert_title_replaced_for_encoded_input(
+        tmp_path,
+        "TITLE: Café from fallback\n".encode("cp1252"),
+        "Café from fallback",
+    )
 
 
 def test_generate_subs_removes_empty_summary_paragraph(tmp_path: Path) -> None:

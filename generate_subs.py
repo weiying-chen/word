@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import re
 import unicodedata
+import warnings
 import zipfile
 from pathlib import Path
 
@@ -58,9 +59,40 @@ def normalize_input_text(text: str) -> str:
     return text.replace(BOX_DRAWING_HORIZONTAL, SPACED_HYPHEN_MINUS)
 
 
+def _decode_input_text(path: Path) -> tuple[str, str, bool]:
+    raw = path.read_bytes()
+    tried_encodings: list[str] = []
+
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw.decode("utf-8-sig"), "utf-8-sig", False
+
+    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+        return raw.decode("utf-16"), "utf-16", False
+
+    for encoding in ("utf-8", "big5", "cp950", "gb18030", "cp1252"):
+        tried_encodings.append(encoding)
+        try:
+            return raw.decode(encoding), encoding, encoding != "utf-8"
+        except UnicodeDecodeError:
+            continue
+
+    tried = ", ".join(tried_encodings)
+    raise UnicodeError(
+        f"Unable to decode input file '{path}' with supported encodings: {tried}"
+    )
+
+
 def parse_input(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
-    lines = path.read_text(encoding="utf-8").splitlines()
+    text, encoding_used, used_fallback = _decode_input_text(path)
+    if used_fallback:
+        warnings.warn(
+            f"Using fallback encoding '{encoding_used}' for {path}; rewriting as UTF-8.",
+            stacklevel=2,
+        )
+        path.write_text(text, encoding="utf-8")
+
+    lines = text.splitlines()
     idx = 0
     while idx < len(lines):
         raw_line = lines[idx]
@@ -69,7 +101,7 @@ def parse_input(path: Path) -> dict[str, str]:
             continue
 
         key, value = raw_line.split(":", 1)
-        key = key.strip().upper()
+        key = key.lstrip("\ufeff").strip().upper()
         value = value.lstrip()
 
         if key not in PLACEHOLDER_KEY_SET:
