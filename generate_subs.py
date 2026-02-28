@@ -420,7 +420,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Fill a DOCX template from a text file.")
     parser.add_argument(
         "--template",
-        default="templates/template.docx",
+        default="templates/subs_template.docx",
         help="Path to the DOCX template.",
     )
     parser.add_argument(
@@ -430,7 +430,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default="outputs/output.docx",
+        default="output/output.docx",
         help="Path to write the filled DOCX.",
     )
     args = parser.parse_args()

@@ -85,7 +85,7 @@ def test_generated_docx_from_alex_blocks_uses_date_prefix(tmp_path: Path) -> Non
             "News title",
             "要用的影片:",
             "https://example.com/video",
-            "Program - Test Title (大愛醫生館 - 測試標題)",
+            "Program - Test Title (健康節目 - 測試標題)",
             "English prompt",
             "中文提示",
         ],
@@ -118,12 +118,12 @@ def test_generated_docx_from_alex_blocks_uses_date_prefix(tmp_path: Path) -> Non
     assert output_path.name.startswith("260123_")
     doc = Document(str(output_path))
     texts = [p.text for p in doc.paragraphs if p.text.strip()]
-    assert texts[0] == "Program - Test Title (大愛醫生館 - 測試標題)"
+    assert texts[0] == "Program - Test Title (健康節目 - 測試標題)"
     assert texts[1] == "https://example.com/video"
     assert texts[2] == "https://example.com/news"
     assert texts[3] == "News title"
     assert texts[4] == "https://example.com/video"
-    assert texts[5] == "Program - Test Title (大愛醫生館 - 測試標題)"
+    assert texts[5] == "Program - Test Title (健康節目 - 測試標題)"
     assert texts[6] == "English prompt"
     assert texts[7] == "中文提示"
 

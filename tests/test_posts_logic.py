@@ -39,8 +39,8 @@ def _add_hyperlink_paragraph(doc: Document, display_text: str, url: str) -> None
 
 
 def test_normalize_title_strips_translator_tag() -> None:
-    title = "大愛醫生館 - 怎麼坐才算有“坐相”？st/rc"
-    assert normalize_title(title) == "大愛醫生館 怎麼坐才算有“坐相”？"
+    title = "健康節目 - 怎麼坐才算有“坐相”？st/rc"
+    assert normalize_title(title) == "健康節目 怎麼坐才算有“坐相”？"
 
 
 def test_extract_post_titles_from_schedule(tmp_path: Path) -> None:
@@ -53,13 +53,13 @@ def test_extract_post_titles_from_schedule(tmp_path: Path) -> None:
             "節目甲 - 測試標題 em/el",
             "https://example.com/1",
             "2. alex",
-            "大愛醫生館 - 怎麼坐才算有“坐相”？st/rc",
+            "健康節目 - 怎麼坐才算有“坐相”？st/rc",
             "https://example.com/2",
             "搭配",
             "https://example.com/news",
             "新聞標題",
             "3. alex",
-            "大愛真健康 - 5分鐘高效有氧 | 上下肢肌耐力 | 肩腿| 背腿 | 核心 nick/cc",
+            "健康教室 - 5分鐘高效有氧 | 上下肢肌耐力 | 肩腿| 背腿 | 核心 nick/cc",
             "https://example.com/3",
             "--------------------------------",
             "FB小編文box裡面的新聞已用掉下面5則",
@@ -68,8 +68,8 @@ def test_extract_post_titles_from_schedule(tmp_path: Path) -> None:
 
     titles = extract_post_titles(schedule_path)
     assert titles == [
-        "大愛醫生館 怎麼坐才算有“坐相”",
-        "大愛真健康 5分鐘高效有氧 上下肢肌耐力 肩腿 背腿 核心",
+        "健康節目 怎麼坐才算有“坐相”",
+        "健康教室 5分鐘高效有氧 上下肢肌耐力 肩腿 背腿 核心",
     ]
 
 
@@ -85,14 +85,14 @@ def test_extract_post_titles_from_alex_blocks(tmp_path: Path) -> None:
             "新聞標題",
             "要用的影片:",
             "https://example.com/video",
-            "Program - Test Title (大愛醫生館 - 中文標題)",
+            "Program - Test Title (健康節目 - 中文標題)",
             "English prompt line",
             "中文提示",
         ],
     )
 
     titles = extract_post_titles(schedule_path)
-    assert titles == ["大愛醫生館 中文標題"]
+    assert titles == ["健康節目 中文標題"]
 
 
 def test_blocks_date_prefix_and_multiline_ref(tmp_path: Path) -> None:
@@ -108,7 +108,7 @@ def test_blocks_date_prefix_and_multiline_ref(tmp_path: Path) -> None:
             "Extra line",
             "要用的影片:",
             "https://example.com/video",
-            "Program - Test Title (大愛醫生館 - 中文標題)",
+            "Program - Test Title (健康節目 - 中文標題)",
         ],
     )
 
@@ -125,8 +125,8 @@ def test_bodhi_date_prefix(tmp_path: Path) -> None:
         [
             "菩提7則",
             "1. alex",
-            "1/20首播 互愛共善造大福",
-            "https://www.daai.tv/master/life-wisdom/P90230145",
+            "1/20首播 善念匯聚成力量",
+            "https://example.com/life-wisdom",
             "--------------------------------",
         ],
     )
@@ -134,7 +134,7 @@ def test_bodhi_date_prefix(tmp_path: Path) -> None:
     entries = extract_post_entries(schedule_path)
     assert len(entries) == 1
     entry = entries[0]
-    assert entry["video_title"] == "人間菩提 (1/20首播 互愛共善造大福)"
+    assert entry["video_title"] == "人間菩提 (1/20首播 善念匯聚成力量)"
     assert entry["ref_url"] == entry["video_url"]
     assert entry["ref_title"] == ""
     expected_prefix = f"{date.today().year % 100:02d}0120_"
@@ -148,7 +148,7 @@ def test_bodhi_section_does_not_leak(tmp_path: Path) -> None:
         [
             "菩提7則",
             "1. alex",
-            "1/20首播 互愛共善造大福",
+            "1/20首播 善念匯聚成力量",
             "https://example.com/bodhi",
             "節目1則",
             "1. alex",
@@ -181,7 +181,7 @@ def test_extracts_full_url_from_truncated_hyperlink(tmp_path: Path) -> None:
     doc.add_paragraph("新聞標題")
     doc.add_paragraph("要用的影片:")
     doc.add_paragraph("https://example.com/video")
-    doc.add_paragraph("Program - Test Title (大愛醫生館 - 測試標題)")
+    doc.add_paragraph("Program - Test Title (健康節目 - 測試標題)")
     doc.save(schedule_path)
 
     entries = extract_post_entries(schedule_path)
@@ -190,10 +190,10 @@ def test_extracts_full_url_from_truncated_hyperlink(tmp_path: Path) -> None:
 
 
 def test_build_hashtags_strips_quotes_and_spaces() -> None:
-    program = "大愛醫生館"
+    program = "健康節目"
     title = "怎麼坐才算有“坐相”？"
-    assert _build_hashtags(program, title, pascal_case=False) == "#大愛醫生館 #怎麼坐才算有坐相"
-    assert _build_hashtags(program, title, pascal_case=True) == "#大愛醫生館 #怎麼坐才算有坐相"
+    assert _build_hashtags(program, title, pascal_case=False) == "#健康節目 #怎麼坐才算有坐相"
+    assert _build_hashtags(program, title, pascal_case=True) == "#健康節目 #怎麼坐才算有坐相"
 
 
 def test_build_hashtags_splits_english_and_chinese_parenthetical() -> None:

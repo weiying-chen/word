@@ -10,21 +10,21 @@ from meta.extract_meta_request import extract_from_docx
 class ExtractMetaRequestTests(unittest.TestCase):
     def _build_docx(self, path: Path) -> None:
         doc = Document()
-        doc.add_paragraph("奧莫克眼科義診 重啟光明安生安心")
+        doc.add_paragraph("沿海義診守護居民健康")
         doc.add_paragraph("1_0001")
         doc.add_paragraph("(NS)")
-        doc.add_paragraph("海燕颱風重創菲律賓後，慈濟在奧莫克援建大愛村。")
-        doc.add_paragraph("篩檢186人，其中超過60例白內障與25例有結膜異常增生問題。")
+        doc.add_paragraph("志工與醫護團隊在沿海小鎮舉辦義診，提供居民所需協助。")
+        doc.add_paragraph("兩天內完成多項檢查，協助居民安排後續治療。")
         doc.add_paragraph("/*SUPER:")
-        doc.add_paragraph("病患│羅伯托//")
-        doc.add_paragraph("我的左眼看不見 也要接受治療了//")
+        doc.add_paragraph("居民│陳先生//")
+        doc.add_paragraph("我的左眼幾乎看不見了//")
         doc.add_paragraph("*/")
         doc.add_paragraph("/*SUPER:")
-        doc.add_paragraph("醫師│毛伊//")
-        doc.add_paragraph("未來 如果慈濟繼續幫助我們//")
+        doc.add_paragraph("醫師│林醫師//")
+        doc.add_paragraph("未來 如果團隊持續提供協助//")
         doc.add_paragraph("*/")
-        doc.add_paragraph("( 13 Roberto )")
-        doc.add_paragraph("( 14 Dr. Maui )")
+        doc.add_paragraph("( 13 Mr. Chen )")
+        doc.add_paragraph("( 14 Dr. Lin )")
         doc.save(str(path))
 
     def test_extracts_title_people_facts(self) -> None:
@@ -33,17 +33,17 @@ class ExtractMetaRequestTests(unittest.TestCase):
             self._build_docx(docx_path)
             payload = extract_from_docx(docx_path)
 
-        self.assertEqual(payload["title_zh"], "奧莫克眼科義診 重啟光明安生安心")
+        self.assertEqual(payload["title_zh"], "沿海義診守護居民健康")
         self.assertEqual(len(payload["people"]), 2)
-        self.assertEqual(payload["people"][0]["name_zh"], "羅伯托")
-        self.assertEqual(payload["people"][0]["role_zh"], "病患")
-        self.assertEqual(payload["people"][1]["name_zh"], "毛伊")
+        self.assertEqual(payload["people"][0]["name_zh"], "陳先生")
+        self.assertEqual(payload["people"][0]["role_zh"], "居民")
+        self.assertEqual(payload["people"][1]["name_zh"], "林醫師")
         self.assertEqual(payload["people"][1]["role_zh"], "醫師")
-        self.assertEqual(payload["people"][0]["name_en"], "Roberto")
-        self.assertEqual(payload["people"][1]["name_en"], "Dr. Maui")
+        self.assertEqual(payload["people"][0]["name_en"], "Mr. Chen")
+        self.assertEqual(payload["people"][1]["name_en"], "Dr. Lin")
         self.assertEqual(
             payload["summary_zh"],
-            "海燕颱風重創菲律賓後，慈濟在奧莫克援建大愛村。",
+            "志工與醫護團隊在沿海小鎮舉辦義診，提供居民所需協助。",
         )
 
 

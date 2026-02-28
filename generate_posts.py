@@ -716,7 +716,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-dir",
-        default="outputs",
+        default="output",
         help="Directory to write generated DOCX files.",
     )
     parser.add_argument(
