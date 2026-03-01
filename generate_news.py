@@ -24,6 +24,8 @@ PLACEHOLDER_KEYS = [
     "TITLE",
     "TITLE_URL",
     "SUMMARY",
+    "META_TITLE_EN",
+    "META_OVERVIEW_EN",
     "BODY",
 ]
 PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
@@ -81,7 +83,7 @@ def parse_input(path: Path) -> dict[str, str]:
             idx += 1
             continue
 
-        if key in {"SUMMARY", "BODY"}:
+        if key in {"SUMMARY", "META_OVERVIEW_EN", "BODY"}:
             collected: list[str] = []
             if value:
                 collected.append(value)
@@ -101,6 +103,7 @@ def parse_input(path: Path) -> dict[str, str]:
         idx += 1
 
     data.setdefault("SUMMARY", "")
+    data.setdefault("META_OVERVIEW_EN", "")
     data.setdefault("BODY", "")
     return data
 
@@ -127,6 +130,13 @@ def _new_document_from_template(template_path: Path) -> Document:
     for paragraph in list(doc.paragraphs):
         remove_paragraph(paragraph)
     return doc
+
+
+def default_output_path(source_docx: Path, output_dir: Path) -> Path:
+    stem = source_docx.stem
+    if not stem.endswith("_final"):
+        stem = f"{stem}_final"
+    return output_dir / f"{stem}.docx"
 
 
 def generate_news(
@@ -177,8 +187,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default="output/news_output.docx",
+        default="",
         help="Path to write the generated DOCX.",
+    )
+    parser.add_argument(
+        "--source-docx",
+        required=True,
+        help="Original source DOCX for naming the output.",
     )
     parser.add_argument(
         "--template",
@@ -187,7 +202,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    generate_news(Path(args.input), Path(args.output), Path(args.template))
+    output_path = Path(args.output) if args.output else default_output_path(
+        Path(args.source_docx), Path("output")
+    )
+
+    generate_news(Path(args.input), output_path, Path(args.template))
 
 
 if __name__ == "__main__":

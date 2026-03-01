@@ -117,3 +117,17 @@ def test_generate_news_renders_title_summary_marker_and_body(tmp_path: Path) -> 
     assert first_paragraph is not None
     hyperlinks = first_paragraph.findall("w:hyperlink", ns)
     assert len(hyperlinks) == 1
+
+
+def test_default_output_path_uses_source_stem_with_final_suffix(tmp_path: Path) -> None:
+    source = tmp_path / "coastal_story.docx"
+    output_dir = tmp_path / "output"
+    output = generate_news.default_output_path(source, output_dir)
+    assert output == output_dir / "coastal_story_final.docx"
+
+
+def test_default_output_path_preserves_existing_final_suffix(tmp_path: Path) -> None:
+    source = tmp_path / "coastal_story_final.docx"
+    output_dir = tmp_path / "output"
+    output = generate_news.default_output_path(source, output_dir)
+    assert output == output_dir / "coastal_story_final.docx"

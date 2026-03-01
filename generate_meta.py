@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import json
+import re
 from pathlib import Path
 
 from docx import Document
@@ -11,14 +11,131 @@ from docx.oxml import OxmlElement
 from docx.text.paragraph import Paragraph
 from docx.shared import Inches
 
+from generate_news import parse_input as parse_news_input
+
 
 TITLE_PLACEHOLDER = "{{TITLE_EN}}"
 PEOPLE_PLACEHOLDER = "{{PEOPLE}}"
 OVERVIEW_PLACEHOLDER = "{{OVERVIEW_EN}}"
+META_TITLE_EN_KEY = "META_TITLE_EN"
+META_OVERVIEW_EN_KEY = "META_OVERVIEW_EN"
+CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+EN_NAME_PAREN_RE = re.compile(r"^\(\s*\d+\s+([A-Za-z][A-Za-z.\s'-]*)\s*\)$")
 
 
-def load_payload(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+def _contains_cjk(text: str) -> bool:
+    return bool(CJK_RE.search(text))
+
+
+def _clean_super_line(text: str) -> str:
+    cleaned = text.strip()
+    if cleaned.endswith("//"):
+        cleaned = cleaned[:-2].rstrip()
+    return cleaned
+
+
+def _parse_super(lines: list[str]) -> dict:
+    role_zh = ""
+    name_zh = ""
+    quotes_zh: list[str] = []
+    if lines:
+        header = lines[0]
+        if "│" in header:
+            role_zh, name_zh = [part.strip() for part in header.split("│", 1)]
+        else:
+            name_zh = header.strip()
+        if len(lines) > 1:
+            quotes_zh = [line for line in lines[1:] if line]
+    return {
+        "role_zh": role_zh,
+        "name_zh": name_zh,
+        "quotes_zh": quotes_zh,
+    }
+
+
+def parse_input(path: Path) -> dict[str, object]:
+    if path.suffix.lower() != ".txt":
+        raise ValueError(f"Unsupported input format: {path}")
+
+    data = parse_news_input(path)
+    body_lines = data.get("BODY", "").splitlines()
+
+    narration_zh: list[str] = []
+    supers: list[dict[str, object]] = []
+    report_zh: list[str] = []
+    english_names: list[str] = []
+    super_lines: list[str] = []
+    in_super = False
+    in_report = False
+
+    for raw in body_lines:
+        line = raw.strip()
+        en_match = EN_NAME_PAREN_RE.match(line)
+        if en_match:
+            english_names.append(en_match.group(1).strip())
+            continue
+        if line.startswith("/*SUPER"):
+            in_super = True
+            super_lines = []
+            continue
+        if line.startswith("/*REPORT"):
+            in_report = True
+            continue
+        if in_report:
+            if line.startswith("*/"):
+                in_report = False
+            else:
+                report_zh.append(_clean_super_line(line))
+            continue
+        if in_super:
+            if line.startswith("*/"):
+                supers.append(_parse_super(super_lines))
+                in_super = False
+            else:
+                super_lines.append(_clean_super_line(line))
+            continue
+
+        if not _contains_cjk(line):
+            continue
+        if re.fullmatch(r"[\d_]+", line):
+            continue
+        if re.fullmatch(r"\(?\s*\d+.*\)?", line) and not _contains_cjk(line):
+            continue
+        if re.fullmatch(r"\(\s*NS\s*\)", line):
+            continue
+        if re.fullmatch(r"\(\s*\d+\s+[A-Za-z]+\s*\)", line):
+            continue
+
+        line = re.sub(r"^\(\s*[^)]*\)\s*", "", line).strip()
+        if not line:
+            continue
+        narration_zh.append(line)
+
+    people: list[dict[str, str]] = [
+        {
+            "name_zh": str(s.get("name_zh", "")),
+            "name_en": "",
+            "role_zh": str(s.get("role_zh", "")),
+            "role_en": "",
+        }
+        for s in supers
+    ]
+    for idx, en_name in enumerate(english_names):
+        if idx >= len(people):
+            break
+        people[idx]["name_en"] = en_name
+
+    summary = data.get("SUMMARY", "").splitlines()
+    return {
+        "title_zh": data.get("TITLE", ""),
+        "summary_zh": summary[0] if summary else "",
+        "narration_zh": narration_zh,
+        "supers_zh": supers,
+        "report_zh": report_zh,
+        "people": people,
+        "title_en": data.get(META_TITLE_EN_KEY, ""),
+        "overview_en": data.get(META_OVERVIEW_EN_KEY, ""),
+    }
 
 
 def remove_paragraph(paragraph: Paragraph) -> None:
@@ -64,7 +181,12 @@ def build_people_lines(people: list[dict]) -> list[str]:
             else:
                 label_zh = role_zh or name_zh
         lines.append(label_zh or "")
-        lines.append(person.get("name_en", ""))
+        name_zh = person.get("name_zh", "").strip()
+        name_en = person.get("name_en", "").strip()
+        if not name_en:
+            placeholder_key = name_zh or "NAME_EN"
+            name_en = f"{{{{{placeholder_key}}}}}"
+        lines.append(name_en)
         lines.append(person.get("role_en", ""))
         if idx < len(people) - 1:
             lines.append("")
@@ -83,12 +205,11 @@ def default_output_path(source_docx: Path, output_dir: Path) -> Path:
     stem = source_docx.stem
     if stem.endswith("_final"):
         stem = stem[: -len("_final")]
-        return output_dir / f"{stem}_標題職銜_final.docx"
-    return output_dir / f"{stem}_標題職銜.docx"
+    return output_dir / f"{stem}_標題職銜_final.docx"
 
 
-def generate_meta(template_path: Path, payload_path: Path, output_path: Path) -> None:
-    data = load_payload(payload_path)
+def generate_meta(template_path: Path, input_path: Path, output_path: Path) -> None:
+    data = parse_input(input_path)
     doc = Document(str(template_path))
     apply_default_margins(doc)
 
@@ -108,7 +229,7 @@ def generate_meta(template_path: Path, payload_path: Path, output_path: Path) ->
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Render meta.docx from JSON data.")
+    parser = argparse.ArgumentParser(description="Render meta.docx from shared news txt data.")
     parser.add_argument(
         "--template",
         default="templates/meta_template.docx",
@@ -116,8 +237,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--input",
-        default="meta_filled.json",
-        help="Path to the filled JSON payload.",
+        default="news_input.txt",
+        help="Path to the shared news txt input.",
     )
     parser.add_argument(
         "--output",
@@ -132,7 +253,7 @@ def main() -> None:
     args = parser.parse_args()
 
     output_path = Path(args.output) if args.output else default_output_path(
-        Path(args.source_docx), Path("outputs")
+        Path(args.source_docx), Path("output")
     )
 
     generate_meta(Path(args.template), Path(args.input), output_path)

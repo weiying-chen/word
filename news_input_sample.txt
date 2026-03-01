@@ -4,6 +4,10 @@ SUMMARY:
 志工與醫護團隊在沿海小鎮舉辦兩天義診，提供居民視力檢查、衛教與轉介服務，讓延誤就醫的家庭重新獲得所需協助。
 (  11/16~17 )
 
+META_TITLE_EN: Coastal Clinic Restores Access to Care
+META_OVERVIEW_EN:
+A volunteer medical team brought screenings, consultations, and follow-up support to residents who had delayed care.
+
 BODY:
 1_0014
 為期兩天的義診一早就湧入人潮，居民依序完成報到、檢查與諮詢。
