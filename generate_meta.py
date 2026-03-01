@@ -187,7 +187,12 @@ def build_people_lines(people: list[dict]) -> list[str]:
             placeholder_key = name_zh or "NAME_EN"
             name_en = f"{{{{{placeholder_key}}}}}"
         lines.append(name_en)
-        lines.append(person.get("role_en", ""))
+        role_zh = person.get("role_zh", "").strip()
+        role_en = person.get("role_en", "").strip()
+        if not role_en:
+            placeholder_key = role_zh or "ROLE_EN"
+            role_en = f"{{{{{placeholder_key}}}}}"
+        lines.append(role_en)
         if idx < len(people) - 1:
             lines.append("")
     return lines
