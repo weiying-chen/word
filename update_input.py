@@ -13,6 +13,7 @@ LABEL_MAP = {
     "建議標題": "TITLE_SUGGESTED",
     "簡介": "INTRO",
     "選圖": "THUMBNAIL",
+    "SUPER_PEOPLE": "SUPER_PEOPLE",
 }
 
 
@@ -75,6 +76,8 @@ def write_input(
 ) -> None:
     intro = fields.get("INTRO", "")
     intro_lines = intro.splitlines() if intro else [""]
+    super_people = fields.get("SUPER_PEOPLE", "")
+    super_people_lines = super_people.splitlines() if super_people else [""]
     output_path.write_text(
         "\n".join(
             [
@@ -89,6 +92,9 @@ def write_input(
                 f"THUMBNAIL: {fields.get('THUMBNAIL', '')}",
                 "",
                 f"TIME_RANGE: {time_range}",
+                "",
+                "SUPER_PEOPLE:",
+                *super_people_lines,
                 "",
                 "BODY:",
                 body,

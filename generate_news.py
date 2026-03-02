@@ -26,6 +26,7 @@ PLACEHOLDER_KEYS = [
     "SUMMARY",
     "META_TITLE_EN",
     "META_OVERVIEW_EN",
+    "SUPER_PEOPLE",
     "BODY",
 ]
 PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
@@ -83,7 +84,7 @@ def parse_input(path: Path) -> dict[str, str]:
             idx += 1
             continue
 
-        if key in {"SUMMARY", "META_OVERVIEW_EN", "BODY"}:
+        if key in {"SUMMARY", "META_OVERVIEW_EN", "SUPER_PEOPLE", "BODY"}:
             collected: list[str] = []
             if value:
                 collected.append(value)
@@ -163,7 +164,12 @@ def generate_news(
     if summary:
         _render_multiline_block(doc, summary)
 
-    if summary or data.get("BODY", ""):
+    super_people = data.get("SUPER_PEOPLE", "")
+    if super_people:
+        doc.add_paragraph("")
+        _render_multiline_block(doc, super_people)
+
+    if summary or super_people or data.get("BODY", ""):
         _add_plain_paragraph(doc, FIXED_MARKER)
         doc.add_paragraph("")
 

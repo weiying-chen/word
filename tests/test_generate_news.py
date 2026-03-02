@@ -19,6 +19,11 @@ def test_parse_input_multiline_summary_and_body(tmp_path: Path) -> None:
                 "Summary line one.",
                 "(  11/16~17 )",
                 "",
+                "SUPER_PEOPLE:",
+                "病患 | 羅伯托",
+                "Roberto",
+                "Patient",
+                "",
                 "BODY:",
                 "1_0014",
                 "中文內文。",
@@ -33,6 +38,7 @@ def test_parse_input_multiline_summary_and_body(tmp_path: Path) -> None:
     assert data["TITLE"] == "Sample News Title"
     assert data["TITLE_URL"] == "https://example.com/news"
     assert data["SUMMARY"] == "Summary line one.\n(  11/16~17 )"
+    assert data["SUPER_PEOPLE"] == "病患 | 羅伯托\nRoberto\nPatient"
     assert data["BODY"] == "1_0014\n中文內文。\nEnglish line."
 
 
@@ -65,6 +71,11 @@ def test_generate_news_renders_title_summary_marker_and_body(tmp_path: Path) -> 
                 "Volunteers organized a two-day clinic to support families in a coastal town.",
                 "(  11/16~17 )",
                 "",
+                "SUPER_PEOPLE:",
+                "病患 | 羅伯托",
+                "Roberto",
+                "Patient",
+                "",
                 "BODY:",
                 "1_0014",
                 "Two days of free screenings brought steady lines of local residents.",
@@ -91,11 +102,15 @@ def test_generate_news_renders_title_summary_marker_and_body(tmp_path: Path) -> 
 
     doc = Document(output_path)
     texts = [p.text for p in doc.paragraphs]
-    assert texts[:10] == [
+    assert texts[:14] == [
         "Community Clinic Brings Care to Coastal Town",
         "",
         "Volunteers organized a two-day clinic to support families in a coastal town.",
         "(  11/16~17 )",
+        "",
+        "病患 | 羅伯托",
+        "Roberto",
+        "Patient",
         "<",
         "",
         "1_0014",
@@ -105,9 +120,9 @@ def test_generate_news_renders_title_summary_marker_and_body(tmp_path: Path) -> 
     ]
 
     assert doc.paragraphs[2].runs[0].font.highlight_color.name == "WHITE"
-    assert doc.paragraphs[4].runs[0].font.highlight_color.name == "WHITE"
-    assert doc.paragraphs[6].runs[0].font.highlight_color.name == "BRIGHT_GREEN"
+    assert doc.paragraphs[8].runs[0].font.highlight_color.name == "WHITE"
     assert doc.paragraphs[10].runs[0].font.highlight_color.name == "BRIGHT_GREEN"
+    assert doc.paragraphs[14].runs[0].font.highlight_color.name == "BRIGHT_GREEN"
 
     with zipfile.ZipFile(output_path) as zf:
         document_xml = etree.fromstring(zf.read("word/document.xml"))
