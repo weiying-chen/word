@@ -2,6 +2,7 @@ from pathlib import Path
 import zipfile
 import warnings
 
+import pytest
 from docx import Document
 from lxml import etree
 
@@ -117,11 +118,12 @@ def test_parse_input_fallback_encoding_warns_and_rewrites_utf8(
 
 
 def test_title_replacement_fallback_encoding(tmp_path: Path) -> None:
-    _assert_title_replaced_for_encoded_input(
-        tmp_path,
-        "TITLE: Café from fallback\n".encode("cp1252"),
-        "Café from fallback",
-    )
+    with pytest.warns(UserWarning, match="fallback encoding 'cp1252'"):
+        _assert_title_replaced_for_encoded_input(
+            tmp_path,
+            "TITLE: Café from fallback\n".encode("cp1252"),
+            "Café from fallback",
+        )
 
 
 def test_generate_subs_removes_empty_summary_paragraph(tmp_path: Path) -> None:
@@ -263,3 +265,133 @@ def test_source_block_highlight_and_link(tmp_path: Path) -> None:
     s_size = s_rpr.find("w:sz", ns)
     assert s_highlight.get("{%s}val" % ns["w"]) == "cyan"
     assert s_size.get("{%s}val" % ns["w"]) == "20"
+
+
+def test_parse_input_multiline_time_range(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.txt"
+    input_path.write_text(
+        "\n".join(
+            [
+                "TIME_RANGE:",
+                "(1) 00:42-05:41 (4m59s)",
+                "(2) 05:44-13:21 (7m37s)",
+                "19'33",
+                "BODY:",
+                "dummy",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    data = generate_subs.parse_input(input_path)
+    assert (
+        data["TIME_RANGE"]
+        == "(1) 00:42-05:41 (4m59s)\n(2) 05:44-13:21 (7m37s)\n19'33"
+    )
+
+
+def test_generate_subs_applies_time_range_style_in_time_range(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TIME_RANGE}}"])
+    input_path.write_text(
+        "\n".join(
+            [
+                "TIME_RANGE:",
+                "(1) 00:42-05:41 (4m59s)",
+                "(2) 05:44-13:21 (7m37s)",
+                "19'33",
+                "BODY:",
+                "dummy",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    wanted = {
+        "(1) 00:42-05:41 (4m59s)",
+        "(2) 05:44-13:21 (7m37s)",
+        "19'33",
+    }
+
+    found = {}
+    for p in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+        if text in wanted:
+            styles = set()
+            for run in p.findall("w:r", ns):
+                r_style = run.find("w:rPr/w:rStyle", ns)
+                if r_style is not None:
+                    styles.add(r_style.get("{%s}val" % ns["w"]))
+            found[text] = styles
+
+    assert "TimeRange" in found["(1) 00:42-05:41 (4m59s)"]
+    assert "TimeRange" in found["(2) 05:44-13:21 (7m37s)"]
+    assert "TimeRange" in found["19'33"]
+
+
+def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -> None:
+    template_path = Path("templates/subs_template.docx")
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    input_path.write_text(
+        "\n".join(
+            [
+                "TITLE: Sample Title",
+                "URL: https://example.com/watch?v=1",
+                "SUMMARY:",
+                "Summary line A.",
+                "",
+                "Summary line B.",
+                "YT_TITLE_SUGGESTED: YT title",
+                "TITLE_SUGGESTED: Title only",
+                "INTRO:",
+                "Intro EN.",
+                "",
+                "Intro ZH.",
+                "THUMBNAIL: missing.png",
+                "TIME_RANGE:",
+                "(1) 00:42-05:41 (4m59s)",
+                "(2) 05:44-13:21 (7m37s)",
+                "",
+                "19'33",
+                "BODY:",
+                "00:00:01:00\t00:00:02:00\t測試",
+                "Test",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+    doc = Document(output_path)
+    texts = [p.text for p in doc.paragraphs]
+
+    # Key structure order should match current output behavior.
+    idx_summary_a = texts.index("Summary line A.")
+    idx_summary_b = texts.index("Summary line B.")
+    idx_yt_label = texts.index("建議YT標題：")
+    idx_title_label = texts.index("建議標題：")
+    idx_intro_label = texts.index("簡介：")
+    idx_thumb_label = texts.index("選圖：")
+    idx_subtitle_label = texts.index("字幕：")
+    idx_t1 = texts.index("(1) 00:42-05:41 (4m59s)")
+    idx_t2 = texts.index("(2) 05:44-13:21 (7m37s)")
+    idx_total = texts.index("19'33")
+    idx_body_src = texts.index("00:00:01:00\t00:00:02:00\t測試")
+
+    assert idx_summary_a < idx_summary_b < idx_yt_label
+    assert idx_yt_label < idx_title_label < idx_intro_label < idx_thumb_label < idx_subtitle_label
+    assert idx_subtitle_label < idx_t1 < idx_t2 < idx_total < idx_body_src
