@@ -165,7 +165,7 @@ class RenderMetaTests(unittest.TestCase):
                 "TITLE: 沿海義診守護居民健康",
                 "TITLE_URL: https://example.com/news/story",
                 "SUMMARY:",
-                "志工與醫護團隊在沿海小鎮舉辦兩天義診。",
+                "A volunteer team hosted a two-day community clinic in a coastal town.",
                 "(  11/16~17 )",
                 "",
                 "META_TITLE_EN: Coastal Clinic Restores Access to Care",
@@ -230,17 +230,17 @@ class RenderMetaTests(unittest.TestCase):
 
 
 def test_default_output_path_uses_source_stem(tmp_path: Path) -> None:
-    source = tmp_path / "約旦難民巴辛_final.docx"
+    source = tmp_path / "sample_story_final.docx"
     output_dir = tmp_path / "output"
     output = default_output_path(source, output_dir)
-    assert output == output_dir / "約旦難民巴辛_標題職銜_final.docx"
+    assert output == output_dir / "sample_story_標題職銜_final.docx"
 
 
 def test_default_output_path_adds_final_suffix_when_missing(tmp_path: Path) -> None:
-    source = tmp_path / "約旦難民巴辛.docx"
+    source = tmp_path / "sample_story.docx"
     output_dir = tmp_path / "output"
     output = default_output_path(source, output_dir)
-    assert output == output_dir / "約旦難民巴辛_標題職銜_final.docx"
+    assert output == output_dir / "sample_story_標題職銜_final.docx"
 
 
 if __name__ == "__main__":
