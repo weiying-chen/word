@@ -16,10 +16,9 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.text.paragraph import Paragraph
 from docx.oxml.ns import qn
-from docx.shared import RGBColor, Inches
+from docx.shared import RGBColor, Inches, Pt
 
 from docx_utils import (
-    add_highlighted_run,
     add_hyperlink,
     clear_paragraph,
     ensure_blank_after_labels,
@@ -44,7 +43,7 @@ SOURCE_URL_RE = re.compile(r"^https?://\S+")
 TIMING_LINE_RE = re.compile(
     r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
-SYMBOL_FONT_NAME = ""
+SYMBOL_FONT_NAME = "Segoe UI Symbol"
 HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
 SOURCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
 SOURCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
@@ -136,7 +135,7 @@ def parse_input(path: Path) -> dict[str, str]:
 
 
 def _run_contains_symbol(text: str) -> bool:
-    return any(unicodedata.category(char).startswith("S") for char in text)
+    return any(unicodedata.category(char) == "So" for char in text)
 
 
 def _set_run_font(run, font_name: str) -> None:
@@ -145,7 +144,6 @@ def _set_run_font(run, font_name: str) -> None:
     r_fonts = r_pr.get_or_add_rFonts()
     r_fonts.set(qn("w:ascii"), font_name)
     r_fonts.set(qn("w:hAnsi"), font_name)
-    r_fonts.set(qn("w:eastAsia"), font_name)
     r_fonts.set(qn("w:cs"), font_name)
 
 
@@ -199,6 +197,46 @@ def _split_marked_parts(text: str) -> list[tuple[str, bool]]:
     return parts
 
 
+def _split_symbol_chunks(text: str) -> list[tuple[str, bool]]:
+    if not text:
+        return []
+
+    parts: list[tuple[str, bool]] = []
+    start = 0
+    current_is_symbol = unicodedata.category(text[0]) == "So"
+
+    for idx in range(1, len(text)):
+        is_symbol = unicodedata.category(text[idx]) == "So"
+        if is_symbol != current_is_symbol:
+            parts.append((text[start:idx], current_is_symbol))
+            start = idx
+            current_is_symbol = is_symbol
+    parts.append((text[start:], current_is_symbol))
+    return parts
+
+
+def _add_text_runs(
+    paragraph,
+    text: str,
+    *,
+    run_style: str | None = None,
+    highlight_color=None,
+    font_size_pt: int | None = None,
+) -> None:
+    for chunk, is_symbol in _split_symbol_chunks(text):
+        if not chunk:
+            continue
+        run = paragraph.add_run(chunk)
+        if run_style:
+            run.style = run_style
+        if font_size_pt is not None:
+            run.font.size = Pt(font_size_pt)
+        if highlight_color is not None:
+            run.font.highlight_color = highlight_color
+        if is_symbol:
+            apply_symbol_font(run)
+
+
 def _add_marked_runs(
     paragraph,
     text: str,
@@ -213,24 +251,13 @@ def _add_marked_runs(
             continue
 
         highlight_color = marked_highlight if marked else default_highlight
-        if highlight_color is not None:
-            if apply_default_size:
-                run = add_highlighted_run(
-                    paragraph,
-                    part_text,
-                    highlight_color=highlight_color,
-                )
-            else:
-                run = paragraph.add_run(part_text)
-                run.font.highlight_color = highlight_color
-        else:
-            run = paragraph.add_run(part_text)
-
-        if run_style:
-            run.style = run_style
-            if highlight_color is not None:
-                run.font.highlight_color = highlight_color
-        apply_symbol_font(run)
+        _add_text_runs(
+            paragraph,
+            part_text,
+            run_style=run_style,
+            highlight_color=highlight_color,
+            font_size_pt=10 if apply_default_size else None,
+        )
 
 
 def replace_body_paragraph(
@@ -240,7 +267,7 @@ def replace_body_paragraph(
     timing_style: str | None = None,
 ) -> None:
     lines = body_text.splitlines() if body_text else []
-    paragraph.text = ""
+    clear_paragraph(paragraph)
     if not lines:
         return
     while lines and not lines[0].strip():
@@ -284,8 +311,7 @@ def replace_body_paragraph(
                     apply_default_size=False,
                 )
             else:
-                run = target.add_run(text)
-                apply_symbol_font(run)
+                _add_text_runs(target, text)
 
     for idx, line in enumerate(lines):
         if idx > 0:

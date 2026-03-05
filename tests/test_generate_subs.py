@@ -562,3 +562,58 @@ def test_generate_subs_timing_marker_keeps_timing_font_size(tmp_path: Path) -> N
     assert s_plain is not None
     assert all(v is None for v in s_marked)
     assert all(v is None for v in s_plain)
+
+
+def test_generate_subs_summary_symbol_font_applies_only_to_icon_runs(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{SUMMARY}}"])
+    input_path.write_text(
+        "\n".join(
+            [
+                "SUMMARY:",
+                "📌 本集重點：",
+                "✔ 在安全與信任的環境中",
+                "BODY:",
+                "dummy",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+    def para_by_text(target: str):
+        for p in doc.findall(".//w:p", ns):
+            text = "".join(t.text or "" for t in p.findall(".//w:t", ns))
+            if text == target:
+                return p
+        return None
+
+    p = para_by_text("📌 本集重點：")
+    assert p is not None
+    runs = p.findall("w:r", ns)
+    run_texts = [
+        "".join(t.text or "" for t in r.findall(".//w:t", ns))
+        for r in runs
+    ]
+    assert run_texts == ["📌", " 本集重點："]
+
+    icon_fonts = runs[0].find("w:rPr/w:rFonts", ns)
+    assert icon_fonts is not None
+    assert icon_fonts.get("{%s}ascii" % ns["w"]) == "Segoe UI Symbol"
+    assert icon_fonts.get("{%s}hAnsi" % ns["w"]) == "Segoe UI Symbol"
+    assert icon_fonts.get("{%s}cs" % ns["w"]) == "Segoe UI Symbol"
+
+    text_fonts = runs[1].find("w:rPr/w:rFonts", ns)
+    assert text_fonts is None
