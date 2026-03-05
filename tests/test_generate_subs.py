@@ -140,12 +140,12 @@ def test_generate_subs_removes_empty_summary_paragraph(tmp_path: Path) -> None:
     assert texts == ["After summary."]
 
 
-def test_generate_subs_removes_empty_time_range_paragraph(tmp_path: Path) -> None:
+def test_generate_subs_removes_empty_timing_paragraph(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{TIME_RANGE}}", "After time range."])
+    _write_docx(template_path, ["{{TIMING}}", "After time range."])
     input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
 
     generate_subs.generate_subs(template_path, input_path, output_path)
@@ -267,12 +267,12 @@ def test_source_block_highlight_and_link(tmp_path: Path) -> None:
     assert s_size.get("{%s}val" % ns["w"]) == "20"
 
 
-def test_parse_input_multiline_time_range(tmp_path: Path) -> None:
+def test_parse_input_multiline_timing(tmp_path: Path) -> None:
     input_path = tmp_path / "input.txt"
     input_path.write_text(
         "\n".join(
             [
-                "TIME_RANGE:",
+                "TIMING:",
                 "(1) 00:42-05:41 (4m59s)",
                 "(2) 05:44-13:21 (7m37s)",
                 "19'33",
@@ -286,21 +286,21 @@ def test_parse_input_multiline_time_range(tmp_path: Path) -> None:
 
     data = generate_subs.parse_input(input_path)
     assert (
-        data["TIME_RANGE"]
+        data["TIMING"]
         == "(1) 00:42-05:41 (4m59s)\n(2) 05:44-13:21 (7m37s)\n19'33"
     )
 
 
-def test_generate_subs_applies_time_range_style_in_time_range(tmp_path: Path) -> None:
+def test_generate_subs_applies_timing_style_in_timing(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{TIME_RANGE}}"])
+    _write_docx(template_path, ["{{TIMING}}"])
     input_path.write_text(
         "\n".join(
             [
-                "TIME_RANGE:",
+                "TIMING:",
                 "(1) 00:42-05:41 (4m59s)",
                 "(2) 05:44-13:21 (7m37s)",
                 "19'33",
@@ -335,9 +335,9 @@ def test_generate_subs_applies_time_range_style_in_time_range(tmp_path: Path) ->
                     styles.add(r_style.get("{%s}val" % ns["w"]))
             found[text] = styles
 
-    assert "TimeRange" in found["(1) 00:42-05:41 (4m59s)"]
-    assert "TimeRange" in found["(2) 05:44-13:21 (7m37s)"]
-    assert "TimeRange" in found["19'33"]
+    assert "Timing" in found["(1) 00:42-05:41 (4m59s)"]
+    assert "Timing" in found["(2) 05:44-13:21 (7m37s)"]
+    assert "Timing" in found["19'33"]
 
 
 def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -> None:
@@ -361,7 +361,7 @@ def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -
                 "",
                 "Intro ZH.",
                 "THUMBNAIL: missing.png",
-                "TIME_RANGE:",
+                "TIMING:",
                 "(1) 00:42-05:41 (4m59s)",
                 "(2) 05:44-13:21 (7m37s)",
                 "",
@@ -395,3 +395,4 @@ def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -
     assert idx_summary_a < idx_summary_b < idx_yt_label
     assert idx_yt_label < idx_title_label < idx_intro_label < idx_thumb_label < idx_subtitle_label
     assert idx_subtitle_label < idx_t1 < idx_t2 < idx_total < idx_body_src
+

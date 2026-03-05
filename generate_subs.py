@@ -36,12 +36,12 @@ PLACEHOLDER_KEYS = [
     "TITLE_SUGGESTED",
     "INTRO",
     "THUMBNAIL",
-    "TIME_RANGE",
+    "TIMING",
     "BODY",
 ]
 PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
 SOURCE_URL_RE = re.compile(r"^https?://\S+")
-TIME_RANGE_LINE_RE = re.compile(
+TIMING_LINE_RE = re.compile(
     r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
 SYMBOL_FONT_NAME = ""
@@ -108,7 +108,7 @@ def parse_input(path: Path) -> dict[str, str]:
             idx += 1
             continue
 
-        if key in {"BODY", "INTRO", "SUMMARY"}:
+        if key in {"BODY", "INTRO", "SUMMARY", "TIMING"}:
             collected: list[str] = []
             if value:
                 collected.append(value)
@@ -179,7 +179,10 @@ def insert_paragraph_after(paragraph, text: str):
 
 
 def replace_body_paragraph(
-    paragraph, body_text: str, source_indent_inches: float
+    paragraph,
+    body_text: str,
+    source_indent_inches: float,
+    timing_style: str | None = None,
 ) -> None:
     lines = body_text.splitlines() if body_text else []
     paragraph.text = ""
@@ -240,13 +243,15 @@ def replace_body_paragraph(
             _add_source_runs(target, text)
         else:
             run = target.add_run(text)
+            if timing_style:
+                run.style = timing_style
             apply_symbol_font(run)
 
     for idx, line in enumerate(lines):
         if idx > 0:
             current = insert_paragraph_after(current, "")
 
-        if TIME_RANGE_LINE_RE.match(line):
+        if TIMING_LINE_RE.match(line):
             in_source_block = False
 
         cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line)
@@ -257,7 +262,7 @@ def replace_body_paragraph(
         write_line(
             current,
             cleaned_line if is_url else line,
-            in_source_block and not TIME_RANGE_LINE_RE.match(line),
+            in_source_block and not TIMING_LINE_RE.match(line),
             bool(is_url),
         )
 
@@ -267,8 +272,8 @@ def remove_paragraph(paragraph) -> None:
     element.getparent().remove(element)
 
 
-def ensure_time_range_style(doc: Document):
-    style_name = "TimeRange"
+def ensure_timing_style(doc: Document):
+    style_name = "Timing"
     styles = doc.styles
     if style_name in [s.name for s in styles]:
         style = styles[style_name]
@@ -350,7 +355,7 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
     input_base = input_path.parent
     doc = Document(str(template_path))
     apply_default_margins(doc)
-    time_range_style = ensure_time_range_style(doc)
+    timing_style = ensure_timing_style(doc)
     ensure_hyperlink_style(doc)
     source_indent_inches = get_default_tab_stop_inches(doc)
     metrics = _get_section_metrics(doc)
@@ -402,10 +407,10 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
                         run.add_picture(str(thumbnail_path), width=metrics["usable_width"])
                     else:
                         replace_placeholder(paragraph, placeholder, value)
-                elif key == "TIME_RANGE" and value:
-                    clear_paragraph(paragraph)
-                    run = paragraph.add_run(value)
-                    run.style = time_range_style
+                elif key == "TIMING" and value:
+                    replace_body_paragraph(
+                        paragraph, value, source_indent_inches, timing_style=timing_style
+                    )
                     insert_paragraph_after(paragraph, "")
                 else:
                     replace_placeholder(paragraph, placeholder, value)
