@@ -412,3 +412,153 @@ def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -
     assert total_i == range_item_indices[-1] + 2
     assert texts[total_i - 1] == ""
 
+
+
+def test_generate_subs_timing_marker_uses_marked_highlight_and_strips_stars(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TIMING}}"])
+    input_path.write_text(
+        "\n".join(
+            [
+                "TIMING:",
+                "(1) 00:42-05:41 (4m59s)",
+                "*(2) 05:44-13:21 (7m37s)*",
+                "19'33",
+                "BODY:",
+                "dummy",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+    def para_by_text(target: str):
+        for p in doc.findall(".//w:p", ns):
+            text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+            if text == target:
+                return p
+        return None
+
+    marked = para_by_text("(2) 05:44-13:21 (7m37s)")
+    assert marked is not None
+
+    runs = marked.findall("w:r", ns)
+    assert runs
+    # Must be Timing style and marked highlight using TIMING yellow.
+    for run in runs:
+        r_style = run.find("w:rPr/w:rStyle", ns)
+        assert r_style is not None
+        assert r_style.get("{%s}val" % ns["w"]) == "Timing"
+    highlights = [
+        r.find("w:rPr/w:highlight", ns).get("{%s}val" % ns["w"])
+        for r in runs
+        if r.find("w:rPr/w:highlight", ns) is not None
+    ]
+    assert "yellow" in highlights
+
+
+def test_generate_subs_timing_marker_applies_only_to_marked_lines(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TIMING}}"])
+    input_path.write_text(
+        "\n".join(
+            [
+                "TIMING:",
+                "*(1) 00:42-05:41 (4m59s)*",
+                "(2) 05:44-13:21 (7m37s)",
+                "*19'33*",
+                "BODY:",
+                "dummy",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+    def get_highlight_values(text_target: str):
+        for p in doc.findall(".//w:p", ns):
+            text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+            if text == text_target:
+                vals = []
+                for r in p.findall("w:r", ns):
+                    h = r.find("w:rPr/w:highlight", ns)
+                    vals.append(h.get("{%s}val" % ns["w"]) if h is not None else None)
+                return vals
+        return None
+
+    h1 = get_highlight_values("(1) 00:42-05:41 (4m59s)")
+    h2 = get_highlight_values("(2) 05:44-13:21 (7m37s)")
+    ht = get_highlight_values("19'33")
+
+    assert h1 is not None and "yellow" in h1
+    assert h2 is not None and all(v is None for v in h2)
+    assert ht is not None and "yellow" in ht
+
+
+def test_generate_subs_timing_marker_keeps_timing_font_size(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TIMING}}"])
+    input_path.write_text(
+        "\n".join(
+            [
+                "TIMING:",
+                "*(1) 00:42-05:41 (4m59s)*",
+                "(2) 05:44-13:21 (7m37s)",
+                "BODY:",
+                "dummy",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+    def get_run_sz_vals(text_target: str):
+        for p in doc.findall(".//w:p", ns):
+            text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+            if text == text_target:
+                vals = []
+                for r in p.findall("w:r", ns):
+                    sz = r.find("w:rPr/w:sz", ns)
+                    vals.append(sz.get("{%s}val" % ns["w"]) if sz is not None else None)
+                return vals
+        return None
+
+    s_marked = get_run_sz_vals("(1) 00:42-05:41 (4m59s)")
+    s_plain = get_run_sz_vals("(2) 05:44-13:21 (7m37s)")
+
+    assert s_marked is not None
+    assert s_plain is not None
+    assert all(v is None for v in s_marked)
+    assert all(v is None for v in s_plain)

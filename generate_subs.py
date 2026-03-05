@@ -48,6 +48,7 @@ SYMBOL_FONT_NAME = ""
 HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
 SOURCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
 SOURCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
+TIMING_HIGHLIGHT_MARKED = WD_COLOR_INDEX.YELLOW
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
@@ -173,9 +174,63 @@ def insert_paragraph_after(paragraph, text: str):
     new_p = OxmlElement("w:p")
     paragraph._p.addnext(new_p)
     new_para = Paragraph(new_p, paragraph._parent)
-    run = new_para.add_run(text)
-    apply_symbol_font(run)
+    if text:
+        run = new_para.add_run(text)
+        apply_symbol_font(run)
     return new_para
+
+
+def _split_marked_parts(text: str) -> list[tuple[str, bool]]:
+    parts: list[tuple[str, bool]] = []
+    last_idx = 0
+
+    for match in HIGHLIGHT_MARKER_RE.finditer(text):
+        if match.start() > last_idx:
+            parts.append((text[last_idx : match.start()], False))
+        parts.append((match.group(1), True))
+        last_idx = match.end()
+
+    if last_idx < len(text):
+        parts.append((text[last_idx:], False))
+
+    if not parts:
+        parts.append((text, False))
+
+    return parts
+
+
+def _add_marked_runs(
+    paragraph,
+    text: str,
+    *,
+    default_highlight=None,
+    marked_highlight=None,
+    run_style: str | None = None,
+    apply_default_size: bool = True,
+) -> None:
+    for part_text, marked in _split_marked_parts(text):
+        if not part_text:
+            continue
+
+        highlight_color = marked_highlight if marked else default_highlight
+        if highlight_color is not None:
+            if apply_default_size:
+                run = add_highlighted_run(
+                    paragraph,
+                    part_text,
+                    highlight_color=highlight_color,
+                )
+            else:
+                run = paragraph.add_run(part_text)
+                run.font.highlight_color = highlight_color
+        else:
+            run = paragraph.add_run(part_text)
+
+        if run_style:
+            run.style = run_style
+            if highlight_color is not None:
+                run.font.highlight_color = highlight_color
+        apply_symbol_font(run)
 
 
 def replace_body_paragraph(
@@ -197,34 +252,12 @@ def replace_body_paragraph(
     in_source_block = False
 
     def _add_source_runs(target, text: str) -> None:
-        parts: list[tuple[str, bool]] = []
-        last_idx = 0
-        for match in HIGHLIGHT_MARKER_RE.finditer(text):
-            if match.start() > last_idx:
-                parts.append((text[last_idx : match.start()], False))
-            parts.append((match.group(1), True))
-            last_idx = match.end()
-        if last_idx < len(text):
-            parts.append((text[last_idx:], False))
-
-        if not parts:
-            run = add_highlighted_run(
-                target, text, highlight_color=SOURCE_HIGHLIGHT_DEFAULT
-            )
-            apply_symbol_font(run)
-            return
-
-        for part_text, marked in parts:
-            if not part_text:
-                continue
-            run = add_highlighted_run(
-                target,
-                part_text,
-                highlight_color=(
-                    SOURCE_HIGHLIGHT_MARKED if marked else SOURCE_HIGHLIGHT_DEFAULT
-                ),
-            )
-            apply_symbol_font(run)
+        _add_marked_runs(
+            target,
+            text,
+            default_highlight=SOURCE_HIGHLIGHT_DEFAULT,
+            marked_highlight=SOURCE_HIGHLIGHT_MARKED,
+        )
 
     def write_line(target, text: str, source_line: bool, is_url: bool) -> None:
         if not text:
@@ -242,10 +275,17 @@ def replace_body_paragraph(
                 return
             _add_source_runs(target, text)
         else:
-            run = target.add_run(text)
             if timing_style:
-                run.style = timing_style
-            apply_symbol_font(run)
+                _add_marked_runs(
+                    target,
+                    text,
+                    marked_highlight=TIMING_HIGHLIGHT_MARKED,
+                    run_style=timing_style,
+                    apply_default_size=False,
+                )
+            else:
+                run = target.add_run(text)
+                apply_symbol_font(run)
 
     for idx, line in enumerate(lines):
         if idx > 0:
