@@ -617,3 +617,48 @@ def test_generate_subs_summary_symbol_font_applies_only_to_icon_runs(
 
     text_fonts = runs[1].find("w:rPr/w:rFonts", ns)
     assert text_fonts is None
+
+
+def test_generate_subs_middle_dot_uses_cjk_font(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{SUMMARY}}"])
+    input_path.write_text(
+        "\n".join(
+            [
+                "SUMMARY:",
+                "示例‧姓名",
+                "BODY:",
+                "dummy",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+    target_run = None
+    for p in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in p.findall(".//w:t", ns))
+        if text == "示例‧姓名":
+            for r in p.findall("w:r", ns):
+                run_text = "".join(t.text or "" for t in r.findall(".//w:t", ns))
+                if "‧" in run_text:
+                    target_run = r
+                    break
+            break
+
+    assert target_run is not None
+    fonts = target_run.find("w:rPr/w:rFonts", ns)
+    assert fonts is not None
+    assert fonts.get("{%s}ascii" % ns["w"]) == "新細明體"
+    assert fonts.get("{%s}hAnsi" % ns["w"]) == "新細明體"
+    assert fonts.get("{%s}cs" % ns["w"]) == "新細明體"

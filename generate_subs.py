@@ -44,6 +44,8 @@ TIMING_LINE_RE = re.compile(
     r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
 SYMBOL_FONT_NAME = "Segoe UI Symbol"
+CJK_FONT_NAME = "新細明體"
+CJK_MIDDLE_DOT = "\u2027"
 HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
 SOURCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
 SOURCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
@@ -154,9 +156,17 @@ def apply_symbol_font(run) -> None:
         _set_run_font(run, SYMBOL_FONT_NAME)
 
 
+def apply_cjk_middle_dot_font(run) -> None:
+    if not CJK_FONT_NAME:
+        return
+    if run.text and CJK_MIDDLE_DOT in run.text:
+        _set_run_font(run, CJK_FONT_NAME)
+
+
 def apply_symbol_fonts_in_paragraph(paragraph) -> None:
     for run in paragraph.runs:
         apply_symbol_font(run)
+        apply_cjk_middle_dot_font(run)
 
 
 def replace_placeholder(paragraph, placeholder: str, value: str) -> bool:
@@ -175,6 +185,7 @@ def insert_paragraph_after(paragraph, text: str):
     if text:
         run = new_para.add_run(text)
         apply_symbol_font(run)
+        apply_cjk_middle_dot_font(run)
     return new_para
 
 
@@ -235,6 +246,8 @@ def _add_text_runs(
             run.font.highlight_color = highlight_color
         if is_symbol:
             apply_symbol_font(run)
+        else:
+            apply_cjk_middle_dot_font(run)
 
 
 def _add_marked_runs(
