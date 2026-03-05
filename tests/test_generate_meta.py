@@ -23,7 +23,7 @@ class RenderMetaTests(unittest.TestCase):
     def test_renders_title_people_overview(self) -> None:
         source_text = "\n".join(
             [
-                "TITLE: 中文標題",
+                "TITLE_TEXT: 中文標題",
                 "SUMMARY:",
                 "中文摘要",
                 "",
@@ -89,7 +89,7 @@ class RenderMetaTests(unittest.TestCase):
             input_path.write_text(
                 "\n".join(
                     [
-                        "TITLE: 中文標題",
+                        "TITLE_TEXT: 中文標題",
                         "SUMMARY:",
                         "中文摘要",
                         "",
@@ -132,7 +132,7 @@ class RenderMetaTests(unittest.TestCase):
     def test_missing_en_fields_render_empty(self) -> None:
         source_text = "\n".join(
             [
-                "TITLE: 中文標題",
+                "TITLE_TEXT: 中文標題",
                 "SUMMARY:",
                 "中文摘要",
                 "",
@@ -163,7 +163,7 @@ class RenderMetaTests(unittest.TestCase):
     def test_renders_from_news_txt_input(self) -> None:
         source_text = "\n".join(
             [
-                "TITLE: 沿海義診守護居民健康",
+                "TITLE_TEXT: 沿海義診守護居民健康",
                 "TITLE_URL: https://example.com/news/story",
                 "SUMMARY:",
                 "A volunteer team hosted a two-day community clinic in a coastal town.",
@@ -232,7 +232,7 @@ class RenderMetaTests(unittest.TestCase):
     def test_meta_people_overrides_matching_blocks(self) -> None:
         source_text = "\n".join(
             [
-                "TITLE: 測試標題",
+                "TITLE_TEXT: 測試標題",
                 "SUMMARY:",
                 "測試摘要",
                 "",

@@ -13,7 +13,7 @@ def test_parse_input_multiline_summary_and_body(tmp_path: Path) -> None:
     input_path.write_text(
         "\n".join(
             [
-                "TITLE: Sample News Title",
+                "TITLE_TEXT: Sample News Title",
                 "TITLE_URL: https://example.com/news",
                 "SUMMARY:",
                 "Summary line one.",
@@ -35,7 +35,7 @@ def test_parse_input_multiline_summary_and_body(tmp_path: Path) -> None:
     )
 
     data = generate_news.parse_input(input_path)
-    assert data["TITLE"] == "Sample News Title"
+    assert data["TITLE_TEXT"] == "Sample News Title"
     assert data["TITLE_URL"] == "https://example.com/news"
     assert data["SUMMARY"] == "Summary line one.\n(  11/16~17 )"
     assert data["SUPER_PEOPLE"] == "病患 | 羅伯托\nRoberto\nPatient"
@@ -46,17 +46,17 @@ def test_parse_input_fallback_encoding_warns_and_rewrites_utf8(
     tmp_path: Path,
 ) -> None:
     input_path = tmp_path / "news_input.txt"
-    input_path.write_bytes("TITLE: Café News\n".encode("cp1252"))
+    input_path.write_bytes("TITLE_TEXT: Café News\n".encode("cp1252"))
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         data = generate_news.parse_input(input_path)
 
-    assert data["TITLE"] == "Café News"
+    assert data["TITLE_TEXT"] == "Café News"
     assert caught
     assert "fallback encoding" in str(caught[0].message).lower()
     assert "cp1252" in str(caught[0].message).lower()
-    assert input_path.read_bytes() == "TITLE: Café News\n".encode("utf-8")
+    assert input_path.read_bytes() == "TITLE_TEXT: Café News\n".encode("utf-8")
 
 
 def test_generate_news_renders_title_summary_marker_and_body(tmp_path: Path) -> None:
@@ -65,7 +65,7 @@ def test_generate_news_renders_title_summary_marker_and_body(tmp_path: Path) -> 
     input_path.write_text(
         "\n".join(
             [
-                "TITLE: Community Clinic Brings Care to Coastal Town",
+                "TITLE_TEXT: Community Clinic Brings Care to Coastal Town",
                 "TITLE_URL: https://example.com/news/story",
                 "SUMMARY:",
                 "Volunteers organized a two-day clinic to support families in a coastal town.",
@@ -132,6 +132,32 @@ def test_generate_news_renders_title_summary_marker_and_body(tmp_path: Path) -> 
     assert first_paragraph is not None
     hyperlinks = first_paragraph.findall("w:hyperlink", ns)
     assert len(hyperlinks) == 1
+
+
+def test_generate_news_falls_back_to_url_when_title_text_missing(tmp_path: Path) -> None:
+    input_path = tmp_path / "news_input.txt"
+    output_path = tmp_path / "news_output.docx"
+    input_path.write_text(
+        "\n".join(
+            [
+                "TITLE_URL: https://example.com/news/story",
+                "SUMMARY:",
+                "Summary line one.",
+                "",
+                "BODY:",
+                "1_0014",
+                "中文內文。",
+                "English line.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_news.generate_news(input_path, output_path)
+
+    doc = Document(output_path)
+    assert doc.paragraphs[0].text == "https://example.com/news/story"
 
 
 def test_default_output_path_uses_source_stem_with_final_suffix(tmp_path: Path) -> None:

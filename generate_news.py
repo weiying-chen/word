@@ -21,7 +21,7 @@ from generate_subs import (
 
 
 PLACEHOLDER_KEYS = [
-    "TITLE",
+    "TITLE_TEXT",
     "TITLE_URL",
     "SUMMARY",
     "META_TITLE_EN",
@@ -152,14 +152,15 @@ def generate_news(
     apply_default_margins(doc)
     ensure_hyperlink_style(doc)
 
-    title = data.get("TITLE", "").strip()
+    title = data.get("TITLE_TEXT", "").strip()
     title_url = data.get("TITLE_URL", "").strip()
-    if title:
+    title_display = title or title_url
+    if title_display:
         title_paragraph = doc.add_paragraph("")
         if title_url:
-            add_hyperlink(title_paragraph, title, title_url)
+            add_hyperlink(title_paragraph, title_display, title_url)
         else:
-            title_paragraph.add_run(title)
+            title_paragraph.add_run(title_display)
         doc.add_paragraph("")
 
     summary = data.get("SUMMARY", "")

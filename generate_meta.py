@@ -216,7 +216,7 @@ def parse_input(path: Path) -> dict[str, object]:
     overrides = _parse_meta_people_blocks(meta_people_text)
     people = _merge_meta_people_overrides(people, overrides)
     return {
-        "title_zh": data.get("TITLE", ""),
+        "title_zh": data.get("TITLE_TEXT", ""),
         "summary_zh": summary[0] if summary else "",
         "narration_zh": narration_zh,
         "supers_zh": supers,

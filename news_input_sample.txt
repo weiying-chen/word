@@ -1,4 +1,4 @@
-TITLE: 沿海義診守護居民健康
+TITLE_TEXT: 沿海義診守護居民健康
 TITLE_URL: https://example.com/news/story
 SUMMARY:
 志工與醫護團隊在沿海小鎮舉辦兩天義診，提供居民視力檢查、衛教與轉介服務，讓延誤就醫的家庭重新獲得所需協助。
