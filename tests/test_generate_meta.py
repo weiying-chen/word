@@ -124,6 +124,7 @@ class RenderMetaTests(unittest.TestCase):
                     "name_en": "Alice",
                     "role_zh": "病患",
                     "role_en": "",
+                    "org_en": "",
                 }
             ],
         )
@@ -225,6 +226,79 @@ class RenderMetaTests(unittest.TestCase):
                 "",
                 "YT簡介",
                 "A volunteer medical team brought screenings and referrals to local residents.",
+            ],
+        )
+
+    def test_meta_people_overrides_matching_blocks(self) -> None:
+        source_text = "\n".join(
+            [
+                "TITLE: 測試標題",
+                "SUMMARY:",
+                "測試摘要",
+                "",
+                "META_TITLE_EN: Test English Title",
+                "META_OVERVIEW_EN:",
+                "Test English overview.",
+                "",
+                "META_PEOPLE:",
+                "居民｜受訪者",
+                "Guest (Edited)",
+                "Resident",
+                "",
+                "醫師｜林醫師",
+                "Dr. Lin",
+                "Doctor",
+                "Clinic Team",
+                "",
+                "BODY:",
+                "(  13   Guest )",
+                "/*SUPER:",
+                "居民│受訪者//",
+                "內容//",
+                "*/",
+                "English line.",
+                "",
+                "(  14   )",
+                "/*SUPER:",
+                "醫師│林醫師//",
+                "內容//",
+                "*/",
+                "English line.",
+                "",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            input_path = tmpdir_path / "news_input.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            input_path.write_text(source_text, encoding="utf-8")
+
+            generate_meta(template_path, input_path, output_path)
+            doc = Document(str(output_path))
+            texts = [p.text for p in doc.paragraphs]
+
+        self.assertEqual(
+            texts,
+            [
+                "重點標",
+                "Test English Title",
+                "名字職銜",
+                "",
+                "居民｜受訪者",
+                "Guest (Edited)",
+                "Resident",
+                "",
+                "醫師｜林醫師",
+                "Dr. Lin",
+                "Doctor",
+                "Clinic Team",
+                "",
+                "YT簡介",
+                "Test English overview.",
             ],
         )
 

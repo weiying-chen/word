@@ -19,6 +19,7 @@ PEOPLE_PLACEHOLDER = "{{PEOPLE}}"
 OVERVIEW_PLACEHOLDER = "{{OVERVIEW_EN}}"
 META_TITLE_EN_KEY = "META_TITLE_EN"
 META_OVERVIEW_EN_KEY = "META_OVERVIEW_EN"
+META_PEOPLE_KEY = "META_PEOPLE"
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 EN_NAME_PAREN_RE = re.compile(r"^\(\s*\d+\s+([A-Za-z][A-Za-z.\s'-]*)\s*\)$")
 
@@ -51,6 +52,90 @@ def _parse_super(lines: list[str]) -> dict:
         "name_zh": name_zh,
         "quotes_zh": quotes_zh,
     }
+
+
+def _parse_meta_people_blocks(text: str) -> list[dict[str, str]]:
+    if not text.strip():
+        return []
+
+    blocks: list[list[str]] = []
+    current: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            if current:
+                blocks.append(current)
+                current = []
+            continue
+        current.append(line)
+    if current:
+        blocks.append(current)
+
+    entries: list[dict[str, str]] = []
+    for block in blocks:
+        if not block:
+            continue
+        label_zh = block[0].strip()
+        name_zh = ""
+        role_zh = ""
+        if "｜" in label_zh:
+            role_zh, name_zh = [part.strip() for part in label_zh.split("｜", 1)]
+        else:
+            name_zh = label_zh.strip()
+
+        entries.append(
+            {
+                "label_zh": label_zh,
+                "name_zh": name_zh,
+                "role_zh": role_zh,
+                "name_en": block[1].strip() if len(block) > 1 else "",
+                "role_en": block[2].strip() if len(block) > 2 else "",
+                "org_en": block[3].strip() if len(block) > 3 else "",
+            }
+        )
+    return entries
+
+
+def _merge_meta_people_overrides(
+    people: list[dict[str, str]],
+    overrides: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    if not overrides:
+        return people
+
+    merged = [dict(person) for person in people]
+    for person in merged:
+        role_zh = person.get("role_zh", "").strip()
+        name_zh = person.get("name_zh", "").strip()
+        label_zh = f"{role_zh}｜{name_zh}" if role_zh and name_zh else (role_zh or name_zh)
+
+        match = next(
+            (
+                entry
+                for entry in overrides
+                if entry.get("label_zh", "").strip()
+                and entry.get("label_zh", "").strip() == label_zh
+            ),
+            None,
+        )
+        if match is None and name_zh:
+            match = next(
+                (
+                    entry
+                    for entry in overrides
+                    if entry.get("name_zh", "").strip() == name_zh
+                ),
+                None,
+            )
+        if match is None:
+            continue
+
+        for key in ("name_en", "role_en", "org_en"):
+            value = match.get(key, "").strip()
+            if value:
+                person[key] = value
+
+    return merged
 
 
 def parse_input(path: Path) -> dict[str, object]:
@@ -117,6 +202,7 @@ def parse_input(path: Path) -> dict[str, object]:
             "name_en": "",
             "role_zh": str(s.get("role_zh", "")),
             "role_en": "",
+            "org_en": "",
         }
         for s in supers
     ]
@@ -126,6 +212,9 @@ def parse_input(path: Path) -> dict[str, object]:
         people[idx]["name_en"] = en_name
 
     summary = data.get("SUMMARY", "").splitlines()
+    meta_people_text = data.get(META_PEOPLE_KEY, "")
+    overrides = _parse_meta_people_blocks(meta_people_text)
+    people = _merge_meta_people_overrides(people, overrides)
     return {
         "title_zh": data.get("TITLE", ""),
         "summary_zh": summary[0] if summary else "",
@@ -193,6 +282,9 @@ def build_people_lines(people: list[dict]) -> list[str]:
             placeholder_key = role_zh or "ROLE_EN"
             role_en = f"{{{{{placeholder_key}}}}}"
         lines.append(role_en)
+        org_en = person.get("org_en", "").strip()
+        if org_en:
+            lines.append(org_en)
         if idx < len(people) - 1:
             lines.append("")
     return lines

@@ -26,6 +26,7 @@ PLACEHOLDER_KEYS = [
     "SUMMARY",
     "META_TITLE_EN",
     "META_OVERVIEW_EN",
+    "META_PEOPLE",
     "SUPER_PEOPLE",
     "BODY",
 ]
@@ -84,7 +85,7 @@ def parse_input(path: Path) -> dict[str, str]:
             idx += 1
             continue
 
-        if key in {"SUMMARY", "META_OVERVIEW_EN", "SUPER_PEOPLE", "BODY"}:
+        if key in {"SUMMARY", "META_OVERVIEW_EN", "META_PEOPLE", "SUPER_PEOPLE", "BODY"}:
             collected: list[str] = []
             if value:
                 collected.append(value)
@@ -105,6 +106,7 @@ def parse_input(path: Path) -> dict[str, str]:
 
     data.setdefault("SUMMARY", "")
     data.setdefault("META_OVERVIEW_EN", "")
+    data.setdefault("META_PEOPLE", "")
     data.setdefault("BODY", "")
     return data
 
