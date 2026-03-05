@@ -197,7 +197,49 @@ def _build_hashtags(program: str, title: str, pascal_case: bool) -> str:
     return " ".join(f"#{tag}" for tag in tags)
 
 
-def _extract_reference(
+def _extract_ref_from_label(
+    lines: list[str],
+    url_targets: list[str | None],
+    label_idx: int,
+    *,
+    stop_labels: set[str],
+    stop_by_person: bool,
+    parse_first_line_date: bool,
+    default_year: int,
+) -> tuple[str, str, str, str]:
+    ref_url = lines[label_idx + 1].strip() if label_idx + 1 < len(lines) else ""
+    ref_url_target = (
+        url_targets[label_idx + 1].strip()
+        if label_idx + 1 < len(url_targets) and url_targets[label_idx + 1]
+        else ""
+    )
+
+    ref_lines: list[str] = []
+    date_prefix = ""
+    cursor = label_idx + 2
+    while cursor < len(lines):
+        candidate = lines[cursor]
+        stripped = candidate.strip()
+        if stop_by_person and PERSON_LINE_RE.match(candidate):
+            break
+        if STOP_SECTION_RE.match(candidate):
+            break
+        if stripped in stop_labels:
+            break
+        if stripped:
+            if parse_first_line_date and not date_prefix:
+                possible = _parse_date_prefix(stripped, default_year=default_year)
+                if possible:
+                    date_prefix = possible
+                    cursor += 1
+                    continue
+            ref_lines.append(stripped)
+        cursor += 1
+
+    return ref_url, "\n".join(ref_lines), ref_url_target, date_prefix
+
+
+def _extract_schedule_reference(
     lines: list[str], url_targets: list[str | None], start_idx: int
 ) -> tuple[str, str, str]:
     for idx in range(start_idx, len(lines)):
@@ -205,15 +247,47 @@ def _extract_reference(
         if PERSON_LINE_RE.match(line) or STOP_SECTION_RE.match(line):
             break
         if line.strip() == "搭配":
-            ref_url = lines[idx + 1] if idx + 1 < len(lines) else ""
-            ref_url_target = (
-                url_targets[idx + 1].strip()
-                if idx + 1 < len(url_targets) and url_targets[idx + 1]
-                else ""
+            ref_url, ref_title, ref_url_target, _ = _extract_ref_from_label(
+                lines,
+                url_targets,
+                idx,
+                stop_labels={"搭配"},
+                stop_by_person=True,
+                parse_first_line_date=False,
+                default_year=date.today().year,
             )
-            ref_title = lines[idx + 2] if idx + 2 < len(lines) else ""
             return ref_url, ref_title, ref_url_target
     return "", "", ""
+
+
+def _build_standard_entry(
+    *,
+    video_title: str,
+    video_url: str,
+    video_url_target: str,
+    ref_url: str,
+    ref_url_target: str,
+    ref_title: str,
+    video_desc_en: str = "",
+    video_desc_zh: str = "",
+) -> dict[str, str]:
+    hashtags_en, hashtags_zh = build_hashtags_from_title_line(video_title)
+    return {
+        "filename_title": build_filename_title_from_title_line(video_title),
+        "header_title": _clean_title_for_display(video_title),
+        "header_url": video_url,
+        "header_url_target": video_url_target,
+        "video_url": video_url,
+        "video_url_target": video_url_target,
+        "video_title": _clean_title_for_display(video_title),
+        "video_desc_en": video_desc_en,
+        "video_desc_zh": video_desc_zh,
+        "ref_url": ref_url,
+        "ref_url_target": ref_url_target,
+        "ref_title": ref_title,
+        "hashtags_en": hashtags_en,
+        "hashtags_zh": hashtags_zh,
+    }
 
 
 def _parse_date_prefix(text: str, default_year: int | None = None) -> str | None:
@@ -293,34 +367,15 @@ def extract_post_entries_from_blocks(schedule_path: Path) -> list[dict[str, str]
         for idx, line in enumerate(block):
             label = line.strip()
             if label in ALEX_REF_LABELS:
-                if idx + 1 < len(block):
-                    ref_url = block[idx + 1].strip()
-                    ref_url_target = (
-                        block_targets[idx + 1].strip()
-                        if block_targets[idx + 1]
-                        else ""
-                    )
-                end_ref = next(
-                    (
-                        pos
-                        for pos in range(idx + 1, len(block))
-                        if block[pos].strip() in ALEX_VIDEO_LABELS
-                    ),
-                    len(block),
+                ref_url, ref_title, ref_url_target, date_prefix = _extract_ref_from_label(
+                    block,
+                    block_targets,
+                    idx,
+                    stop_labels=ALEX_VIDEO_LABELS,
+                    stop_by_person=False,
+                    parse_first_line_date=True,
+                    default_year=default_year,
                 )
-                cursor = idx + 2
-                if cursor < end_ref:
-                    possible_date = _parse_date_prefix(block[cursor], default_year)
-                    if possible_date:
-                        date_prefix = possible_date
-                        cursor += 1
-                if cursor < end_ref:
-                    ref_lines = [
-                        text.strip()
-                        for text in block[cursor:end_ref]
-                        if text.strip()
-                    ]
-                    ref_title = "\n".join(ref_lines)
             elif label in ALEX_VIDEO_LABELS:
                 if idx + 1 < len(block):
                     video_url = block[idx + 1].strip()
@@ -339,25 +394,16 @@ def extract_post_entries_from_blocks(schedule_path: Path) -> list[dict[str, str]
         if not video_title:
             continue
 
-        program_name, episode_title = _split_program_title(video_title)
-        hashtags_en, hashtags_zh = build_hashtags_from_title_line(video_title)
-        filename_title = build_filename_title_from_title_line(video_title)
-        entry: dict[str, str] = {
-            "filename_title": filename_title,
-            "header_title": _clean_title_for_display(video_title),
-            "header_url": video_url,
-            "header_url_target": video_url_target,
-            "video_url": video_url,
-            "video_url_target": video_url_target,
-            "video_title": _clean_title_for_display(video_title),
-            "video_desc_en": video_desc_en,
-            "video_desc_zh": video_desc_zh,
-            "ref_url": ref_url,
-            "ref_url_target": ref_url_target,
-            "ref_title": ref_title,
-            "hashtags_en": hashtags_en,
-            "hashtags_zh": hashtags_zh,
-        }
+        entry = _build_standard_entry(
+            video_title=video_title,
+            video_url=video_url,
+            video_url_target=video_url_target,
+            ref_url=ref_url,
+            ref_url_target=ref_url_target,
+            ref_title=ref_title,
+            video_desc_en=video_desc_en,
+            video_desc_zh=video_desc_zh,
+        )
         if date_prefix:
             entry["filename_prefix_override"] = f"{date_prefix}_"
         entries.append(entry)
@@ -434,26 +480,18 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
                         entry["filename_prefix_override"] = f"{parsed_prefix}_"
                 entries.append(entry)
                 continue
-            ref_url, ref_title, ref_url_target = _extract_reference(
+            ref_url, ref_title, ref_url_target = _extract_schedule_reference(
                 lines, url_targets, idx + 1
             )
-            program_name, episode_title = _split_program_title(title_line)
-            hashtags_en, hashtags_zh = build_hashtags_from_title_line(title_line)
             entries.append(
-                {
-                    "filename_title": build_filename_title_from_title_line(title_line),
-                    "header_title": _clean_title_for_display(title_line),
-                    "header_url": url_line,
-                    "header_url_target": url_target or "",
-                    "video_url": url_line,
-                    "video_url_target": url_target or "",
-                    "video_title": _clean_title_for_display(title_line),
-                    "ref_url": ref_url,
-                    "ref_url_target": ref_url_target,
-                    "ref_title": ref_title,
-                    "hashtags_en": hashtags_en,
-                    "hashtags_zh": hashtags_zh,
-                }
+                _build_standard_entry(
+                    video_title=title_line,
+                    video_url=url_line,
+                    video_url_target=url_target or "",
+                    ref_url=ref_url,
+                    ref_url_target=ref_url_target,
+                    ref_title=ref_title,
+                )
             )
 
     return entries

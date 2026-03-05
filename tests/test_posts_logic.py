@@ -73,6 +73,30 @@ def test_extract_post_titles_from_schedule(tmp_path: Path) -> None:
     ]
 
 
+def test_schedule_reference_keeps_all_lines_under_url(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "schedule_multiline_ref.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "節目2則",
+            "1. alex",
+            "Program - Episode",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "26/1/29",
+            "Reference headline",
+            "2. alex",
+            "Program - Next Episode",
+            "https://example.com/video2",
+            "--------------------------------",
+        ],
+    )
+
+    entries = extract_post_entries(schedule_path)
+    assert entries[0]["ref_title"] == "26/1/29\nReference headline"
+
+
 def test_extract_post_titles_from_alex_blocks(tmp_path: Path) -> None:
     schedule_path = tmp_path / "alex_blocks.docx"
     _write_docx(
