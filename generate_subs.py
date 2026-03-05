@@ -411,7 +411,6 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
                     replace_body_paragraph(
                         paragraph, value, source_indent_inches, timing_style=timing_style
                     )
-                    insert_paragraph_after(paragraph, "")
                 else:
                     replace_placeholder(paragraph, placeholder, value)
                 break

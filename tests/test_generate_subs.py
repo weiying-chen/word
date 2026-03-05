@@ -396,3 +396,19 @@ def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -
     assert idx_yt_label < idx_title_label < idx_intro_label < idx_thumb_label < idx_subtitle_label
     assert idx_subtitle_label < idx_t1 < idx_t2 < idx_total < idx_body_src
 
+    # TIMING spacing rule (generic):
+    # - range items are consecutive (no blank lines between them)
+    # - exactly one blank line is required before total time
+    range_item_indices = [
+        i for i, t in enumerate(texts)
+        if t.startswith("(") and ") " in t and "(" in t and "m" in t and "s" in t
+    ]
+    assert len(range_item_indices) >= 2
+
+    for prev_i, next_i in zip(range_item_indices, range_item_indices[1:]):
+        assert next_i == prev_i + 1
+
+    total_i = texts.index("19'33")
+    assert total_i == range_item_indices[-1] + 2
+    assert texts[total_i - 1] == ""
+
