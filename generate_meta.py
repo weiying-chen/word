@@ -43,6 +43,8 @@ def _parse_super(lines: list[str]) -> dict:
         header = lines[0]
         if "│" in header:
             role_zh, name_zh = [part.strip() for part in header.split("│", 1)]
+        elif "｜" in header:
+            role_zh, name_zh = [part.strip() for part in header.split("｜", 1)]
         else:
             name_zh = header.strip()
         if len(lines) > 1:
