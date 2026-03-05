@@ -662,3 +662,11 @@ def test_generate_subs_middle_dot_uses_cjk_font(tmp_path: Path) -> None:
     assert fonts.get("{%s}ascii" % ns["w"]) == "新細明體"
     assert fonts.get("{%s}hAnsi" % ns["w"]) == "新細明體"
     assert fonts.get("{%s}cs" % ns["w"]) == "新細明體"
+
+
+def test_with_subs_output_suffix_appends_al_once() -> None:
+    base = Path("output/sample.docx")
+    already = Path("output/sample_al.docx")
+
+    assert generate_subs.with_subs_output_suffix(base) == Path("output/sample_al.docx")
+    assert generate_subs.with_subs_output_suffix(already) == already

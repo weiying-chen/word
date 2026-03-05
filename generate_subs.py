@@ -53,6 +53,7 @@ TIMING_HIGHLIGHT_MARKED = WD_COLOR_INDEX.YELLOW
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
+SUBS_OUTPUT_SUFFIX = "_al"
 
 
 def normalize_input_text(text: str) -> str:
@@ -429,6 +430,12 @@ def fix_docx_namespaces(path: Path) -> None:
     tmp_path.replace(path)
 
 
+def with_subs_output_suffix(path: Path) -> Path:
+    if path.stem.endswith(SUBS_OUTPUT_SUFFIX):
+        return path
+    return path.with_name(f"{path.stem}{SUBS_OUTPUT_SUFFIX}{path.suffix}")
+
+
 def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> None:
     data = parse_input(input_path)
     input_base = input_path.parent
@@ -518,7 +525,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    generate_subs(Path(args.template), Path(args.input), Path(args.output))
+    generate_subs(
+        Path(args.template),
+        Path(args.input),
+        with_subs_output_suffix(Path(args.output)),
+    )
 
 
 if __name__ == "__main__":
