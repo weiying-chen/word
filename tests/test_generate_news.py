@@ -172,3 +172,89 @@ def test_default_output_path_preserves_existing_final_suffix(tmp_path: Path) -> 
     output_dir = tmp_path / "output"
     output = generate_news.default_output_path(source, output_dir)
     assert output == output_dir / "coastal_story_final.docx"
+
+
+def test_parse_sources_merges_docx_and_txt_sections(tmp_path: Path) -> None:
+    source_docx = tmp_path / "source.docx"
+    source_txt = tmp_path / "source.txt"
+
+    doc = Document()
+    doc.add_paragraph("Sample title from docx")
+    doc.add_paragraph("https://example.com/story")
+    doc.add_paragraph("Summary from docx")
+    doc.add_paragraph("( 11/16~17 )")
+    doc.save(source_docx)
+
+    source_txt.write_text(
+        "\n".join(
+            [
+                "SUPER_PEOPLE：",
+                "Patient | Alex Wang",
+                "Alex Wang",
+                "Patient",
+                "",
+                "字幕：",
+                "1_0001",
+                "中文內文。",
+                "English body line.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    data = generate_news.parse_sources(source_docx, source_txt)
+
+    assert data["TITLE_TEXT"] == "Sample title from docx"
+    assert data["TITLE_URL"] == "https://example.com/story"
+    assert data["SUMMARY"] == "Summary from docx"
+    assert data["SUPER_PEOPLE"] == "Patient | Alex Wang\nAlex Wang\nPatient"
+    assert data["BODY"] == "1_0001\n中文內文。\nEnglish body line."
+
+
+def test_generate_news_from_sources_renders_without_intermediate_input(
+    tmp_path: Path,
+) -> None:
+    source_docx = tmp_path / "source.docx"
+    source_txt = tmp_path / "source.txt"
+    output_path = tmp_path / "news_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("Direct generation title")
+    doc.add_paragraph("https://example.com/direct")
+    doc.add_paragraph("Direct summary line")
+    doc.add_paragraph("( 11/16~17 )")
+    doc.save(source_docx)
+
+    source_txt.write_text(
+        "\n".join(
+            [
+                "SUPER_PEOPLE：",
+                "Patient | Alex Wang",
+                "Alex Wang",
+                "Patient",
+                "",
+                "字幕：",
+                "1_0001",
+                "中文內文。",
+                "English body line.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_news.generate_news_from_sources(source_docx, source_txt, output_path)
+
+    texts = [p.text for p in Document(output_path).paragraphs]
+    assert texts[:10] == [
+        "Direct generation title",
+        "",
+        "Direct summary line",
+        "",
+        "Patient | Alex Wang",
+        "Alex Wang",
+        "Patient",
+        "<",
+        "",
+        "1_0001",
+    ]

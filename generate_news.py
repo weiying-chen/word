@@ -18,6 +18,7 @@ from generate_subs import (
     normalize_input_text,
     remove_paragraph,
 )
+from update_input import parse_source_docx, parse_source_txt
 
 
 PLACEHOLDER_KEYS = [
@@ -107,8 +108,22 @@ def parse_input(path: Path) -> dict[str, str]:
     data.setdefault("SUMMARY", "")
     data.setdefault("META_OVERVIEW_EN", "")
     data.setdefault("META_PEOPLE", "")
+    data.setdefault("SUPER_PEOPLE", "")
     data.setdefault("BODY", "")
     return data
+
+
+def parse_sources(source_docx_path: Path, source_txt_path: Path) -> dict[str, str]:
+    title, url, summary, _time_range = parse_source_docx(source_docx_path)
+    fields, body = parse_source_txt(source_txt_path)
+
+    return {
+        "TITLE_TEXT": normalize_input_text(title),
+        "TITLE_URL": normalize_input_text(url),
+        "SUMMARY": normalize_input_text(summary),
+        "SUPER_PEOPLE": normalize_input_text(fields.get("SUPER_PEOPLE", "")),
+        "BODY": normalize_input_text(body),
+    }
 
 
 def _add_plain_paragraph(doc: Document, text: str) -> None:
@@ -142,12 +157,11 @@ def default_output_path(source_docx: Path, output_dir: Path) -> Path:
     return output_dir / f"{stem}.docx"
 
 
-def generate_news(
-    input_path: Path,
+def generate_news_from_data(
+    data: dict[str, str],
     output_path: Path,
     template_path: Path = DEFAULT_TEMPLATE,
 ) -> None:
-    data = parse_input(input_path)
     doc = _new_document_from_template(template_path)
     apply_default_margins(doc)
     ensure_hyperlink_style(doc)
@@ -185,14 +199,38 @@ def generate_news(
     fix_docx_namespaces(output_path)
 
 
+def generate_news(
+    input_path: Path,
+    output_path: Path,
+    template_path: Path = DEFAULT_TEMPLATE,
+) -> None:
+    data = parse_input(input_path)
+    generate_news_from_data(data, output_path, template_path)
+
+
+def generate_news_from_sources(
+    source_docx_path: Path,
+    source_txt_path: Path,
+    output_path: Path,
+    template_path: Path = DEFAULT_TEMPLATE,
+) -> None:
+    data = parse_sources(source_docx_path, source_txt_path)
+    generate_news_from_data(data, output_path, template_path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Render a newsroom DOCX from a structured text input."
     )
     parser.add_argument(
         "--input",
-        default="news_input.txt",
-        help="Path to the news input text file.",
+        default="",
+        help="Path to a prepared news input text file. Optional when using --source-txt.",
+    )
+    parser.add_argument(
+        "--source-txt",
+        default="",
+        help="Path to source.txt. If set, generation runs directly from source.docx + source.txt.",
     )
     parser.add_argument(
         "--output",
@@ -214,6 +252,18 @@ def main() -> None:
     output_path = Path(args.output) if args.output else default_output_path(
         Path(args.source_docx), Path("output")
     )
+
+    if args.source_txt:
+        generate_news_from_sources(
+            Path(args.source_docx),
+            Path(args.source_txt),
+            output_path,
+            Path(args.template),
+        )
+        return
+
+    if not args.input:
+        raise SystemExit("Provide either --input or --source-txt.")
 
     generate_news(Path(args.input), output_path, Path(args.template))
 
