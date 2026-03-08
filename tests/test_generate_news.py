@@ -258,3 +258,43 @@ def test_generate_news_from_sources_renders_without_intermediate_input(
         "",
         "1_0001",
     ]
+
+
+def test_parse_sources_prefers_english_fields_in_source_txt(tmp_path: Path) -> None:
+    source_docx = tmp_path / 'source.docx'
+    source_txt = tmp_path / 'source.txt'
+
+    doc = Document()
+    doc.add_paragraph('Docx title')
+    doc.add_paragraph('https://example.com/from-docx')
+    doc.add_paragraph('Docx summary')
+    doc.add_paragraph('( 11/16~17 )')
+    doc.save(source_docx)
+
+    source_txt.write_text(
+        '\n'.join(
+            [
+                'TITLE_TEXT: Source title',
+                'TITLE_URL: https://example.com/from-source',
+                'SUMMARY:',
+                'Source summary',
+                '',
+                'SUPER_PEOPLE:',
+                'Patient | Alex Wang',
+                'Alex Wang',
+                'Patient',
+                '',
+                'BODY:',
+                '1_0001',
+                '中文內文。',
+                'English body line.',
+            ]
+        ),
+        encoding='utf-8',
+    )
+
+    data = generate_news.parse_sources(source_docx, source_txt)
+
+    assert data['TITLE_TEXT'] == 'Source title'
+    assert data['TITLE_URL'] == 'https://example.com/from-source'
+    assert data['SUMMARY'] == 'Source summary'

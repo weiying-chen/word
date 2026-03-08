@@ -117,10 +117,14 @@ def parse_sources(source_docx_path: Path, source_txt_path: Path) -> dict[str, st
     title, url, summary, _time_range = parse_source_docx(source_docx_path)
     fields, body = parse_source_txt(source_txt_path)
 
+    title_text = fields.get("TITLE_TEXT", "").strip() or title
+    title_url = fields.get("TITLE_URL", "").strip() or url
+    summary_text = fields.get("SUMMARY", "").strip() or summary
+
     return {
-        "TITLE_TEXT": normalize_input_text(title),
-        "TITLE_URL": normalize_input_text(url),
-        "SUMMARY": normalize_input_text(summary),
+        "TITLE_TEXT": normalize_input_text(title_text),
+        "TITLE_URL": normalize_input_text(title_url),
+        "SUMMARY": normalize_input_text(summary_text),
         "SUPER_PEOPLE": normalize_input_text(fields.get("SUPER_PEOPLE", "")),
         "BODY": normalize_input_text(body),
     }

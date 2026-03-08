@@ -97,3 +97,36 @@ def test_generate_news_parse_input_preserves_super_people(tmp_path: Path) -> Non
 
     assert data['SUPER_PEOPLE'] == '病患 | 羅伯托\nRoberto\nPatient'
     assert data['BODY'] == '1_0001\n中文內文。\nEnglish line.'
+
+
+def test_parse_source_txt_supports_english_news_labels(tmp_path: Path) -> None:
+    source_txt = tmp_path / 'source.txt'
+    source_txt.write_text(
+        '\n'.join(
+            [
+                'TITLE_TEXT: Sample title',
+                'TITLE_URL: https://example.com/story',
+                'SUMMARY:',
+                'Summary line one.',
+                '',
+                'SUPER_PEOPLE:',
+                'Patient | Alex Wang',
+                'Alex Wang',
+                'Patient',
+                '',
+                'BODY:',
+                '1_0001',
+                '中文內文。',
+                'English body.',
+            ]
+        ),
+        encoding='utf-8',
+    )
+
+    fields, body = update_input.parse_source_txt(source_txt)
+
+    assert fields['TITLE_TEXT'] == 'Sample title'
+    assert fields['TITLE_URL'] == 'https://example.com/story'
+    assert fields['SUMMARY'] == 'Summary line one.'
+    assert fields['SUPER_PEOPLE'] == 'Patient | Alex Wang\nAlex Wang\nPatient'
+    assert body == '1_0001\n中文內文。\nEnglish body.'

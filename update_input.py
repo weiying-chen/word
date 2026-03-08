@@ -3,18 +3,33 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 from docx import Document
 
 
 LABEL_MAP = {
+    # Chinese source labels
     "建議YT標題": "YT_TITLE_SUGGESTED",
     "建議標題": "TITLE_SUGGESTED",
     "簡介": "INTRO",
     "選圖": "THUMBNAIL",
     "SUPER_PEOPLE": "SUPER_PEOPLE",
+    # English source labels (news-native)
+    "YT_TITLE_SUGGESTED": "YT_TITLE_SUGGESTED",
+    "TITLE_SUGGESTED": "TITLE_SUGGESTED",
+    "INTRO": "INTRO",
+    "THUMBNAIL": "THUMBNAIL",
+    "TITLE_TEXT": "TITLE_TEXT",
+    "TITLE_URL": "TITLE_URL",
+    "SUMMARY": "SUMMARY",
+    "BODY": "BODY",
 }
+
+BODY_LABELS = {"字幕", "BODY"}
+LABEL_LINE_RE = re.compile(r"^\s*([^:：]+)\s*[:：]\s*$")
+INLINE_LINE_RE = re.compile(r"^\s*([^:：]+)\s*[:：]\s*(.*)$")
 
 
 def parse_source_docx(path: Path) -> tuple[str, str, str, str]:
@@ -31,21 +46,38 @@ def parse_source_txt(path: Path) -> tuple[dict[str, str], str]:
     body_lines: list[str] = []
     idx = 0
 
+    def parse_label_line(raw: str) -> str | None:
+        m = LABEL_LINE_RE.match(raw.strip())
+        if not m:
+            return None
+        return m.group(1).strip()
+
     def is_label_line(raw: str) -> bool:
-        stripped = raw.strip()
-        if not stripped.endswith("："):
+        label = parse_label_line(raw)
+        if not label:
             return False
-        label = stripped[:-1]
-        return label in LABEL_MAP or label == "字幕"
+        return label in LABEL_MAP or label in BODY_LABELS
 
     while idx < len(lines):
-        line = lines[idx].strip()
-        if not line.endswith("："):
+        raw = lines[idx]
+
+        # Inline labels: KEY: value
+        inline = INLINE_LINE_RE.match(raw.strip())
+        if inline and not LABEL_LINE_RE.match(raw.strip()):
+            label = inline.group(1).strip()
+            value = inline.group(2)
+            mapped = LABEL_MAP.get(label)
+            if mapped:
+                fields[mapped] = value.strip("\n")
             idx += 1
             continue
 
-        label = line[:-1]
-        if label == "字幕":
+        label = parse_label_line(raw)
+        if not label:
+            idx += 1
+            continue
+
+        if label in BODY_LABELS:
             body_lines = lines[idx + 1 :]
             break
 
@@ -55,8 +87,9 @@ def parse_source_txt(path: Path) -> tuple[dict[str, str], str]:
             collected.append(lines[idx])
             idx += 1
 
-        if label in LABEL_MAP:
-            fields[LABEL_MAP[label]] = "\n".join(collected).strip("\n")
+        mapped = LABEL_MAP.get(label)
+        if mapped:
+            fields[mapped] = "\n".join(collected).strip("\n")
 
     while body_lines and body_lines[0].strip() == "":
         body_lines.pop(0)
