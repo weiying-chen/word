@@ -10,31 +10,13 @@ from pathlib import Path
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 
-from docx_utils import add_hyperlink
-from generate_subs import (
-    apply_default_margins,
-    ensure_hyperlink_style,
-    fix_docx_namespaces,
-    normalize_input_text,
-    remove_paragraph,
-)
-from update_input import parse_source_docx, parse_source_txt
+from generate_subs import fix_docx_namespaces, normalize_input_text, remove_paragraph
 
 
-PLACEHOLDER_KEYS = [
-    "TITLE_TEXT",
-    "TITLE_URL",
-    "SUMMARY",
-    "META_TITLE_EN",
-    "META_OVERVIEW_EN",
-    "META_PEOPLE",
-    "SUPER_PEOPLE",
-    "BODY",
-]
-PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
 SHOT_ID_RE = re.compile(r"^\d+_\d+$")
-FIXED_MARKER = "<"
-DEFAULT_TEMPLATE = Path("templates/news_template.docx")
+BODY_LABEL_LINE_RE = re.compile(r"^\s*(BODY|字幕)\s*[:：]\s*$")
+BODY_INLINE_LINE_RE = re.compile(r"^\s*(BODY|字幕)\s*[:：]\s*(.*)$")
+MARKER_TEXT = "<"
 
 
 def _decode_input_text(path: Path) -> tuple[str, str, bool]:
@@ -61,7 +43,6 @@ def _decode_input_text(path: Path) -> tuple[str, str, bool]:
 
 
 def parse_input(path: Path) -> dict[str, str]:
-    data: dict[str, str] = {}
     text, encoding_used, used_fallback = _decode_input_text(path)
     if used_fallback:
         warnings.warn(
@@ -71,63 +52,22 @@ def parse_input(path: Path) -> dict[str, str]:
         path.write_text(text, encoding="utf-8")
 
     lines = text.splitlines()
-    idx = 0
-    while idx < len(lines):
-        raw_line = lines[idx]
-        if ":" not in raw_line:
-            idx += 1
-            continue
 
-        key, value = raw_line.split(":", 1)
-        key = key.lstrip("\ufeff").strip().upper()
-        value = value.lstrip()
+    for idx, raw_line in enumerate(lines):
+        stripped = raw_line.strip()
 
-        if key not in PLACEHOLDER_KEY_SET:
-            idx += 1
-            continue
+        inline = BODY_INLINE_LINE_RE.match(stripped)
+        if inline and not BODY_LABEL_LINE_RE.match(stripped):
+            collected = [inline.group(2)] if inline.group(2) else []
+            collected.extend(lines[idx + 1 :])
+            return {"BODY": normalize_input_text("\n".join(collected).rstrip())}
 
-        if key in {"SUMMARY", "META_OVERVIEW_EN", "META_PEOPLE", "SUPER_PEOPLE", "BODY"}:
-            collected: list[str] = []
-            if value:
-                collected.append(value)
-            idx += 1
-            while idx < len(lines):
-                next_line = lines[idx]
-                if ":" in next_line:
-                    next_key = next_line.split(":", 1)[0].strip().upper()
-                    if next_key in PLACEHOLDER_KEY_SET:
-                        break
-                collected.append(next_line)
-                idx += 1
-            data[key] = normalize_input_text("\n".join(collected).rstrip())
-            continue
+        if BODY_LABEL_LINE_RE.match(stripped):
+            return {
+                "BODY": normalize_input_text("\n".join(lines[idx + 1 :]).rstrip())
+            }
 
-        data[key] = normalize_input_text(value)
-        idx += 1
-
-    data.setdefault("SUMMARY", "")
-    data.setdefault("META_OVERVIEW_EN", "")
-    data.setdefault("META_PEOPLE", "")
-    data.setdefault("SUPER_PEOPLE", "")
-    data.setdefault("BODY", "")
-    return data
-
-
-def parse_sources(source_docx_path: Path, source_txt_path: Path) -> dict[str, str]:
-    title, url, summary, _time_range = parse_source_docx(source_docx_path)
-    fields, body = parse_source_txt(source_txt_path)
-
-    title_text = fields.get("TITLE_TEXT", "").strip() or title
-    title_url = fields.get("TITLE_URL", "").strip() or url
-    summary_text = fields.get("SUMMARY", "").strip() or summary
-
-    return {
-        "TITLE_TEXT": normalize_input_text(title_text),
-        "TITLE_URL": normalize_input_text(title_url),
-        "SUMMARY": normalize_input_text(summary_text),
-        "SUPER_PEOPLE": normalize_input_text(fields.get("SUPER_PEOPLE", "")),
-        "BODY": normalize_input_text(body),
-    }
+    return {"BODY": normalize_input_text(text.rstrip())}
 
 
 def _add_plain_paragraph(doc: Document, text: str) -> None:
@@ -147,13 +87,6 @@ def _render_multiline_block(doc: Document, text: str) -> None:
         _add_plain_paragraph(doc, line)
 
 
-def _new_document_from_template(template_path: Path) -> Document:
-    doc = Document(str(template_path))
-    for paragraph in list(doc.paragraphs):
-        remove_paragraph(paragraph)
-    return doc
-
-
 def default_output_path(source_docx: Path, output_dir: Path) -> Path:
     stem = source_docx.stem
     if not stem.endswith("_final"):
@@ -161,41 +94,39 @@ def default_output_path(source_docx: Path, output_dir: Path) -> Path:
     return output_dir / f"{stem}.docx"
 
 
+def _marker_index(doc: Document) -> int:
+    for idx, paragraph in enumerate(doc.paragraphs):
+        if paragraph.text.strip() == MARKER_TEXT:
+            return idx
+    raise ValueError("source.docx must contain a '<' marker paragraph.")
+
+
+def _trim_existing_body(doc: Document, marker_idx: int) -> None:
+    for paragraph in list(doc.paragraphs[marker_idx + 1 :]):
+        remove_paragraph(paragraph)
+
+
+def generate_news(
+    source_docx_path: Path,
+    input_path: Path,
+    output_path: Path,
+) -> None:
+    data = parse_input(input_path)
+    generate_news_from_data(source_docx_path, data, output_path)
+
+
 def generate_news_from_data(
+    source_docx_path: Path,
     data: dict[str, str],
     output_path: Path,
-    template_path: Path = DEFAULT_TEMPLATE,
 ) -> None:
-    doc = _new_document_from_template(template_path)
-    apply_default_margins(doc)
-    ensure_hyperlink_style(doc)
-
-    title = data.get("TITLE_TEXT", "").strip()
-    title_url = data.get("TITLE_URL", "").strip()
-    title_display = title or title_url
-    if title_display:
-        title_paragraph = doc.add_paragraph("")
-        if title_url:
-            add_hyperlink(title_paragraph, title_display, title_url)
-        else:
-            title_paragraph.add_run(title_display)
-        doc.add_paragraph("")
-
-    summary = data.get("SUMMARY", "")
-    if summary:
-        _render_multiline_block(doc, summary)
-
-    super_people = data.get("SUPER_PEOPLE", "")
-    if super_people:
-        doc.add_paragraph("")
-        _render_multiline_block(doc, super_people)
-
-    if summary or super_people or data.get("BODY", ""):
-        _add_plain_paragraph(doc, FIXED_MARKER)
-        doc.add_paragraph("")
+    doc = Document(str(source_docx_path))
+    marker_idx = _marker_index(doc)
+    _trim_existing_body(doc, marker_idx)
 
     body = data.get("BODY", "")
     if body:
+        doc.add_paragraph("")
         _render_multiline_block(doc, body)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -203,38 +134,22 @@ def generate_news_from_data(
     fix_docx_namespaces(output_path)
 
 
-def generate_news(
-    input_path: Path,
-    output_path: Path,
-    template_path: Path = DEFAULT_TEMPLATE,
-) -> None:
-    data = parse_input(input_path)
-    generate_news_from_data(data, output_path, template_path)
-
-
 def generate_news_from_sources(
     source_docx_path: Path,
     source_txt_path: Path,
     output_path: Path,
-    template_path: Path = DEFAULT_TEMPLATE,
 ) -> None:
-    data = parse_sources(source_docx_path, source_txt_path)
-    generate_news_from_data(data, output_path, template_path)
+    generate_news(source_docx_path, source_txt_path, output_path)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Render a newsroom DOCX from a structured text input."
-    )
-    parser.add_argument(
-        "--input",
-        default="",
-        help="Path to a prepared news input text file. Optional when using --source-txt.",
+        description="Render a newsroom DOCX by preserving the DOCX header and replacing the body from text."
     )
     parser.add_argument(
         "--source-txt",
-        default="",
-        help="Path to source.txt. If set, generation runs directly from source.docx + source.txt.",
+        default="source.txt",
+        help="Path to the body text source.",
     )
     parser.add_argument(
         "--output",
@@ -244,32 +159,14 @@ def main() -> None:
     parser.add_argument(
         "--source-docx",
         required=True,
-        help="Original source DOCX for naming the output.",
-    )
-    parser.add_argument(
-        "--template",
-        default=str(DEFAULT_TEMPLATE),
-        help="Path to the base DOCX template for styles.",
+        help="Original source DOCX whose header is preserved.",
     )
     args = parser.parse_args()
 
     output_path = Path(args.output) if args.output else default_output_path(
         Path(args.source_docx), Path("output")
     )
-
-    if args.source_txt:
-        generate_news_from_sources(
-            Path(args.source_docx),
-            Path(args.source_txt),
-            output_path,
-            Path(args.template),
-        )
-        return
-
-    if not args.input:
-        raise SystemExit("Provide either --input or --source-txt.")
-
-    generate_news(Path(args.input), output_path, Path(args.template))
+    generate_news(Path(args.source_docx), Path(args.source_txt), output_path)
 
 
 if __name__ == "__main__":

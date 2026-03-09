@@ -70,7 +70,7 @@ def test_write_input_emits_super_people_before_body(tmp_path: Path) -> None:
     assert 'SUPER_PEOPLE:\n病患 | 羅伯托\nRoberto\nPatient\n\nBODY:\n1_0001\nEnglish body.' in text
 
 
-def test_generate_news_parse_input_preserves_super_people(tmp_path: Path) -> None:
+def test_generate_news_parse_input_keeps_only_body(tmp_path: Path) -> None:
     input_path = tmp_path / 'news_input.txt'
     input_path.write_text(
         '\n'.join(
@@ -95,7 +95,6 @@ def test_generate_news_parse_input_preserves_super_people(tmp_path: Path) -> Non
 
     data = generate_news.parse_input(input_path)
 
-    assert data['SUPER_PEOPLE'] == '病患 | 羅伯托\nRoberto\nPatient'
     assert data['BODY'] == '1_0001\n中文內文。\nEnglish line.'
 
 
