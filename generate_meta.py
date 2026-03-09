@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import warnings
 from pathlib import Path
 
 from docx import Document
@@ -11,7 +12,7 @@ from docx.oxml import OxmlElement
 from docx.text.paragraph import Paragraph
 from docx.shared import Inches
 
-from generate_news import parse_input as parse_news_input
+from generate_subs import normalize_input_text
 
 
 TITLE_PLACEHOLDER = "{{TITLE_EN}}"
@@ -21,7 +22,15 @@ META_TITLE_EN_KEY = "META_TITLE_EN"
 META_OVERVIEW_EN_KEY = "META_OVERVIEW_EN"
 META_PEOPLE_KEY = "META_PEOPLE"
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
-EN_NAME_PAREN_RE = re.compile(r"^\(\s*\d+\s+([A-Za-z][A-Za-z.\s'-]*)\s*\)$")
+EN_NAME_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z.\s'-]*")
+META_KEYS = {
+    "TITLE_TEXT",
+    "SUMMARY",
+    "META_TITLE_EN",
+    "META_OVERVIEW_EN",
+    "META_PEOPLE",
+    "BODY",
+}
 
 
 def _contains_cjk(text: str) -> bool:
@@ -33,6 +42,20 @@ def _clean_super_line(text: str) -> str:
     if cleaned.endswith("//"):
         cleaned = cleaned[:-2].rstrip()
     return cleaned
+
+
+def _extract_english_name_hint(text: str) -> str:
+    stripped = text.strip()
+    if not (stripped.startswith("(") and stripped.endswith(")")):
+        return ""
+
+    inner = stripped[1:-1]
+    candidates = [match.group(0).strip() for match in EN_NAME_TOKEN_RE.finditer(inner)]
+    candidates = [candidate.rstrip(" .,;:-") for candidate in candidates if candidate.strip()]
+    if not candidates:
+        return ""
+
+    return max(candidates, key=len)
 
 
 def _parse_super(lines: list[str]) -> dict:
@@ -140,11 +163,104 @@ def _merge_meta_people_overrides(
     return merged
 
 
-def parse_input(path: Path) -> dict[str, object]:
+def _decode_input_text(path: Path) -> tuple[str, str, bool]:
+    raw = path.read_bytes()
+    tried_encodings: list[str] = []
+
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw.decode("utf-8-sig"), "utf-8-sig", False
+
+    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+        return raw.decode("utf-16"), "utf-16", False
+
+    for encoding in ("utf-8", "big5", "cp950", "gb18030", "cp1252"):
+        tried_encodings.append(encoding)
+        try:
+            return raw.decode(encoding), encoding, encoding != "utf-8"
+        except UnicodeDecodeError:
+            continue
+
+    tried = ", ".join(tried_encodings)
+    raise UnicodeError(
+        f"Unable to decode input file '{path}' with supported encodings: {tried}"
+    )
+
+
+def _parse_news_payload(path: Path, *, allow_body_fallback: bool = False) -> dict[str, str]:
+    text, encoding_used, used_fallback = _decode_input_text(path)
+    if used_fallback:
+        warnings.warn(
+            f"Using fallback encoding '{encoding_used}' for {path}; rewriting as UTF-8.",
+            stacklevel=2,
+        )
+        path.write_text(text, encoding="utf-8")
+
+    lines = text.splitlines()
+    data: dict[str, str] = {}
+    idx = 0
+    while idx < len(lines):
+        raw_line = lines[idx]
+        if ":" not in raw_line:
+            idx += 1
+            continue
+
+        key, value = raw_line.split(":", 1)
+        key = key.lstrip("\ufeff").strip().upper()
+        value = value.lstrip()
+
+        if key not in META_KEYS:
+            idx += 1
+            continue
+
+        if key in {"SUMMARY", "META_PEOPLE", "BODY"}:
+            collected: list[str] = []
+            if value:
+                collected.append(value)
+            idx += 1
+            while idx < len(lines):
+                next_line = lines[idx]
+                if ":" in next_line:
+                    next_key = next_line.split(":", 1)[0].strip().upper()
+                    if next_key in META_KEYS:
+                        break
+                collected.append(next_line)
+                idx += 1
+            data[key] = normalize_input_text("\n".join(collected).rstrip())
+            continue
+
+        data[key] = normalize_input_text(value)
+        idx += 1
+
+    data.setdefault("TITLE_TEXT", "")
+    data.setdefault("SUMMARY", "")
+    data.setdefault(META_TITLE_EN_KEY, "")
+    data.setdefault(META_OVERVIEW_EN_KEY, "")
+    data.setdefault(META_PEOPLE_KEY, "")
+    data.setdefault("BODY", "")
+    if allow_body_fallback and not data["BODY"] and not any(
+        data[key]
+        for key in (
+            "TITLE_TEXT",
+            "SUMMARY",
+            META_TITLE_EN_KEY,
+            META_OVERVIEW_EN_KEY,
+            META_PEOPLE_KEY,
+        )
+    ):
+        data["BODY"] = normalize_input_text(text.rstrip())
+    return data
+
+
+def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
     if path.suffix.lower() != ".txt":
         raise ValueError(f"Unsupported input format: {path}")
 
-    data = parse_news_input(path)
+    data = _parse_news_payload(path, allow_body_fallback=True)
+    if meta_path is not None:
+        if meta_path.suffix.lower() != ".txt":
+            raise ValueError(f"Unsupported meta input format: {meta_path}")
+        meta_data = _parse_news_payload(meta_path, allow_body_fallback=False)
+        data = {**data, **{k: v for k, v in meta_data.items() if k != "BODY" and v}}
     body_lines = data.get("BODY", "").splitlines()
 
     narration_zh: list[str] = []
@@ -157,11 +273,11 @@ def parse_input(path: Path) -> dict[str, object]:
 
     for raw in body_lines:
         line = raw.strip()
-        en_match = EN_NAME_PAREN_RE.match(line)
-        if en_match:
-            english_names.append(en_match.group(1).strip())
+        english_name = _extract_english_name_hint(line)
+        if english_name:
+            english_names.append(english_name)
             continue
-        if line.startswith("/*SUPER"):
+        if line == "/*SUPER:":
             in_super = True
             super_lines = []
             continue
@@ -274,10 +390,10 @@ def build_people_lines(people: list[dict]) -> list[str]:
         lines.append(label_zh or "")
         name_zh = person.get("name_zh", "").strip()
         name_en = person.get("name_en", "").strip()
-        if not name_en:
-            placeholder_key = name_zh or "NAME_EN"
-            name_en = f"{{{{{placeholder_key}}}}}"
-        lines.append(name_en)
+        if name_en:
+            lines.append(name_en)
+        elif name_zh:
+            lines.append(f"{{{{{name_zh}}}}}")
         role_zh = person.get("role_zh", "").strip()
         role_en = person.get("role_en", "").strip()
         if not role_en:
@@ -307,8 +423,13 @@ def default_output_path(source_docx: Path, output_dir: Path) -> Path:
     return output_dir / f"{stem}_標題職銜_final.docx"
 
 
-def generate_meta(template_path: Path, input_path: Path, output_path: Path) -> None:
-    data = parse_input(input_path)
+def generate_meta(
+    template_path: Path,
+    input_path: Path,
+    output_path: Path,
+    meta_path: Path | None = None,
+) -> None:
+    data = parse_input(input_path, meta_path)
     doc = Document(str(template_path))
     apply_default_margins(doc)
 
@@ -335,9 +456,14 @@ def main() -> None:
         help="Path to the meta DOCX template.",
     )
     parser.add_argument(
-        "--input",
-        default="news_input.txt",
-        help="Path to the shared news txt input.",
+        "--source-txt",
+        default="source.txt",
+        help="Path to the body text input.",
+    )
+    parser.add_argument(
+        "--meta-txt",
+        default="",
+        help="Optional path to a separate meta txt input.",
     )
     parser.add_argument(
         "--output",
@@ -355,7 +481,8 @@ def main() -> None:
         Path(args.source_docx), Path("output")
     )
 
-    generate_meta(Path(args.template), Path(args.input), output_path)
+    meta_path = Path(args.meta_txt) if args.meta_txt else None
+    generate_meta(Path(args.template), Path(args.source_txt), output_path, meta_path=meta_path)
 
 
 if __name__ == "__main__":

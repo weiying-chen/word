@@ -28,8 +28,7 @@ class RenderMetaTests(unittest.TestCase):
                 "中文摘要",
                 "",
                 "META_TITLE_EN: English Title",
-                "META_OVERVIEW_EN:",
-                "English overview.",
+                "META_OVERVIEW_EN: English overview.",
                 "",
                 "BODY:",
                 "(  13   Alice )",
@@ -94,8 +93,7 @@ class RenderMetaTests(unittest.TestCase):
                         "中文摘要",
                         "",
                         "META_TITLE_EN: English Title",
-                        "META_OVERVIEW_EN:",
-                        "English overview.",
+                        "META_OVERVIEW_EN: English overview.",
                         "",
                         "BODY:",
                         "(  13   Alice )",
@@ -126,6 +124,234 @@ class RenderMetaTests(unittest.TestCase):
                     "role_en": "",
                     "org_en": "",
                 }
+            ],
+        )
+
+    def test_parse_input_extracts_english_name_from_generic_super_cues(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "news_input.txt"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                        "(22秒，Alois L. Sikuka)",
+                        "/*SUPER:",
+                        "國會議員│阿洛斯．史庫卡//",
+                        "引言二//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(input_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "烏漾達",
+                    "name_en": "Uyanda",
+                    "role_zh": "慈濟志工",
+                    "role_en": "",
+                    "org_en": "",
+                },
+                {
+                    "name_zh": "阿洛斯．史庫卡",
+                    "name_en": "Alois L. Sikuka",
+                    "role_zh": "國會議員",
+                    "role_en": "",
+                    "org_en": "",
+                },
+            ],
+        )
+
+    def test_parse_input_ignores_super1_blocks_for_people(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "news_input.txt"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                        "(8．)",
+                        "/*SUPER1:",
+                        "我們愛我們的新學校 耶",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(input_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "烏漾達",
+                    "name_en": "Uyanda",
+                    "role_zh": "慈濟志工",
+                    "role_en": "",
+                    "org_en": "",
+                }
+            ],
+        )
+
+    def test_parse_input_supports_separate_meta_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "META_TITLE_EN: English Title",
+                        "META_OVERVIEW_EN: English overview.",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(body_path, meta_path)
+
+        self.assertEqual(data["title_en"], "English Title")
+        self.assertEqual(data["overview_en"], "English overview.")
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "烏漾達",
+                    "name_en": "Uyanda",
+                    "role_zh": "慈濟志工",
+                    "role_en": "",
+                    "org_en": "",
+                }
+            ],
+        )
+
+    def test_generate_meta_supports_separate_meta_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "META_TITLE_EN: English Title",
+                        "META_OVERVIEW_EN: English overview.",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            generate_meta(template_path, body_path, output_path, meta_path=meta_path)
+
+            doc = Document(str(output_path))
+            texts = [p.text for p in doc.paragraphs]
+
+        self.assertEqual(
+            texts,
+            [
+                "重點標",
+                "English Title",
+                "名字職銜",
+                "",
+                "慈濟志工｜烏漾達",
+                "Uyanda",
+                "{{慈濟志工}}",
+                "",
+                "YT簡介",
+                "English overview.",
+            ],
+        )
+
+    def test_generate_meta_omits_name_placeholder_for_role_only_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            body_path = tmpdir_path / "source.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(8．)",
+                        "/*SUPER:",
+                        "家長｜//",
+                        "內容//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            generate_meta(template_path, body_path, output_path)
+
+            doc = Document(str(output_path))
+            texts = [p.text for p in doc.paragraphs]
+
+        self.assertEqual(
+            texts,
+            [
+                "重點標",
+                "",
+                "名字職銜",
+                "",
+                "家長",
+                "{{家長}}",
+                "",
+                "YT簡介",
+                "",
             ],
         )
 
@@ -170,8 +396,7 @@ class RenderMetaTests(unittest.TestCase):
                 "(  11/16~17 )",
                 "",
                 "META_TITLE_EN: Coastal Clinic Restores Access to Care",
-                "META_OVERVIEW_EN:",
-                "A volunteer medical team brought screenings and referrals to local residents.",
+                "META_OVERVIEW_EN: A volunteer medical team brought screenings and referrals to local residents.",
                 "",
                 "BODY:",
                 "1_0014",
@@ -237,8 +462,7 @@ class RenderMetaTests(unittest.TestCase):
                 "測試摘要",
                 "",
                 "META_TITLE_EN: Test English Title",
-                "META_OVERVIEW_EN:",
-                "Test English overview.",
+                "META_OVERVIEW_EN: Test English overview.",
                 "",
                 "META_PEOPLE:",
                 "居民｜受訪者",
