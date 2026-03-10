@@ -1,4 +1,15 @@
-# AGENTS
+# Agent Instructions
+
+## Git commits
+
+- Use short commit messages in sentence case (only the first word capitalized).
+- Do not use Conventional Commits prefixes (e.g. `feat:`, `fix:`).
+
+## Testing workflow
+
+- For every code change, add a generic test, make sure it fails first, then implement the code and make sure it passes.
+
+## Project notes
 
 - This project uses Codex CLI.
 - Add agent-specific instructions here.
