@@ -469,6 +469,53 @@ def test_generate_subs_timing_marker_uses_marked_highlight_and_strips_stars(
     assert "yellow" in highlights
 
 
+def test_generate_subs_summary_marker_uses_marked_highlight_and_strips_stars(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{SUMMARY}}"])
+    input_path.write_text(
+        "\n".join(
+            [
+                "SUMMARY:",
+                "Plain summary line.",
+                "*Marked summary line.*",
+                "BODY:",
+                "dummy",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+    def get_highlight_values(text_target: str):
+        for p in doc.findall(".//w:p", ns):
+            text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+            if text == text_target:
+                vals = []
+                for r in p.findall("w:r", ns):
+                    h = r.find("w:rPr/w:highlight", ns)
+                    vals.append(h.get("{%s}val" % ns["w"]) if h is not None else None)
+                return vals
+        return None
+
+    plain = get_highlight_values("Plain summary line.")
+    marked = get_highlight_values("Marked summary line.")
+
+    assert plain is not None and all(v is None for v in plain)
+    assert marked is not None and "yellow" in marked
+
+
 def test_generate_subs_timing_marker_applies_only_to_marked_lines(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     input_path = tmp_path / "input.txt"

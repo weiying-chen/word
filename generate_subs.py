@@ -279,6 +279,7 @@ def replace_body_paragraph(
     body_text: str,
     source_indent_inches: float,
     timing_style: str | None = None,
+    marked_highlight=None,
 ) -> None:
     lines = body_text.splitlines() if body_text else []
     clear_paragraph(paragraph)
@@ -316,11 +317,15 @@ def replace_body_paragraph(
                 return
             _add_source_runs(target, text)
         else:
-            if timing_style:
+            if timing_style or marked_highlight is not None:
                 _add_marked_runs(
                     target,
                     text,
-                    marked_highlight=TIMING_HIGHLIGHT_MARKED,
+                    marked_highlight=(
+                        TIMING_HIGHLIGHT_MARKED
+                        if timing_style
+                        else marked_highlight
+                    ),
                     run_style=timing_style,
                     apply_default_size=False,
                 )
@@ -459,7 +464,12 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
             if not summary and paragraph.text.strip() == "{{SUMMARY}}":
                 remove_paragraph(paragraph)
                 continue
-            replace_body_paragraph(paragraph, summary, source_indent_inches)
+            replace_body_paragraph(
+                paragraph,
+                summary,
+                source_indent_inches,
+                marked_highlight=TIMING_HIGHLIGHT_MARKED,
+            )
             continue
         if "{{BODY}}" in paragraph.text:
             body = data.get("BODY", "")
