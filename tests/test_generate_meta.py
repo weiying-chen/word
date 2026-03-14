@@ -82,6 +82,48 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_generate_meta_removes_empty_title_and_overview_placeholders(self) -> None:
+        source_text = "\n".join(
+            [
+                "BODY:",
+                "(  13   Alice )",
+                "/*SUPER:",
+                "病患│甲//",
+                "引言一//",
+                "*/",
+                "",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            payload_path = tmpdir_path / "news_input.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            payload_path.write_text(source_text, encoding="utf-8")
+
+            generate_meta(template_path, payload_path, output_path)
+
+            texts = [p.text for p in Document(str(output_path)).paragraphs]
+
+        self.assertEqual(
+            texts,
+            [
+                "重點標",
+                "",
+                "名字職銜",
+                "",
+                "病患｜甲",
+                "Alice",
+                "{{病患}}",
+                "",
+                "YT簡介",
+                "",
+            ],
+        )
+
     def test_parse_input_extracts_meta_fields_and_people(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "news_input.txt"
@@ -302,6 +344,58 @@ class RenderMetaTests(unittest.TestCase):
                     "name_en": "Uyanda",
                     "role_zh": "慈濟志工",
                     "role_en": "",
+                    "org_en": "",
+                }
+            ],
+        )
+
+    def test_parse_input_supports_short_meta_aliases_in_separate_meta_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
+                        "",
+                        "PEOPLE:",
+                        "慈濟志工｜烏漾達",
+                        "Uyanda",
+                        "Volunteer",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(body_path, meta_path)
+
+        self.assertEqual(data["title_en"], "English Title")
+        self.assertEqual(data["overview_en"], "English overview.")
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "烏漾達",
+                    "name_en": "Uyanda",
+                    "role_zh": "慈濟志工",
+                    "role_en": "Volunteer",
                     "org_en": "",
                 }
             ],

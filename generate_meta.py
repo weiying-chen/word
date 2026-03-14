@@ -21,6 +21,11 @@ OVERVIEW_PLACEHOLDER = "{{OVERVIEW_EN}}"
 META_TITLE_EN_KEY = "META_TITLE_EN"
 META_OVERVIEW_EN_KEY = "META_OVERVIEW_EN"
 META_PEOPLE_KEY = "META_PEOPLE"
+META_KEY_ALIASES = {
+    "TITLE": META_TITLE_EN_KEY,
+    "OVERVIEW": META_OVERVIEW_EN_KEY,
+    "PEOPLE": META_PEOPLE_KEY,
+}
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 EN_NAME_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z.\s'-]*")
 EN_NAME_HINT_RE = re.compile(
@@ -34,6 +39,9 @@ META_KEYS = {
     "META_TITLE_EN",
     "META_OVERVIEW_EN",
     "META_PEOPLE",
+    "TITLE",
+    "OVERVIEW",
+    "PEOPLE",
     "BODY",
 }
 
@@ -216,6 +224,7 @@ def _parse_news_payload(path: Path, *, allow_body_fallback: bool = False) -> dic
 
         key, value = raw_line.split(":", 1)
         key = key.lstrip("\ufeff").strip().upper()
+        key = META_KEY_ALIASES.get(key, key)
         value = value.lstrip()
 
         if key not in META_KEYS:
@@ -386,6 +395,21 @@ def replace_multiline(paragraph: Paragraph, lines: list[str]) -> None:
         current = insert_paragraph_after(current, line)
 
 
+def replace_or_remove_paragraph_text(paragraph: Paragraph | None, text: str) -> None:
+    if paragraph is None:
+        return
+    if text:
+        paragraph.text = text
+    else:
+        next_element = paragraph._p.getnext()
+        if next_element is not None and next_element.tag.endswith("}p"):
+            next_paragraph = Paragraph(next_element, paragraph._parent)
+            if not next_paragraph.text.strip():
+                remove_paragraph(paragraph)
+                return
+        paragraph.text = ""
+
+
 def build_people_lines(people: list[dict]) -> list[str]:
     lines: list[str] = []
     for idx, person in enumerate(people):
@@ -444,16 +468,16 @@ def generate_meta(
     apply_default_margins(doc)
 
     title_placeholder = find_paragraph_by_text(doc, TITLE_PLACEHOLDER)
-    if title_placeholder:
-        title_placeholder.text = data.get("title_en", "")
+    replace_or_remove_paragraph_text(title_placeholder, str(data.get("title_en", "")))
 
     people_placeholder = find_paragraph_by_text(doc, PEOPLE_PLACEHOLDER)
     if people_placeholder:
         replace_multiline(people_placeholder, build_people_lines(data.get("people", [])))
 
     overview_placeholder = find_paragraph_by_text(doc, OVERVIEW_PLACEHOLDER)
-    if overview_placeholder:
-        overview_placeholder.text = data.get("overview_en", "")
+    replace_or_remove_paragraph_text(
+        overview_placeholder, str(data.get("overview_en", ""))
+    )
 
     doc.save(str(output_path))
 
