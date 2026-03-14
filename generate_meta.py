@@ -23,6 +23,11 @@ META_OVERVIEW_EN_KEY = "META_OVERVIEW_EN"
 META_PEOPLE_KEY = "META_PEOPLE"
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 EN_NAME_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z.\s'-]*")
+EN_NAME_HINT_RE = re.compile(
+    r'^[\s\d.,，．。:：;；!?！？~\-–—秒分]*'
+    r'([A-Za-z][A-Za-z.\s"“”\'‘’\-]*[A-Za-z])'
+    r'(?:\s*[\u4e00-\u9fff].*)?$'
+)
 META_KEYS = {
     "TITLE_TEXT",
     "SUMMARY",
@@ -50,12 +55,17 @@ def _extract_english_name_hint(text: str) -> str:
         return ""
 
     inner = stripped[1:-1]
-    candidates = [match.group(0).strip() for match in EN_NAME_TOKEN_RE.finditer(inner)]
-    candidates = [candidate.rstrip(" .,;:-") for candidate in candidates if candidate.strip()]
-    if not candidates:
+    match = EN_NAME_HINT_RE.match(inner.strip())
+    if not match:
         return ""
 
-    return max(candidates, key=len)
+    name = match.group(1).strip().rstrip(" .,;:-")
+    return (
+        name.replace("“", '"')
+        .replace("”", '"')
+        .replace("‘", "'")
+        .replace("’", "'")
+    )
 
 
 def _parse_super(lines: list[str]) -> dict:

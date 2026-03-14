@@ -173,6 +173,55 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_parse_input_ignores_instructional_parenthetical_english_and_keeps_full_name(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "news_input.txt"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(11，Dr. Margarita “Maui” Bondoc-Hermosa 毛伊醫師)",
+                        "/*SUPER:",
+                        "慈濟人醫會眼科醫師│毛伊//",
+                        "引言一//",
+                        "*/",
+                        "",
+                        "(志工說以Maul 來為名)",
+                        "(7，Allyza Jane Alinsub Sergida)",
+                        "/*SUPER:",
+                        "小患者│艾莉莎//",
+                        "引言二//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(input_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "毛伊",
+                    "name_en": 'Dr. Margarita "Maui" Bondoc-Hermosa',
+                    "role_zh": "慈濟人醫會眼科醫師",
+                    "role_en": "",
+                    "org_en": "",
+                },
+                {
+                    "name_zh": "艾莉莎",
+                    "name_en": "Allyza Jane Alinsub Sergida",
+                    "role_zh": "小患者",
+                    "role_en": "",
+                    "org_en": "",
+                },
+            ],
+        )
+
     def test_parse_input_ignores_super1_blocks_for_people(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "news_input.txt"
