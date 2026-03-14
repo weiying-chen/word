@@ -455,6 +455,60 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_generate_meta_omits_english_name_from_label_when_repeated_below(self) -> None:
+        source_text = "\n".join(
+            [
+                "BODY:",
+                "(7)",
+                "/*SUPER:",
+                "艾莉莎的父親│Mar Jason B. Sergida//",
+                "內容//",
+                "*/",
+                "",
+            ]
+        )
+
+        meta_text = "\n".join(
+            [
+                "PEOPLE:",
+                "艾莉莎的父親｜Mar Jason B. Sergida",
+                "Mar Jason B. Sergida",
+                "Allyza's father",
+                "",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            body_path.write_text(source_text, encoding="utf-8")
+            meta_path.write_text(meta_text, encoding="utf-8")
+
+            generate_meta(template_path, body_path, output_path, meta_path=meta_path)
+
+            texts = [p.text for p in Document(str(output_path)).paragraphs]
+
+        self.assertEqual(
+            texts,
+            [
+                "重點標",
+                "",
+                "名字職銜",
+                "",
+                "艾莉莎的父親",
+                "Mar Jason B. Sergida",
+                "Allyza's father",
+                "",
+                "YT簡介",
+                "",
+            ],
+        )
+
     def test_generate_meta_omits_name_placeholder_for_role_only_entries(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)

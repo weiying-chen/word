@@ -410,25 +410,47 @@ def replace_or_remove_paragraph_text(paragraph: Paragraph | None, text: str) -> 
         paragraph.text = ""
 
 
+def _label_without_repeated_english_name(
+    label_zh: str,
+    *,
+    role_zh: str,
+    name_en: str,
+) -> str:
+    if not label_zh or not role_zh or not name_en:
+        return label_zh
+    if "｜" not in label_zh:
+        return label_zh
+
+    label_role, label_name = [part.strip() for part in label_zh.split("｜", 1)]
+    if label_role != role_zh.strip():
+        return label_zh
+    if label_name.strip().casefold() != name_en.strip().casefold():
+        return label_zh
+    return role_zh.strip()
+
+
 def build_people_lines(people: list[dict]) -> list[str]:
     lines: list[str] = []
     for idx, person in enumerate(people):
+        role_zh = person.get("role_zh", "").strip()
+        name_zh = person.get("name_zh", "").strip()
+        name_en = person.get("name_en", "").strip()
         label_zh = person.get("label_zh")
         if not label_zh:
-            role_zh = person.get("role_zh", "").strip()
-            name_zh = person.get("name_zh", "").strip()
             if role_zh and name_zh:
                 label_zh = f"{role_zh}｜{name_zh}"
             else:
                 label_zh = role_zh or name_zh
+        label_zh = _label_without_repeated_english_name(
+            label_zh or "",
+            role_zh=role_zh,
+            name_en=name_en,
+        )
         lines.append(label_zh or "")
-        name_zh = person.get("name_zh", "").strip()
-        name_en = person.get("name_en", "").strip()
         if name_en:
             lines.append(name_en)
         elif name_zh:
             lines.append(f"{{{{{name_zh}}}}}")
-        role_zh = person.get("role_zh", "").strip()
         role_en = person.get("role_en", "").strip()
         if not role_en:
             placeholder_key = role_zh or "ROLE_EN"
