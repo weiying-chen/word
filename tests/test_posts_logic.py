@@ -191,6 +191,51 @@ def test_bodhi_section_does_not_leak(tmp_path: Path) -> None:
     assert not entries[1].get("reference_only")
 
 
+def test_human_bodhi_header_is_treated_as_bodhi_section(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "human_bodhi.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "人間菩提7則",
+            "4. alex",
+            "3/11 善療眾病度苦厄",
+            "https://example.com/life-wisdom",
+            "--------------------------------",
+        ],
+    )
+
+    entries = extract_post_entries(schedule_path)
+    assert len(entries) == 1
+    assert entries[0].get("reference_only")
+    expected_prefix = f"{date.today().year % 100:02d}0311_"
+    assert entries[0]["filename_prefix_override"] == expected_prefix
+
+
+def test_date_assignment_line_for_alex_is_parsed(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "date_assignment.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "節目2則",
+            "4/11(六)發 alex",
+            "Program - Episode",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "World Parkinson's Day",
+            "2. emily",
+            "Other Program - Other Episode",
+            "https://example.com/other",
+            "--------------------------------",
+        ],
+    )
+
+    entries = extract_post_entries(schedule_path)
+    assert len(entries) == 1
+    assert entries[0]["video_title"] == "Program - Episode"
+    assert entries[0]["ref_title"] == "World Parkinson's Day"
+
+
 def test_extracts_full_url_from_truncated_hyperlink(tmp_path: Path) -> None:
     schedule_path = tmp_path / "alex_blocks_hyperlink.docx"
     doc = Document()

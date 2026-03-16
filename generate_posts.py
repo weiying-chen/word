@@ -22,8 +22,11 @@ from docx_utils import (
 
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
+DATE_ASSIGNMENT_LINE_RE = re.compile(
+    r"^\d{1,2}/\d{1,2}(?:\([^()]*\))?\s*發\s*(\S+)"
+)
 PROGRAM_SECTION_RE = re.compile(r"^節目.*則")
-BODHI_SECTION_RE = re.compile(r"^菩提.*則")
+BODHI_SECTION_RE = re.compile(r"^(?:人間)?菩提.*則")
 STOP_SECTION_RE = re.compile(r"^(?:-+|FB小編文|本周節日)")
 TRANSLATOR_TAG_RE = re.compile(r"\s*[A-Za-z]+/[A-Za-z]+\s*$")
 BLOCK_INDEX_RE = re.compile(r"^\d+\s*$")
@@ -36,6 +39,14 @@ ALEX_REF_LABELS = {"參考資料:", "參考資料："}
 ALEX_VIDEO_LABELS = {"要用的影片:", "要用的影片："}
 PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
 DASH_SPLIT_RE = re.compile(r"\s*-\s*")
+
+
+def _extract_person_name(line: str) -> str | None:
+    for pattern in (PERSON_LINE_RE, DATE_ASSIGNMENT_LINE_RE):
+        match = pattern.match(line)
+        if match:
+            return match.group(1).strip().lower()
+    return None
 
 
 def _extract_hyperlink_target(paragraph) -> str | None:
@@ -220,7 +231,7 @@ def _extract_ref_from_label(
     while cursor < len(lines):
         candidate = lines[cursor]
         stripped = candidate.strip()
-        if stop_by_person and PERSON_LINE_RE.match(candidate):
+        if stop_by_person and _extract_person_name(candidate):
             break
         if STOP_SECTION_RE.match(candidate):
             break
@@ -244,7 +255,7 @@ def _extract_schedule_reference(
 ) -> tuple[str, str, str]:
     for idx in range(start_idx, len(lines)):
         line = lines[idx]
-        if PERSON_LINE_RE.match(line) or STOP_SECTION_RE.match(line):
+        if _extract_person_name(line) or STOP_SECTION_RE.match(line):
             break
         if line.strip() == "搭配":
             ref_url, ref_title, ref_url_target, _ = _extract_ref_from_label(
@@ -437,11 +448,9 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
         if STOP_SECTION_RE.match(line):
             break
 
-        match = PERSON_LINE_RE.match(line)
-        if not match:
+        person = _extract_person_name(line)
+        if not person:
             continue
-
-        person = match.group(1).strip().lower()
         if idx + 1 >= len(lines):
             continue
         title_line = lines[idx + 1]
