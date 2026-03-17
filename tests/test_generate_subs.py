@@ -199,6 +199,22 @@ def test_generate_subs_replaces_box_drawing_horizontal(tmp_path: Path) -> None:
     assert doc.paragraphs[0].text == "為什麼要蓋醫院 - 貧中帶病拖垮家庭"
 
 
+def test_generate_subs_replaces_commas_in_title_with_spaces(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TITLE}}"])
+    input_path.write_text(
+        "TITLE: 大愛真健康 - 改善長者走路與平衡，溫和髖關節保養\n",
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+    doc = Document(output_path)
+    assert doc.paragraphs[0].text == "大愛真健康 - 改善長者走路與平衡 溫和髖關節保養"
+
+
 def test_source_block_highlight_and_link(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     input_path = tmp_path / "input.txt"

@@ -54,12 +54,21 @@ SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
 SUBS_OUTPUT_SUFFIX = "_al"
+TITLE_COMMA_RE = re.compile(r"[,\uFF0C]+")
 
 
 def normalize_input_text(text: str) -> str:
     if not text:
         return text
     return text.replace(BOX_DRAWING_HORIZONTAL, SPACED_HYPHEN_MINUS)
+
+
+def normalize_title_text(text: str) -> str:
+    if not text:
+        return text
+    normalized = normalize_input_text(text)
+    normalized = TITLE_COMMA_RE.sub(" ", normalized)
+    return re.sub(r"[ \t]+", " ", normalized).strip()
 
 
 def _decode_input_text(path: Path) -> tuple[str, str, bool]:
@@ -127,7 +136,10 @@ def parse_input(path: Path) -> dict[str, str]:
             data[key] = normalize_input_text("\n".join(collected).rstrip())
             continue
 
-        data[key] = normalize_input_text(value)
+        if key in {"TITLE", "TITLE_SUGGESTED", "YT_TITLE_SUGGESTED"}:
+            data[key] = normalize_title_text(value)
+        else:
+            data[key] = normalize_input_text(value)
         idx += 1
 
     data.setdefault("BODY", "")
