@@ -369,8 +369,8 @@ def remove_paragraph(paragraph) -> None:
     element.getparent().remove(element)
 
 
-def ensure_timing_style(doc: Document):
-    style_name = "Timing"
+def ensure_annotation_style(doc: Document):
+    style_name = "Annotation"
     styles = doc.styles
     if style_name in [s.name for s in styles]:
         style = styles[style_name]
@@ -458,7 +458,7 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
     input_base = input_path.parent
     doc = Document(str(template_path))
     apply_default_margins(doc)
-    timing_style = ensure_timing_style(doc)
+    timing_style = ensure_annotation_style(doc)
     ensure_hyperlink_style(doc)
     source_indent_inches = get_default_tab_stop_inches(doc)
     metrics = _get_section_metrics(doc)

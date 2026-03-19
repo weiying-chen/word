@@ -351,9 +351,9 @@ def test_generate_subs_applies_timing_style_in_timing(tmp_path: Path) -> None:
                     styles.add(r_style.get("{%s}val" % ns["w"]))
             found[text] = styles
 
-    assert "Timing" in found["(1) 00:42-05:41 (4m59s)"]
-    assert "Timing" in found["(2) 05:44-13:21 (7m37s)"]
-    assert "Timing" in found["19'33"]
+    assert "Annotation" in found["(1) 00:42-05:41 (4m59s)"]
+    assert "Annotation" in found["(2) 05:44-13:21 (7m37s)"]
+    assert "Annotation" in found["19'33"]
 
 
 def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -> None:
@@ -472,11 +472,11 @@ def test_generate_subs_timing_marker_uses_marked_highlight_and_strips_stars(
 
     runs = marked.findall("w:r", ns)
     assert runs
-    # Must be Timing style and marked highlight using TIMING yellow.
+    # Must be Annotation style and marked highlight using TIMING yellow.
     for run in runs:
         r_style = run.find("w:rPr/w:rStyle", ns)
         assert r_style is not None
-        assert r_style.get("{%s}val" % ns["w"]) == "Timing"
+        assert r_style.get("{%s}val" % ns["w"]) == "Annotation"
     highlights = [
         r.find("w:rPr/w:highlight", ns).get("{%s}val" % ns["w"])
         for r in runs
