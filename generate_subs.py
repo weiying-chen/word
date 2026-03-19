@@ -35,6 +35,7 @@ PLACEHOLDER_KEYS = [
     "TITLE_SUGGESTED",
     "INTRO",
     "THUMBNAIL",
+    "THUMBNAIL_CREDIT",
     "TIMING",
     "BODY",
 ]
@@ -458,7 +459,7 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
     input_base = input_path.parent
     doc = Document(str(template_path))
     apply_default_margins(doc)
-    timing_style = ensure_annotation_style(doc)
+    annotation_style = ensure_annotation_style(doc)
     ensure_hyperlink_style(doc)
     source_indent_inches = get_default_tab_stop_inches(doc)
     metrics = _get_section_metrics(doc)
@@ -513,11 +514,23 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
                         paragraph.paragraph_format.first_line_indent = 0
                         run = paragraph.add_run()
                         run.add_picture(str(thumbnail_path), width=metrics["usable_width"])
+                        thumbnail_credit = data.get("THUMBNAIL_CREDIT", "").strip()
+                        if thumbnail_credit:
+                            credit_paragraph = insert_paragraph_after(paragraph, "")
+                            credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                            credit_paragraph.paragraph_format.left_indent = 0
+                            credit_paragraph.paragraph_format.right_indent = 0
+                            credit_paragraph.paragraph_format.first_line_indent = 0
+                            _add_text_runs(
+                                credit_paragraph,
+                                thumbnail_credit,
+                                run_style=annotation_style,
+                            )
                     else:
                         replace_placeholder(paragraph, placeholder, value)
                 elif key == "TIMING" and value:
                     replace_body_paragraph(
-                        paragraph, value, source_indent_inches, timing_style=timing_style
+                        paragraph, value, source_indent_inches, timing_style=annotation_style
                     )
                 else:
                     replace_placeholder(paragraph, placeholder, value)

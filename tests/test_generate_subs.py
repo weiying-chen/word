@@ -16,6 +16,17 @@ def _write_docx(path: Path, paragraphs: list[str]) -> None:
     doc.save(path)
 
 
+def _write_png(path: Path) -> None:
+    path.write_bytes(
+        bytes.fromhex(
+            "89504E470D0A1A0A"
+            "0000000D49484452000000010000000108060000001F15C489"
+            "0000000D49444154789C63F8FFFFFF7F0009FB03FD2A86E38A"
+            "0000000049454E44AE426082"
+        )
+    )
+
+
 def _assert_title_replaced_for_encoded_input(
     tmp_path: Path,
     encoded_text: bytes,
@@ -181,6 +192,51 @@ def test_generate_subs_inserts_blank_after_last_label(tmp_path: Path) -> None:
     doc = Document(output_path)
     assert doc.paragraphs[0].text.strip() == "字幕："
     assert not doc.paragraphs[1].text.strip()
+
+
+def test_generate_subs_adds_thumbnail_credit_after_image(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+    image_path = tmp_path / "thumbnail.png"
+
+    _write_docx(template_path, ["選圖：", "{{THUMBNAIL}}", "After thumbnail."])
+    _write_png(image_path)
+    input_path.write_text(
+        "\n".join(
+            [
+                f"THUMBNAIL: {image_path.name}",
+                "THUMBNAIL_CREDIT: Image created by ChatGPT",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    paragraphs = []
+    for p in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+        styles = {
+            r_style.get("{%s}val" % ns["w"])
+            for run in p.findall("w:r", ns)
+            for r_style in [run.find("w:rPr/w:rStyle", ns)]
+            if r_style is not None
+        }
+        has_drawing = p.find(".//w:drawing", ns) is not None
+        paragraphs.append((text, styles, has_drawing))
+
+    image_idx = next(i for i, (_, _, has_drawing) in enumerate(paragraphs) if has_drawing)
+    credit_text, credit_styles, _ = paragraphs[image_idx + 1]
+
+    assert credit_text == "Image created by ChatGPT"
+    assert "Annotation" in credit_styles
+    assert paragraphs[image_idx + 2][0] == "After thumbnail."
 
 
 def test_generate_subs_replaces_box_drawing_horizontal(tmp_path: Path) -> None:
