@@ -83,7 +83,10 @@ def _add_plain_paragraph(doc: Document, text: str) -> None:
 
 
 def _render_multiline_block(doc: Document, text: str) -> None:
-    for line in text.splitlines():
+    lines = text.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    for line in lines:
         _add_plain_paragraph(doc, line)
 
 
