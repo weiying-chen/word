@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import re
 import unicodedata
 import warnings
@@ -13,10 +14,11 @@ from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.text import WD_COLOR_INDEX
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import OxmlElement
-from docx.text.paragraph import Paragraph
 from docx.oxml.ns import qn
 from docx.shared import RGBColor, Inches, Pt
+from docx.text.paragraph import Paragraph
 
 from docx_utils import (
     add_hyperlink,
@@ -28,20 +30,15 @@ from docx_utils import (
 
 
 PLACEHOLDER_KEYS = [
-    "TITLE",
-    "URL",
-    "SUMMARY",
     "YT_TITLE_SUGGESTED",
     "TITLE_SUGGESTED",
     "INTRO",
     "THUMBNAIL",
     "THUMBNAIL_CREDIT",
-    "TIMING",
-    "BODY",
 ]
 PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
 SOURCE_URL_RE = re.compile(r"^https?://\S+")
-TIMING_LINE_RE = re.compile(
+SUBTITLE_LINE_RE = re.compile(
     r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
 SYMBOL_FONT_NAME = "Segoe UI Symbol"
@@ -50,18 +47,22 @@ CJK_MIDDLE_DOT = "\u2027"
 HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
 SOURCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
 SOURCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
-TIMING_HIGHLIGHT_MARKED = WD_COLOR_INDEX.YELLOW
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
 SUBS_OUTPUT_SUFFIX = "_al"
 TITLE_COMMA_RE = re.compile(r"[,\uFF0C]+")
+SUBTITLE_LABELS = {"字幕：", "字幕:"}
 
 
 def normalize_input_text(text: str) -> str:
     if not text:
         return text
     return text.replace(BOX_DRAWING_HORIZONTAL, SPACED_HYPHEN_MINUS)
+
+
+def _normalized_paragraph_text(text: str) -> str:
+    return text.lstrip("\ufeff").lstrip()
 
 
 def normalize_title_text(text: str) -> str:
@@ -121,7 +122,7 @@ def parse_input(path: Path) -> dict[str, str]:
             idx += 1
             continue
 
-        if key in {"BODY", "INTRO", "SUMMARY", "TIMING"}:
+        if key in {"INTRO"}:
             collected: list[str] = []
             if value:
                 collected.append(value)
@@ -143,9 +144,7 @@ def parse_input(path: Path) -> dict[str, str]:
             data[key] = normalize_input_text(value)
         idx += 1
 
-    data.setdefault("BODY", "")
     data.setdefault("INTRO", "")
-    data.setdefault("SUMMARY", "")
 
     return data
 
@@ -334,11 +333,7 @@ def replace_body_paragraph(
                 _add_marked_runs(
                     target,
                     text,
-                    marked_highlight=(
-                        TIMING_HIGHLIGHT_MARKED
-                        if timing_style
-                        else marked_highlight
-                    ),
+                    marked_highlight=marked_highlight,
                     run_style=timing_style,
                     apply_default_size=False,
                 )
@@ -349,7 +344,8 @@ def replace_body_paragraph(
         if idx > 0:
             current = insert_paragraph_after(current, "")
 
-        if TIMING_LINE_RE.match(line):
+        normalized_line = _normalized_paragraph_text(line)
+        if SUBTITLE_LINE_RE.match(normalized_line):
             in_source_block = False
 
         cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line)
@@ -360,7 +356,7 @@ def replace_body_paragraph(
         write_line(
             current,
             cleaned_line if is_url else line,
-            in_source_block and not TIMING_LINE_RE.match(line),
+            in_source_block and not SUBTITLE_LINE_RE.match(normalized_line),
             bool(is_url),
         )
 
@@ -454,15 +450,81 @@ def with_subs_output_suffix(path: Path) -> Path:
     return path.with_name(f"{path.stem}{SUBS_OUTPUT_SUFFIX}{path.suffix}")
 
 
-def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> None:
+def _extract_source_paragraphs(
+    source_docx_path: Path,
+) -> tuple[Document, list[Paragraph], list[Paragraph]]:
+    source_doc = Document(str(source_docx_path))
+    paragraphs = list(source_doc.paragraphs)
+
+    for idx, paragraph in enumerate(paragraphs):
+        if SUBTITLE_LINE_RE.match(_normalized_paragraph_text(paragraph.text)):
+            return source_doc, paragraphs[:idx], paragraphs[idx:]
+
+    raise ValueError("source.docx must contain at least one subtitle timestamp paragraph.")
+
+
+def _remap_relationship_ids(source_part, target_part, paragraph_element) -> None:
+    for element in paragraph_element.iter():
+        relation_id = element.get(qn("r:id"))
+        if not relation_id:
+            continue
+        relation = source_part.rels[relation_id]
+        if relation.reltype != RT.HYPERLINK:
+            continue
+        new_relation_id = target_part.relate_to(
+            relation.target_ref,
+            RT.HYPERLINK,
+            is_external=True,
+        )
+        element.set(qn("r:id"), new_relation_id)
+
+
+def _clone_paragraph_before(source_paragraph: Paragraph, target_paragraph: Paragraph) -> None:
+    cloned = deepcopy(source_paragraph._p)
+    _remap_relationship_ids(source_paragraph.part, target_paragraph.part, cloned)
+    target_paragraph._p.addprevious(cloned)
+
+
+def _clone_paragraph_after(source_paragraph: Paragraph, target_paragraph: Paragraph) -> Paragraph:
+    cloned = deepcopy(source_paragraph._p)
+    _remap_relationship_ids(source_paragraph.part, target_paragraph.part, cloned)
+    target_paragraph._p.addnext(cloned)
+    return Paragraph(cloned, target_paragraph._parent)
+
+
+def _find_subtitle_target_paragraph(doc: Document):
+    for paragraph in doc.paragraphs:
+        if paragraph.text.strip() not in SUBTITLE_LABELS:
+            continue
+        next_elm = paragraph._p.getnext()
+        while next_elm is not None and next_elm.tag != qn("w:p"):
+            next_elm = next_elm.getnext()
+        if next_elm is None:
+            return insert_paragraph_after(paragraph, "")
+        return Paragraph(next_elm, paragraph._parent)
+    return None
+
+
+def generate_subs(
+    template_path: Path,
+    source_docx_path: Path,
+    input_path: Path,
+    output_path: Path,
+) -> None:
     data = parse_input(input_path)
     input_base = input_path.parent
+    _, source_header, source_body = _extract_source_paragraphs(source_docx_path)
     doc = Document(str(template_path))
     apply_default_margins(doc)
     annotation_style = ensure_annotation_style(doc)
     ensure_hyperlink_style(doc)
     source_indent_inches = get_default_tab_stop_inches(doc)
     metrics = _get_section_metrics(doc)
+
+    if doc.paragraphs and source_header:
+        anchor = doc.paragraphs[0]
+        for paragraph in source_header:
+            _clone_paragraph_before(paragraph, anchor)
 
     for paragraph in list(doc.paragraphs):
         if "{{INTRO}}" in paragraph.text:
@@ -472,24 +534,8 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
                 continue
             replace_body_paragraph(paragraph, intro, source_indent_inches)
             continue
-        if "{{SUMMARY}}" in paragraph.text:
-            summary = data.get("SUMMARY", "")
-            if not summary and paragraph.text.strip() == "{{SUMMARY}}":
-                remove_paragraph(paragraph)
-                continue
-            replace_body_paragraph(
-                paragraph,
-                summary,
-                source_indent_inches,
-                marked_highlight=TIMING_HIGHLIGHT_MARKED,
-            )
-            continue
-        if "{{BODY}}" in paragraph.text:
-            body = data.get("BODY", "")
-            if not body and paragraph.text.strip() == "{{BODY}}":
-                remove_paragraph(paragraph)
-                continue
-            replace_body_paragraph(paragraph, body, source_indent_inches)
+        if paragraph.text.strip() in {"{{TITLE}}", "{{URL}}", "{{SUMMARY}}", "{{BODY}}"}:
+            remove_paragraph(paragraph)
             continue
 
         for key in PLACEHOLDER_KEYS:
@@ -528,14 +574,15 @@ def generate_subs(template_path: Path, input_path: Path, output_path: Path) -> N
                             )
                     else:
                         replace_placeholder(paragraph, placeholder, value)
-                elif key == "TIMING" and value:
-                    replace_body_paragraph(
-                        paragraph, value, source_indent_inches, timing_style=annotation_style
-                    )
                 else:
                     replace_placeholder(paragraph, placeholder, value)
                 break
-    ensure_blank_after_labels(doc, {"簡介：", "簡介:", "字幕：", "字幕:"})
+    ensure_blank_after_labels(doc, {"簡介：", "簡介:", *SUBTITLE_LABELS})
+    subtitle_target = _find_subtitle_target_paragraph(doc)
+    if subtitle_target is not None:
+        current = subtitle_target
+        for paragraph in source_body:
+            current = _clone_paragraph_after(paragraph, current)
 
     doc.save(str(output_path))
     fix_docx_namespaces(output_path)
@@ -547,6 +594,11 @@ def main() -> None:
         "--template",
         default="templates/subs_template.docx",
         help="Path to the DOCX template.",
+    )
+    parser.add_argument(
+        "--source-docx",
+        required=True,
+        help="Original source DOCX whose header and subtitles are preserved.",
     )
     parser.add_argument(
         "--input",
@@ -562,6 +614,7 @@ def main() -> None:
 
     generate_subs(
         Path(args.template),
+        Path(args.source_docx),
         Path(args.input),
         with_subs_output_suffix(Path(args.output)),
     )

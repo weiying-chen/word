@@ -4,14 +4,42 @@ import warnings
 
 import pytest
 from docx import Document
+from docx.enum.text import WD_COLOR_INDEX
 from lxml import etree
 
+from docx_utils import add_hyperlink
 import generate_subs
 
 
 def _write_docx(path: Path, paragraphs: list[str]) -> None:
     doc = Document()
     for text in paragraphs:
+        doc.add_paragraph(text)
+    doc.save(path)
+
+
+def _write_source_docx(
+    path: Path,
+    *,
+    header_paragraphs: list[str] | None = None,
+    body_paragraphs: list[str] | None = None,
+) -> None:
+    doc = Document()
+    header_items = header_paragraphs if header_paragraphs is not None else [
+        "Original title",
+        "https://example.com/story",
+        "",
+        "Original summary.",
+        "",
+    ]
+    for text in header_items:
+        doc.add_paragraph(text)
+    body_items = body_paragraphs if body_paragraphs is not None else [
+        "00:00:00:00\t00:00:02:00\tFirst line.",
+        "First translation.",
+        "",
+    ]
+    for text in body_items:
         doc.add_paragraph(text)
     doc.save(path)
 
@@ -27,33 +55,58 @@ def _write_png(path: Path) -> None:
     )
 
 
-def _assert_title_replaced_for_encoded_input(
+def _write_formatted_source_docx(path: Path) -> None:
+    doc = Document()
+    doc.add_paragraph("Source title")
+    link_paragraph = doc.add_paragraph("")
+    add_hyperlink(
+        link_paragraph,
+        "https://example.com/source",
+        "https://example.com/source",
+    )
+    doc.add_paragraph("")
+    doc.add_paragraph("Source summary.")
+    timing_paragraph = doc.add_paragraph("")
+    timing_paragraph.add_run("07:34-09:41 (2分7秒)").font.highlight_color = (
+        WD_COLOR_INDEX.YELLOW
+    )
+    subtitle_paragraph = doc.add_paragraph("")
+    subtitle_paragraph.add_run(
+        "00:00:00:00\t00:00:02:00\tFirst line."
+    ).font.highlight_color = WD_COLOR_INDEX.BRIGHT_GREEN
+    doc.add_paragraph("First translation.")
+    doc.save(path)
+
+
+def _assert_yt_title_replaced_for_encoded_input(
     tmp_path: Path,
     encoded_text: bytes,
     expected_title: str,
 ) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{TITLE}}"])
+    _write_docx(template_path, ["{{YT_TITLE_SUGGESTED}}"])
+    _write_source_docx(source_docx, header_paragraphs=[])
     input_path.write_bytes(encoded_text)
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
 
     doc = Document(output_path)
     assert doc.paragraphs[0].text == expected_title
 
 
-def test_parse_input_multiline_summary(tmp_path: Path) -> None:
+def test_parse_input_multiline_intro(tmp_path: Path) -> None:
     input_path = tmp_path / "input.txt"
     input_path.write_text(
         "\n".join(
             [
-                "TITLE: Sample Title",
-                "SUMMARY:",
-                "First summary line.",
-                "Second summary line.",
+                "YT_TITLE_SUGGESTED: Sample Title",
+                "INTRO:",
+                "First intro line.",
+                "Second intro line.",
                 "TITLE_SUGGESTED: Another Title",
                 "",
             ]
@@ -62,51 +115,29 @@ def test_parse_input_multiline_summary(tmp_path: Path) -> None:
     )
 
     data = generate_subs.parse_input(input_path)
-    assert data["SUMMARY"] == "First summary line.\nSecond summary line."
+    assert data["INTRO"] == "First intro line.\nSecond intro line."
 
 
-def test_parse_input_multiline_intro_body(tmp_path: Path) -> None:
-    input_path = tmp_path / "input.txt"
-    input_path.write_text(
-        "\n".join(
-            [
-                "INTRO:",
-                "Intro line one.",
-                "Intro line two.",
-                "BODY:",
-                "Body line one.",
-                "Body line two.",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    data = generate_subs.parse_input(input_path)
-    assert data["INTRO"] == "Intro line one.\nIntro line two."
-    assert data["BODY"] == "Body line one.\nBody line two."
-
-
-def test_title_replacement_utf8_no_bom(tmp_path: Path) -> None:
-    _assert_title_replaced_for_encoded_input(
+def test_yt_title_replacement_utf8_no_bom(tmp_path: Path) -> None:
+    _assert_yt_title_replaced_for_encoded_input(
         tmp_path,
-        "TITLE: UTF8 Title\n".encode("utf-8"),
+        "YT_TITLE_SUGGESTED: UTF8 Title\n".encode("utf-8"),
         "UTF8 Title",
     )
 
 
-def test_title_replacement_utf8_bom(tmp_path: Path) -> None:
-    _assert_title_replaced_for_encoded_input(
+def test_yt_title_replacement_utf8_bom(tmp_path: Path) -> None:
+    _assert_yt_title_replaced_for_encoded_input(
         tmp_path,
-        b"\xef\xbb\xbfTITLE: UTF8 BOM Title\n",
+        b"\xef\xbb\xbfYT_TITLE_SUGGESTED: UTF8 BOM Title\n",
         "UTF8 BOM Title",
     )
 
 
-def test_title_replacement_utf16_le_bom(tmp_path: Path) -> None:
-    _assert_title_replaced_for_encoded_input(
+def test_yt_title_replacement_utf16_le_bom(tmp_path: Path) -> None:
+    _assert_yt_title_replaced_for_encoded_input(
         tmp_path,
-        "TITLE: UTF16 BOM Title\n".encode("utf-16"),
+        "YT_TITLE_SUGGESTED: UTF16 BOM Title\n".encode("utf-16"),
         "UTF16 BOM Title",
     )
 
@@ -115,92 +146,121 @@ def test_parse_input_fallback_encoding_warns_and_rewrites_utf8(
     tmp_path: Path,
 ) -> None:
     input_path = tmp_path / "input.txt"
-    input_path.write_bytes("TITLE: Café News\n".encode("cp1252"))
+    input_path.write_bytes("YT_TITLE_SUGGESTED: Café News\n".encode("cp1252"))
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         data = generate_subs.parse_input(input_path)
 
-    assert data["TITLE"] == "Café News"
+    assert data["YT_TITLE_SUGGESTED"] == "Café News"
     assert caught
     assert "fallback encoding" in str(caught[0].message).lower()
     assert "cp1252" in str(caught[0].message).lower()
-    assert input_path.read_bytes() == "TITLE: Café News\n".encode("utf-8")
+    assert input_path.read_bytes() == "YT_TITLE_SUGGESTED: Café News\n".encode("utf-8")
 
 
-def test_title_replacement_fallback_encoding(tmp_path: Path) -> None:
+def test_yt_title_replacement_fallback_encoding(tmp_path: Path) -> None:
     with pytest.warns(UserWarning, match="fallback encoding 'cp1252'"):
-        _assert_title_replaced_for_encoded_input(
+        _assert_yt_title_replaced_for_encoded_input(
             tmp_path,
-            "TITLE: Café from fallback\n".encode("cp1252"),
+            "YT_TITLE_SUGGESTED: Café from fallback\n".encode("cp1252"),
             "Café from fallback",
         )
 
 
-def test_generate_subs_removes_empty_summary_paragraph(tmp_path: Path) -> None:
+def test_generate_subs_copies_source_header_before_generated_sections(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{SUMMARY}}", "After summary."])
-    input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
+    _write_docx(template_path, ["建議YT標題：", "{{YT_TITLE_SUGGESTED}}", "字幕："])
+    _write_source_docx(
+        source_docx,
+        header_paragraphs=[
+            "Source title",
+            "https://example.com/source",
+            "",
+            "Source summary.",
+            "",
+        ],
+    )
+    input_path.write_text("YT_TITLE_SUGGESTED: Suggested title\n", encoding="utf-8")
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
-    doc = Document(output_path)
-    texts = [p.text for p in doc.paragraphs if p.text]
-    assert texts == ["After summary."]
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    texts = [p.text for p in Document(output_path).paragraphs]
+
+    assert texts[:7] == [
+        "Source title",
+        "https://example.com/source",
+        "",
+        "Source summary.",
+        "",
+        "建議YT標題：",
+        "Suggested title",
+    ]
 
 
-def test_generate_subs_removes_empty_timing_paragraph(tmp_path: Path) -> None:
+def test_generate_subs_removes_empty_intro_paragraph(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{TIMING}}", "After time range."])
-    input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
+    _write_docx(template_path, ["{{INTRO}}", "After intro."])
+    _write_source_docx(source_docx)
+    input_path.write_text("YT_TITLE_SUGGESTED: Sample Title\n", encoding="utf-8")
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
     doc = Document(output_path)
     texts = [p.text for p in doc.paragraphs if p.text]
-    assert texts == ["After time range."]
+    assert "After intro." in texts
+    assert "Original title" in texts
 
 
 def test_generate_subs_inserts_blank_after_labels(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
     _write_docx(template_path, ["簡介：", "Line after label."])
-    input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
+    _write_source_docx(source_docx)
+    input_path.write_text("YT_TITLE_SUGGESTED: Sample Title\n", encoding="utf-8")
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
     doc = Document(output_path)
-    assert doc.paragraphs[0].text.strip() == "簡介："
-    assert not doc.paragraphs[1].text.strip()
-    assert doc.paragraphs[2].text.strip() == "Line after label."
+    label_idx = [p.text for p in doc.paragraphs].index("簡介：")
+    assert not doc.paragraphs[label_idx + 1].text.strip()
+    assert doc.paragraphs[label_idx + 2].text.strip() == "Line after label."
 
 
 def test_generate_subs_inserts_blank_after_last_label(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
     _write_docx(template_path, ["字幕："])
-    input_path.write_text("TITLE: Sample Title\n", encoding="utf-8")
+    _write_source_docx(source_docx)
+    input_path.write_text("YT_TITLE_SUGGESTED: Sample Title\n", encoding="utf-8")
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
     doc = Document(output_path)
-    assert doc.paragraphs[0].text.strip() == "字幕："
-    assert not doc.paragraphs[1].text.strip()
+    label_idx = [p.text for p in doc.paragraphs].index("字幕：")
+    assert not doc.paragraphs[label_idx + 1].text.strip()
+    assert doc.paragraphs[label_idx + 2].text == "00:00:00:00\t00:00:02:00\tFirst line."
 
 
 def test_generate_subs_adds_thumbnail_credit_after_image(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
     image_path = tmp_path / "thumbnail.png"
 
     _write_docx(template_path, ["選圖：", "{{THUMBNAIL}}", "After thumbnail."])
+    _write_source_docx(source_docx)
     _write_png(image_path)
     input_path.write_text(
         "\n".join(
@@ -213,7 +273,7 @@ def test_generate_subs_adds_thumbnail_credit_after_image(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
 
     with zipfile.ZipFile(output_path) as zf:
         doc = etree.fromstring(zf.read("word/document.xml"))
@@ -241,191 +301,135 @@ def test_generate_subs_adds_thumbnail_credit_after_image(tmp_path: Path) -> None
 
 def test_generate_subs_replaces_box_drawing_horizontal(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{TITLE}}"])
+    _write_docx(template_path, ["{{TITLE_SUGGESTED}}"])
+    _write_source_docx(source_docx)
     input_path.write_text(
-        "TITLE: 為什麼要蓋醫院─貧中帶病拖垮家庭\n",
+        "TITLE_SUGGESTED: 為什麼要蓋醫院─貧中帶病拖垮家庭\n",
         encoding="utf-8",
     )
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
     doc = Document(output_path)
-    assert doc.paragraphs[0].text == "為什麼要蓋醫院 - 貧中帶病拖垮家庭"
+    assert "為什麼要蓋醫院 - 貧中帶病拖垮家庭" in [p.text for p in doc.paragraphs]
 
 
 def test_generate_subs_replaces_commas_in_title_with_spaces(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{TITLE}}"])
+    _write_docx(template_path, ["{{TITLE_SUGGESTED}}"])
+    _write_source_docx(source_docx)
     input_path.write_text(
-        "TITLE: 大愛真健康 - 改善長者走路與平衡，溫和髖關節保養\n",
+        "TITLE_SUGGESTED: 大愛真健康 - 改善長者走路與平衡，溫和髖關節保養\n",
         encoding="utf-8",
     )
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
     doc = Document(output_path)
-    assert doc.paragraphs[0].text == "大愛真健康 - 改善長者走路與平衡 溫和髖關節保養"
+    assert "大愛真健康 - 改善長者走路與平衡 溫和髖關節保養" in [
+        p.text for p in doc.paragraphs
+    ]
 
 
-def test_source_block_highlight_and_link(tmp_path: Path) -> None:
+def test_generate_subs_preserves_source_hyperlink_and_highlight_formatting(
+    tmp_path: Path,
+) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{BODY}}"])
-    input_path.write_text(
-        "\n".join(
-            [
-                "BODY:",
-                "00:00:00:00\t00:00:02:00\tFirst line.",
-                "First translation.",
-                "",
-                "https://example.com/source",
-                "Source line one.",
-                "",
-                "00:00:02:00\t00:00:04:00\tSecond line.",
-                "Second translation.",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    _write_docx(template_path, ["字幕："])
+    _write_formatted_source_docx(source_docx)
+    input_path.write_text("INTRO: Intro\n", encoding="utf-8")
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    with zipfile.ZipFile(source_docx) as zf:
+        source_xml = etree.fromstring(zf.read("word/document.xml"))
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
 
     with zipfile.ZipFile(output_path) as zf:
         doc = etree.fromstring(zf.read("word/document.xml"))
 
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    source_timing_highlight = None
+    source_subtitle_highlight = None
+    for p in source_xml.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in p.findall(".//w:t", ns))
+        if "07:34-09:41 (2分7秒)" in text:
+            source_timing_highlight = p.find("w:r/w:rPr/w:highlight", ns).get(
+                "{%s}val" % ns["w"]
+            )
+        if "First line." in text:
+            source_subtitle_highlight = p.find("w:r/w:rPr/w:highlight", ns).get(
+                "{%s}val" % ns["w"]
+            )
+
     url_paragraph = None
-    source_paragraph = None
+    timing_paragraph = None
+    subtitle_paragraph = None
     for p in doc.findall(".//w:p", ns):
         text = "".join(t.text or "" for t in p.findall(".//w:t", ns))
         if "https://example.com/source" in text:
             url_paragraph = p
-        if "Source line one." in text:
-            source_paragraph = p
+        if "07:34-09:41 (2分7秒)" in text:
+            timing_paragraph = p
+        if "First line." in text:
+            subtitle_paragraph = p
 
     assert url_paragraph is not None
-    assert source_paragraph is not None
+    assert timing_paragraph is not None
+    assert subtitle_paragraph is not None
 
     hyperlinks = url_paragraph.findall("w:hyperlink", ns)
     assert len(hyperlinks) == 1
 
     h_runs = hyperlinks[0].findall("w:r", ns)
     assert h_runs
-    h_rpr = h_runs[0].find("w:rPr", ns)
-    h_highlight = h_rpr.find("w:highlight", ns)
-    h_size = h_rpr.find("w:sz", ns)
-    assert h_highlight.get("{%s}val" % ns["w"]) == "cyan"
-    assert h_size.get("{%s}val" % ns["w"]) == "20"
+    timing_run = timing_paragraph.find("w:r", ns)
+    assert timing_run is not None
+    timing_highlight = timing_run.find("w:rPr/w:highlight", ns)
+    assert timing_highlight is not None
+    assert timing_highlight.get("{%s}val" % ns["w"]) == source_timing_highlight
 
-    s_run = None
-    for r in source_paragraph.findall("w:r", ns):
-        text = "".join(t.text or "" for t in r.findall(".//w:t", ns))
-        if "Source line one." in text:
-            s_run = r
-            break
-
-    assert s_run is not None
-    s_rpr = s_run.find("w:rPr", ns)
-    s_highlight = s_rpr.find("w:highlight", ns)
-    s_size = s_rpr.find("w:sz", ns)
-    assert s_highlight.get("{%s}val" % ns["w"]) == "cyan"
-    assert s_size.get("{%s}val" % ns["w"]) == "20"
-
-
-def test_parse_input_multiline_timing(tmp_path: Path) -> None:
-    input_path = tmp_path / "input.txt"
-    input_path.write_text(
-        "\n".join(
-            [
-                "TIMING:",
-                "(1) 00:42-05:41 (4m59s)",
-                "(2) 05:44-13:21 (7m37s)",
-                "19'33",
-                "BODY:",
-                "dummy",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    data = generate_subs.parse_input(input_path)
-    assert (
-        data["TIMING"]
-        == "(1) 00:42-05:41 (4m59s)\n(2) 05:44-13:21 (7m37s)\n19'33"
-    )
-
-
-def test_generate_subs_applies_timing_style_in_timing(tmp_path: Path) -> None:
-    template_path = tmp_path / "template.docx"
-    input_path = tmp_path / "input.txt"
-    output_path = tmp_path / "output.docx"
-
-    _write_docx(template_path, ["{{TIMING}}"])
-    input_path.write_text(
-        "\n".join(
-            [
-                "TIMING:",
-                "(1) 00:42-05:41 (4m59s)",
-                "(2) 05:44-13:21 (7m37s)",
-                "19'33",
-                "BODY:",
-                "dummy",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    generate_subs.generate_subs(template_path, input_path, output_path)
-
-    with zipfile.ZipFile(output_path) as zf:
-        doc = etree.fromstring(zf.read("word/document.xml"))
-
-    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    wanted = {
-        "(1) 00:42-05:41 (4m59s)",
-        "(2) 05:44-13:21 (7m37s)",
-        "19'33",
-    }
-
-    found = {}
-    for p in doc.findall(".//w:p", ns):
-        text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
-        if text in wanted:
-            styles = set()
-            for run in p.findall("w:r", ns):
-                r_style = run.find("w:rPr/w:rStyle", ns)
-                if r_style is not None:
-                    styles.add(r_style.get("{%s}val" % ns["w"]))
-            found[text] = styles
-
-    assert "Annotation" in found["(1) 00:42-05:41 (4m59s)"]
-    assert "Annotation" in found["(2) 05:44-13:21 (7m37s)"]
-    assert "Annotation" in found["19'33"]
-
+    subtitle_run = subtitle_paragraph.find("w:r", ns)
+    assert subtitle_run is not None
+    subtitle_highlight = subtitle_run.find("w:rPr/w:highlight", ns)
+    assert subtitle_highlight is not None
+    assert subtitle_highlight.get("{%s}val" % ns["w"]) == source_subtitle_highlight
 
 def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -> None:
     template_path = Path("templates/subs_template.docx")
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
+    _write_source_docx(
+        source_docx,
+        header_paragraphs=[
+            "Sample Title",
+            "https://example.com/watch?v=1",
+            "",
+            "Summary line A.",
+            "",
+            "Summary line B.",
+            "",
+        ],
+        body_paragraphs=[
+            "00:00:01:00\t00:00:02:00\t測試",
+            "Test",
+            "",
+        ],
+    )
     input_path.write_text(
         "\n".join(
             [
-                "TITLE: Sample Title",
-                "URL: https://example.com/watch?v=1",
-                "SUMMARY:",
-                "Summary line A.",
-                "",
-                "Summary line B.",
                 "YT_TITLE_SUGGESTED: YT title",
                 "TITLE_SUGGESTED: Title only",
                 "INTRO:",
@@ -433,21 +437,13 @@ def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -
                 "",
                 "Intro ZH.",
                 "THUMBNAIL: missing.png",
-                "TIMING:",
-                "(1) 00:42-05:41 (4m59s)",
-                "(2) 05:44-13:21 (7m37s)",
-                "",
-                "19'33",
-                "BODY:",
-                "00:00:01:00\t00:00:02:00\t測試",
-                "Test",
                 "",
             ]
         ),
         encoding="utf-8",
     )
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
     doc = Document(output_path)
     texts = [p.text for p in doc.paragraphs]
 
@@ -458,254 +454,69 @@ def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -
     idx_title_label = texts.index("建議標題：")
     idx_intro_label = texts.index("簡介：")
     idx_thumb_label = texts.index("選圖：")
+    idx_thumb_value = texts.index("missing.png")
     idx_subtitle_label = texts.index("字幕：")
-    idx_t1 = texts.index("(1) 00:42-05:41 (4m59s)")
-    idx_t2 = texts.index("(2) 05:44-13:21 (7m37s)")
-    idx_total = texts.index("19'33")
     idx_body_src = texts.index("00:00:01:00\t00:00:02:00\t測試")
 
     assert idx_summary_a < idx_summary_b < idx_yt_label
     assert idx_yt_label < idx_title_label < idx_intro_label < idx_thumb_label < idx_subtitle_label
-    assert idx_subtitle_label < idx_t1 < idx_t2 < idx_total < idx_body_src
-
-    # TIMING spacing rule (generic):
-    # - range items are consecutive (no blank lines between them)
-    # - exactly one blank line is required before total time
-    range_item_indices = [
-        i for i, t in enumerate(texts)
-        if t.startswith("(") and ") " in t and "(" in t and "m" in t and "s" in t
-    ]
-    assert len(range_item_indices) >= 2
-
-    for prev_i, next_i in zip(range_item_indices, range_item_indices[1:]):
-        assert next_i == prev_i + 1
-
-    total_i = texts.index("19'33")
-    assert total_i == range_item_indices[-1] + 2
-    assert texts[total_i - 1] == ""
+    assert idx_subtitle_label < idx_body_src
+    assert idx_subtitle_label == idx_thumb_value + 2
 
 
+def test_generate_subs_treats_bom_prefixed_first_subtitle_as_body(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
 
-def test_generate_subs_timing_marker_uses_marked_highlight_and_strips_stars(
+    _write_docx(template_path, ["建議YT標題：", "{{YT_TITLE_SUGGESTED}}", "字幕："])
+    _write_source_docx(
+        source_docx,
+        header_paragraphs=[
+            "Source title",
+            "Source summary.",
+            "",
+        ],
+        body_paragraphs=[
+            "\ufeff00:00:21:10\t00:00:23:24\tFirst subtitle line.",
+            "Second subtitle line.",
+        ],
+    )
+    input_path.write_text("YT_TITLE_SUGGESTED: Suggested title\n", encoding="utf-8")
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    texts = [p.text for p in Document(output_path).paragraphs]
+
+    assert "\ufeff00:00:21:10\t00:00:23:24\tFirst subtitle line." not in texts[:5]
+    label_idx = texts.index("字幕：")
+    first_subtitle_idx = texts.index("\ufeff00:00:21:10\t00:00:23:24\tFirst subtitle line.")
+    assert first_subtitle_idx == label_idx + 2
+
+
+def test_generate_subs_intro_symbol_font_applies_only_to_icon_runs(
     tmp_path: Path,
 ) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{TIMING}}"])
+    _write_docx(template_path, ["{{INTRO}}"])
+    _write_source_docx(source_docx)
     input_path.write_text(
         "\n".join(
             [
-                "TIMING:",
-                "(1) 00:42-05:41 (4m59s)",
-                "*(2) 05:44-13:21 (7m37s)*",
-                "19'33",
-                "BODY:",
-                "dummy",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    generate_subs.generate_subs(template_path, input_path, output_path)
-
-    with zipfile.ZipFile(output_path) as zf:
-        doc = etree.fromstring(zf.read("word/document.xml"))
-
-    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-
-    def para_by_text(target: str):
-        for p in doc.findall(".//w:p", ns):
-            text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
-            if text == target:
-                return p
-        return None
-
-    marked = para_by_text("(2) 05:44-13:21 (7m37s)")
-    assert marked is not None
-
-    runs = marked.findall("w:r", ns)
-    assert runs
-    # Must be Annotation style and marked highlight using TIMING yellow.
-    for run in runs:
-        r_style = run.find("w:rPr/w:rStyle", ns)
-        assert r_style is not None
-        assert r_style.get("{%s}val" % ns["w"]) == "Annotation"
-    highlights = [
-        r.find("w:rPr/w:highlight", ns).get("{%s}val" % ns["w"])
-        for r in runs
-        if r.find("w:rPr/w:highlight", ns) is not None
-    ]
-    assert "yellow" in highlights
-
-
-def test_generate_subs_summary_marker_uses_marked_highlight_and_strips_stars(
-    tmp_path: Path,
-) -> None:
-    template_path = tmp_path / "template.docx"
-    input_path = tmp_path / "input.txt"
-    output_path = tmp_path / "output.docx"
-
-    _write_docx(template_path, ["{{SUMMARY}}"])
-    input_path.write_text(
-        "\n".join(
-            [
-                "SUMMARY:",
-                "Plain summary line.",
-                "*Marked summary line.*",
-                "BODY:",
-                "dummy",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    generate_subs.generate_subs(template_path, input_path, output_path)
-
-    with zipfile.ZipFile(output_path) as zf:
-        doc = etree.fromstring(zf.read("word/document.xml"))
-
-    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-
-    def get_highlight_values(text_target: str):
-        for p in doc.findall(".//w:p", ns):
-            text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
-            if text == text_target:
-                vals = []
-                for r in p.findall("w:r", ns):
-                    h = r.find("w:rPr/w:highlight", ns)
-                    vals.append(h.get("{%s}val" % ns["w"]) if h is not None else None)
-                return vals
-        return None
-
-    plain = get_highlight_values("Plain summary line.")
-    marked = get_highlight_values("Marked summary line.")
-
-    assert plain is not None and all(v is None for v in plain)
-    assert marked is not None and "yellow" in marked
-
-
-def test_generate_subs_timing_marker_applies_only_to_marked_lines(tmp_path: Path) -> None:
-    template_path = tmp_path / "template.docx"
-    input_path = tmp_path / "input.txt"
-    output_path = tmp_path / "output.docx"
-
-    _write_docx(template_path, ["{{TIMING}}"])
-    input_path.write_text(
-        "\n".join(
-            [
-                "TIMING:",
-                "*(1) 00:42-05:41 (4m59s)*",
-                "(2) 05:44-13:21 (7m37s)",
-                "*19'33*",
-                "BODY:",
-                "dummy",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    generate_subs.generate_subs(template_path, input_path, output_path)
-
-    with zipfile.ZipFile(output_path) as zf:
-        doc = etree.fromstring(zf.read("word/document.xml"))
-
-    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-
-    def get_highlight_values(text_target: str):
-        for p in doc.findall(".//w:p", ns):
-            text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
-            if text == text_target:
-                vals = []
-                for r in p.findall("w:r", ns):
-                    h = r.find("w:rPr/w:highlight", ns)
-                    vals.append(h.get("{%s}val" % ns["w"]) if h is not None else None)
-                return vals
-        return None
-
-    h1 = get_highlight_values("(1) 00:42-05:41 (4m59s)")
-    h2 = get_highlight_values("(2) 05:44-13:21 (7m37s)")
-    ht = get_highlight_values("19'33")
-
-    assert h1 is not None and "yellow" in h1
-    assert h2 is not None and all(v is None for v in h2)
-    assert ht is not None and "yellow" in ht
-
-
-def test_generate_subs_timing_marker_keeps_timing_font_size(tmp_path: Path) -> None:
-    template_path = tmp_path / "template.docx"
-    input_path = tmp_path / "input.txt"
-    output_path = tmp_path / "output.docx"
-
-    _write_docx(template_path, ["{{TIMING}}"])
-    input_path.write_text(
-        "\n".join(
-            [
-                "TIMING:",
-                "*(1) 00:42-05:41 (4m59s)*",
-                "(2) 05:44-13:21 (7m37s)",
-                "BODY:",
-                "dummy",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    generate_subs.generate_subs(template_path, input_path, output_path)
-
-    with zipfile.ZipFile(output_path) as zf:
-        doc = etree.fromstring(zf.read("word/document.xml"))
-
-    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-
-    def get_run_sz_vals(text_target: str):
-        for p in doc.findall(".//w:p", ns):
-            text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
-            if text == text_target:
-                vals = []
-                for r in p.findall("w:r", ns):
-                    sz = r.find("w:rPr/w:sz", ns)
-                    vals.append(sz.get("{%s}val" % ns["w"]) if sz is not None else None)
-                return vals
-        return None
-
-    s_marked = get_run_sz_vals("(1) 00:42-05:41 (4m59s)")
-    s_plain = get_run_sz_vals("(2) 05:44-13:21 (7m37s)")
-
-    assert s_marked is not None
-    assert s_plain is not None
-    assert all(v is None for v in s_marked)
-    assert all(v is None for v in s_plain)
-
-
-def test_generate_subs_summary_symbol_font_applies_only_to_icon_runs(
-    tmp_path: Path,
-) -> None:
-    template_path = tmp_path / "template.docx"
-    input_path = tmp_path / "input.txt"
-    output_path = tmp_path / "output.docx"
-
-    _write_docx(template_path, ["{{SUMMARY}}"])
-    input_path.write_text(
-        "\n".join(
-            [
-                "SUMMARY:",
+                "INTRO:",
                 "📌 本集重點：",
                 "✔ 在安全與信任的環境中",
-                "BODY:",
-                "dummy",
                 "",
             ]
         ),
         encoding="utf-8",
     )
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
 
     with zipfile.ZipFile(output_path) as zf:
         doc = etree.fromstring(zf.read("word/document.xml"))
@@ -740,24 +551,24 @@ def test_generate_subs_summary_symbol_font_applies_only_to_icon_runs(
 
 def test_generate_subs_middle_dot_uses_cjk_font(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["{{SUMMARY}}"])
+    _write_docx(template_path, ["{{INTRO}}"])
+    _write_source_docx(source_docx)
     input_path.write_text(
         "\n".join(
             [
-                "SUMMARY:",
+                "INTRO:",
                 "示例‧姓名",
-                "BODY:",
-                "dummy",
                 "",
             ]
         ),
         encoding="utf-8",
     )
 
-    generate_subs.generate_subs(template_path, input_path, output_path)
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
 
     with zipfile.ZipFile(output_path) as zf:
         doc = etree.fromstring(zf.read("word/document.xml"))
