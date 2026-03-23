@@ -236,6 +236,31 @@ def test_date_assignment_line_for_alex_is_parsed(tmp_path: Path) -> None:
     assert entries[0]["ref_title"] == "World Parkinson's Day"
 
 
+def test_standalone_person_line_for_alex_is_parsed(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "standalone_person.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "節目2則",
+            "alex",
+            "Program - Episode",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "News title",
+            "emily",
+            "Other Program - Other Episode",
+            "https://example.com/other",
+            "--------------------------------",
+        ],
+    )
+
+    entries = extract_post_entries(schedule_path)
+    assert len(entries) == 1
+    assert entries[0]["video_title"] == "Program - Episode"
+    assert entries[0]["ref_title"] == "News title"
+
+
 def test_extracts_full_url_from_truncated_hyperlink(tmp_path: Path) -> None:
     schedule_path = tmp_path / "alex_blocks_hyperlink.docx"
     doc = Document()

@@ -25,6 +25,7 @@ PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
 DATE_ASSIGNMENT_LINE_RE = re.compile(
     r"^\d{1,2}/\d{1,2}(?:\([^()]*\))?\s*發\s*(\S+)"
 )
+BARE_PERSON_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*$")
 PROGRAM_SECTION_RE = re.compile(r"^節目.*則")
 BODHI_SECTION_RE = re.compile(r"^(?:人間)?菩提.*則")
 STOP_SECTION_RE = re.compile(r"^(?:-+|FB小編文|本周節日)")
@@ -46,6 +47,9 @@ def _extract_person_name(line: str) -> str | None:
         match = pattern.match(line)
         if match:
             return match.group(1).strip().lower()
+    stripped = line.strip()
+    if BARE_PERSON_LINE_RE.fullmatch(stripped):
+        return stripped.lower()
     return None
 
 
