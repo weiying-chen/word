@@ -9,6 +9,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.oxml import OxmlElement
+from docx.enum.text import WD_COLOR_INDEX
 from docx.text.paragraph import Paragraph
 from docx.shared import Inches
 
@@ -18,6 +19,7 @@ from generate_subs import normalize_input_text
 TITLE_PLACEHOLDER = "{{TITLE_EN}}"
 PEOPLE_PLACEHOLDER = "{{PEOPLE}}"
 OVERVIEW_PLACEHOLDER = "{{OVERVIEW_EN}}"
+HIGHLIGHT_LABELS = {"重點標", "名字職銜", "YT簡介"}
 META_TITLE_EN_KEY = "META_TITLE_EN"
 META_OVERVIEW_EN_KEY = "META_OVERVIEW_EN"
 META_PEOPLE_KEY = "META_PEOPLE"
@@ -377,6 +379,12 @@ def insert_paragraph_after(paragraph: Paragraph, text: str) -> Paragraph:
     return new_para
 
 
+def clear_paragraph(paragraph: Paragraph) -> None:
+    for child in list(paragraph._p):
+        if not child.tag.endswith("}pPr"):
+            paragraph._p.remove(child)
+
+
 def find_paragraph_by_text(doc: Document, text: str) -> Paragraph | None:
     for paragraph in doc.paragraphs:
         if paragraph.text.strip() == text:
@@ -384,11 +392,19 @@ def find_paragraph_by_text(doc: Document, text: str) -> Paragraph | None:
     return None
 
 
+def reapply_label_highlights(doc: Document) -> None:
+    for paragraph in doc.paragraphs:
+        if paragraph.text.strip() not in HIGHLIGHT_LABELS:
+            continue
+        for run in paragraph.runs:
+            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+
+
 def replace_multiline(paragraph: Paragraph, lines: list[str]) -> None:
-    paragraph.text = ""
     if not lines:
         remove_paragraph(paragraph)
         return
+    clear_paragraph(paragraph)
     paragraph.add_run(lines[0])
     current = paragraph
     for line in lines[1:]:
@@ -479,6 +495,12 @@ def default_output_path(source_docx: Path, output_dir: Path) -> Path:
     return output_dir / f"{stem}_標題職銜_final.docx"
 
 
+def resolve_template_path(template_path: Path) -> Path:
+    if template_path.is_absolute() or template_path.exists():
+        return template_path
+    return Path(__file__).resolve().parent / template_path
+
+
 def generate_meta(
     template_path: Path,
     input_path: Path,
@@ -486,7 +508,7 @@ def generate_meta(
     meta_path: Path | None = None,
 ) -> None:
     data = parse_input(input_path, meta_path)
-    doc = Document(str(template_path))
+    doc = Document(str(resolve_template_path(template_path)))
     apply_default_margins(doc)
 
     title_placeholder = find_paragraph_by_text(doc, TITLE_PLACEHOLDER)
@@ -501,6 +523,7 @@ def generate_meta(
         overview_placeholder, str(data.get("overview_en", ""))
     )
 
+    reapply_label_highlights(doc)
     doc.save(str(output_path))
 
 

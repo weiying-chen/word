@@ -1,10 +1,17 @@
 import tempfile
 import unittest
+import os
 from pathlib import Path
 
 from docx import Document
+from docx.enum.text import WD_COLOR_INDEX
 
-from generate_meta import default_output_path, generate_meta, parse_input
+from generate_meta import (
+    default_output_path,
+    generate_meta,
+    parse_input,
+    resolve_template_path,
+)
 
 
 class RenderMetaTests(unittest.TestCase):
@@ -455,6 +462,91 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_generate_meta_does_not_leave_empty_run_in_people_paragraph(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "PEOPLE:",
+                        "慈濟志工｜烏漾達",
+                        "Uyanda",
+                        "Volunteer",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            generate_meta(template_path, body_path, output_path, meta_path=meta_path)
+
+            doc = Document(str(output_path))
+            people_paragraph = doc.paragraphs[4]
+
+        self.assertEqual(people_paragraph.text, "慈濟志工｜烏漾達")
+        self.assertEqual(
+            [run.text for run in people_paragraph.runs],
+            ["慈濟志工｜烏漾達"],
+        )
+
+    def test_generate_meta_reapplies_yellow_highlight_to_fixed_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            body_path = tmpdir_path / "source.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "META_TITLE_EN: English Title",
+                        "META_OVERVIEW_EN: English overview.",
+                        "",
+                        "BODY:",
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            generate_meta(template_path, body_path, output_path)
+
+            doc = Document(str(output_path))
+            labels = {
+                paragraph.text: [run.font.highlight_color for run in paragraph.runs]
+                for paragraph in doc.paragraphs
+                if paragraph.text in {"重點標", "名字職銜", "YT簡介"}
+            }
+
+        self.assertEqual(labels["重點標"], [WD_COLOR_INDEX.YELLOW])
+        self.assertEqual(labels["名字職銜"], [WD_COLOR_INDEX.YELLOW])
+        self.assertEqual(labels["YT簡介"], [WD_COLOR_INDEX.YELLOW])
+
     def test_generate_meta_omits_english_name_from_label_when_repeated_below(self) -> None:
         source_text = "\n".join(
             [
@@ -736,6 +828,17 @@ def test_default_output_path_adds_final_suffix_when_missing(tmp_path: Path) -> N
     output_dir = tmp_path / "output"
     output = default_output_path(source, output_dir)
     assert output == output_dir / "sample_story_標題職銜_final.docx"
+
+
+def test_resolve_template_path_uses_script_directory_for_relative_paths() -> None:
+    previous_cwd = Path.cwd()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        os.chdir(tmpdir)
+        try:
+            template = resolve_template_path(Path("templates/meta_template.docx"))
+        finally:
+            os.chdir(previous_cwd)
+    assert template == Path("/home/weiying/python/word/templates/meta_template.docx")
 
 
 if __name__ == "__main__":
