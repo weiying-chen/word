@@ -37,7 +37,9 @@ PLACEHOLDER_KEYS = [
     "THUMBNAIL_CREDIT",
 ]
 PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
-SOURCE_URL_RE = re.compile(r"^https?://\S+")
+INPUT_KEY_SET = PLACEHOLDER_KEY_SET | {"BODY"}
+GENERIC_PLACEHOLDER_RE = re.compile(r"^\{\{([A-Z_]+)\}\}$")
+SOURCE_LINK_RE = re.compile(r"^https?://\S+")
 SUBTITLE_LINE_RE = re.compile(
     r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
@@ -51,7 +53,7 @@ SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
 SUBS_OUTPUT_SUFFIX = "_al"
-TITLE_COMMA_RE = re.compile(r"[,\uFF0C]+")
+COMMA_RE = re.compile(r"[,\uFF0C]+")
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
 
 
@@ -69,7 +71,7 @@ def normalize_title_text(text: str) -> str:
     if not text:
         return text
     normalized = normalize_input_text(text)
-    normalized = TITLE_COMMA_RE.sub(" ", normalized)
+    normalized = COMMA_RE.sub(" ", normalized)
     return re.sub(r"[ \t]+", " ", normalized).strip()
 
 
@@ -118,11 +120,11 @@ def parse_input(path: Path) -> dict[str, str]:
         key = key.lstrip("\ufeff").strip().upper()
         value = value.lstrip()
 
-        if key not in PLACEHOLDER_KEY_SET:
+        if key not in INPUT_KEY_SET:
             idx += 1
             continue
 
-        if key in {"INTRO"}:
+        if key in {"INTRO", "BODY"}:
             collected: list[str] = []
             if value:
                 collected.append(value)
@@ -131,20 +133,21 @@ def parse_input(path: Path) -> dict[str, str]:
                 next_line = lines[idx]
                 if ":" in next_line:
                     next_key = next_line.split(":", 1)[0].strip().upper()
-                    if next_key in PLACEHOLDER_KEY_SET:
+                    if next_key in INPUT_KEY_SET:
                         break
                 collected.append(next_line)
                 idx += 1
             data[key] = normalize_input_text("\n".join(collected).rstrip())
             continue
 
-        if key in {"TITLE", "TITLE_SUGGESTED", "YT_TITLE_SUGGESTED"}:
+        if key in {"TITLE_SUGGESTED", "YT_TITLE_SUGGESTED"}:
             data[key] = normalize_title_text(value)
         else:
             data[key] = normalize_input_text(value)
         idx += 1
 
     data.setdefault("INTRO", "")
+    data.setdefault("BODY", "")
 
     return data
 
@@ -349,15 +352,15 @@ def replace_body_paragraph(
             in_source_block = False
 
         cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line)
-        is_url = SOURCE_URL_RE.match(cleaned_line)
-        if is_url:
+        is_link = SOURCE_LINK_RE.match(cleaned_line)
+        if is_link:
             in_source_block = True
 
         write_line(
             current,
-            cleaned_line if is_url else line,
+            cleaned_line if is_link else line,
             in_source_block and not SUBTITLE_LINE_RE.match(normalized_line),
-            bool(is_url),
+            bool(is_link),
         )
 
 
@@ -534,7 +537,16 @@ def generate_subs(
                 continue
             replace_body_paragraph(paragraph, intro, source_indent_inches)
             continue
-        if paragraph.text.strip() in {"{{TITLE}}", "{{URL}}", "{{SUMMARY}}", "{{BODY}}"}:
+        if "{{BODY}}" in paragraph.text:
+            body = data.get("BODY", "")
+            if not body and paragraph.text.strip() == "{{BODY}}":
+                remove_paragraph(paragraph)
+                continue
+            replace_body_paragraph(paragraph, body, source_indent_inches)
+            continue
+        stripped = paragraph.text.strip()
+        match = GENERIC_PLACEHOLDER_RE.fullmatch(stripped)
+        if match and match.group(1) not in (INPUT_KEY_SET | {"INTRO", "BODY"}):
             remove_paragraph(paragraph)
             continue
 
@@ -545,10 +557,7 @@ def generate_subs(
                 if not value and paragraph.text.strip() == placeholder:
                     remove_paragraph(paragraph)
                     break
-                if key == "URL" and value:
-                    clear_paragraph(paragraph)
-                    add_hyperlink(paragraph, value, value)
-                elif key == "THUMBNAIL" and value:
+                if key == "THUMBNAIL" and value:
                     thumbnail_path = Path(value)
                     if not thumbnail_path.is_absolute():
                         thumbnail_path = input_base / thumbnail_path
@@ -579,7 +588,13 @@ def generate_subs(
                 break
     ensure_blank_after_labels(doc, {"簡介：", "簡介:", *SUBTITLE_LABELS})
     subtitle_target = _find_subtitle_target_paragraph(doc)
-    if subtitle_target is not None:
+    body_text = data.get("BODY", "").strip()
+    if body_text and subtitle_target is not None:
+        # Keep one blank line between "字幕：" and the first timestamp line.
+        clear_paragraph(subtitle_target)
+        body_paragraph = insert_paragraph_after(subtitle_target, "")
+        replace_body_paragraph(body_paragraph, body_text, source_indent_inches)
+    elif subtitle_target is not None:
         current = subtitle_target
         for paragraph in source_body:
             current = _clone_paragraph_after(paragraph, current)
