@@ -13,7 +13,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.text.paragraph import Paragraph
 from docx.shared import Inches
 
-from generate_subs import normalize_input_text
+from generate_subs import fix_docx_namespaces, normalize_input_text
 
 
 TITLE_PLACEHOLDER = "{{TITLE_EN}}"
@@ -164,9 +164,29 @@ def _merge_meta_people_overrides(
                 ),
                 None,
             )
+        if match is None and role_zh:
+            # Support role-only override labels, matched by English name line.
+            # Example:
+            #   慈濟人醫會醫師
+            #   Timothy Yu
+            person_name_en = person.get("name_en", "").strip()
+            match = next(
+                (
+                    entry
+                    for entry in overrides
+                    if entry.get("label_zh", "").strip() == role_zh
+                    and entry.get("name_en", "").strip()
+                    and entry.get("name_en", "").strip().casefold()
+                    in {name_zh.casefold(), person_name_en.casefold()}
+                ),
+                None,
+            )
         if match is None:
             continue
 
+        label_override = match.get("label_zh", "").strip()
+        if label_override:
+            person["label_zh"] = label_override
         for key in ("name_en", "role_en", "org_en"):
             value = match.get(key, "").strip()
             if value:
@@ -438,6 +458,9 @@ def _label_without_repeated_english_name(
 
 def build_people_lines(people: list[dict]) -> list[str]:
     lines: list[str] = []
+    if people:
+        # Keep one blank line between the "名字職銜" label and the first person entry.
+        lines.append("")
     for idx, person in enumerate(people):
         role_zh = person.get("role_zh", "").strip()
         name_zh = person.get("name_zh", "").strip()
@@ -515,7 +538,9 @@ def generate_meta(
     )
 
     reapply_label_highlights(doc)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
+    fix_docx_namespaces(output_path)
 
 
 def main() -> None:
