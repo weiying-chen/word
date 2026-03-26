@@ -20,14 +20,9 @@ TITLE_PLACEHOLDER = "{{TITLE_EN}}"
 PEOPLE_PLACEHOLDER = "{{PEOPLE}}"
 OVERVIEW_PLACEHOLDER = "{{OVERVIEW_EN}}"
 HIGHLIGHT_LABELS = {"重點標", "名字職銜", "YT簡介"}
-META_TITLE_EN_KEY = "META_TITLE_EN"
-META_OVERVIEW_EN_KEY = "META_OVERVIEW_EN"
-META_PEOPLE_KEY = "META_PEOPLE"
-META_KEY_ALIASES = {
-    "TITLE": META_TITLE_EN_KEY,
-    "OVERVIEW": META_OVERVIEW_EN_KEY,
-    "PEOPLE": META_PEOPLE_KEY,
-}
+TITLE_KEY = "TITLE"
+OVERVIEW_KEY = "OVERVIEW"
+PEOPLE_KEY = "PEOPLE"
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 EN_NAME_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z.\s'-]*")
 EN_NAME_HINT_RE = re.compile(
@@ -35,15 +30,12 @@ EN_NAME_HINT_RE = re.compile(
     r'([A-Za-z][A-Za-z.\s"“”\'‘’\-]*[A-Za-z])'
     r'(?:\s*[\u4e00-\u9fff].*)?$'
 )
-META_KEYS = {
+ALLOWED_KEYS = {
     "TITLE_TEXT",
     "SUMMARY",
-    "META_TITLE_EN",
-    "META_OVERVIEW_EN",
-    "META_PEOPLE",
-    "TITLE",
-    "OVERVIEW",
-    "PEOPLE",
+    TITLE_KEY,
+    OVERVIEW_KEY,
+    PEOPLE_KEY,
     "BODY",
 }
 
@@ -226,14 +218,13 @@ def _parse_news_payload(path: Path, *, allow_body_fallback: bool = False) -> dic
 
         key, value = raw_line.split(":", 1)
         key = key.lstrip("\ufeff").strip().upper()
-        key = META_KEY_ALIASES.get(key, key)
         value = value.lstrip()
 
-        if key not in META_KEYS:
+        if key not in ALLOWED_KEYS:
             idx += 1
             continue
 
-        if key in {"SUMMARY", "META_PEOPLE", "BODY"}:
+        if key in {"SUMMARY", PEOPLE_KEY, "BODY"}:
             collected: list[str] = []
             if value:
                 collected.append(value)
@@ -242,7 +233,7 @@ def _parse_news_payload(path: Path, *, allow_body_fallback: bool = False) -> dic
                 next_line = lines[idx]
                 if ":" in next_line:
                     next_key = next_line.split(":", 1)[0].strip().upper()
-                    if next_key in META_KEYS:
+                    if next_key in ALLOWED_KEYS:
                         break
                 collected.append(next_line)
                 idx += 1
@@ -254,18 +245,18 @@ def _parse_news_payload(path: Path, *, allow_body_fallback: bool = False) -> dic
 
     data.setdefault("TITLE_TEXT", "")
     data.setdefault("SUMMARY", "")
-    data.setdefault(META_TITLE_EN_KEY, "")
-    data.setdefault(META_OVERVIEW_EN_KEY, "")
-    data.setdefault(META_PEOPLE_KEY, "")
+    data.setdefault(TITLE_KEY, "")
+    data.setdefault(OVERVIEW_KEY, "")
+    data.setdefault(PEOPLE_KEY, "")
     data.setdefault("BODY", "")
     if allow_body_fallback and not data["BODY"] and not any(
         data[key]
         for key in (
             "TITLE_TEXT",
             "SUMMARY",
-            META_TITLE_EN_KEY,
-            META_OVERVIEW_EN_KEY,
-            META_PEOPLE_KEY,
+            TITLE_KEY,
+            OVERVIEW_KEY,
+            PEOPLE_KEY,
         )
     ):
         data["BODY"] = normalize_input_text(text.rstrip())
@@ -351,7 +342,7 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
         people[idx]["name_en"] = en_name
 
     summary = data.get("SUMMARY", "").splitlines()
-    meta_people_text = data.get(META_PEOPLE_KEY, "")
+    meta_people_text = data.get(PEOPLE_KEY, "")
     overrides = _parse_meta_people_blocks(meta_people_text)
     people = _merge_meta_people_overrides(people, overrides)
     return {
@@ -361,8 +352,8 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
         "supers_zh": supers,
         "report_zh": report_zh,
         "people": people,
-        "title_en": data.get(META_TITLE_EN_KEY, ""),
-        "overview_en": data.get(META_OVERVIEW_EN_KEY, ""),
+        "title_en": data.get(TITLE_KEY, ""),
+        "overview_en": data.get(OVERVIEW_KEY, ""),
     }
 
 

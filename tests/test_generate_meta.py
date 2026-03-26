@@ -34,8 +34,8 @@ class RenderMetaTests(unittest.TestCase):
                 "SUMMARY:",
                 "中文摘要",
                 "",
-                "META_TITLE_EN: English Title",
-                "META_OVERVIEW_EN: English overview.",
+                "TITLE: English Title",
+                "OVERVIEW: English overview.",
                 "",
                 "BODY:",
                 "(  13   Alice )",
@@ -141,8 +141,8 @@ class RenderMetaTests(unittest.TestCase):
                         "SUMMARY:",
                         "中文摘要",
                         "",
-                        "META_TITLE_EN: English Title",
-                        "META_OVERVIEW_EN: English overview.",
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
                         "",
                         "BODY:",
                         "(  13   Alice )",
@@ -331,8 +331,8 @@ class RenderMetaTests(unittest.TestCase):
             meta_path.write_text(
                 "\n".join(
                     [
-                        "META_TITLE_EN: English Title",
-                        "META_OVERVIEW_EN: English overview.",
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
                         "",
                     ]
                 ),
@@ -356,7 +356,42 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
-    def test_parse_input_supports_short_meta_aliases_in_separate_meta_file(self) -> None:
+    def test_parse_input_ignores_unknown_meta_keys_in_separate_meta_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "OLD_TITLE: Legacy title",
+                        "OLD_OVERVIEW: Legacy overview",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(body_path, meta_path)
+
+        self.assertEqual(data["title_en"], "")
+        self.assertEqual(data["overview_en"], "")
+
+    def test_parse_input_supports_separate_meta_people_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             body_path = tmpdir_path / "source.txt"
@@ -433,8 +468,8 @@ class RenderMetaTests(unittest.TestCase):
             meta_path.write_text(
                 "\n".join(
                     [
-                        "META_TITLE_EN: English Title",
-                        "META_OVERVIEW_EN: English overview.",
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
                         "",
                     ]
                 ),
@@ -519,8 +554,8 @@ class RenderMetaTests(unittest.TestCase):
             body_path.write_text(
                 "\n".join(
                     [
-                        "META_TITLE_EN: English Title",
-                        "META_OVERVIEW_EN: English overview.",
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
                         "",
                         "BODY:",
                         "(6． Uyanda烏漾達)",
@@ -684,8 +719,8 @@ class RenderMetaTests(unittest.TestCase):
                 "A volunteer team hosted a two-day community clinic in a coastal town.",
                 "(  11/16~17 )",
                 "",
-                "META_TITLE_EN: Coastal Clinic Restores Access to Care",
-                "META_OVERVIEW_EN: A volunteer medical team brought screenings and referrals to local residents.",
+                "TITLE: Coastal Clinic Restores Access to Care",
+                "OVERVIEW: A volunteer medical team brought screenings and referrals to local residents.",
                 "",
                 "BODY:",
                 "1_0014",
@@ -750,10 +785,10 @@ class RenderMetaTests(unittest.TestCase):
                 "SUMMARY:",
                 "測試摘要",
                 "",
-                "META_TITLE_EN: Test English Title",
-                "META_OVERVIEW_EN: Test English overview.",
+                "TITLE: Test English Title",
+                "OVERVIEW: Test English overview.",
                 "",
-                "META_PEOPLE:",
+                "PEOPLE:",
                 "居民｜受訪者",
                 "Guest (Edited)",
                 "Resident",
@@ -838,7 +873,7 @@ def test_resolve_template_path_uses_script_directory_for_relative_paths() -> Non
             template = resolve_template_path(Path("templates/meta_template.docx"))
         finally:
             os.chdir(previous_cwd)
-    assert template == Path("/home/weiying/python/word/templates/meta_template.docx")
+    assert template == Path(__file__).resolve().parent.parent / "templates" / "meta_template.docx"
 
 
 if __name__ == "__main__":
