@@ -403,14 +403,6 @@ def find_paragraph_by_text(doc: Document, text: str) -> Paragraph | None:
     return None
 
 
-def reapply_label_highlights(doc: Document) -> None:
-    for paragraph in doc.paragraphs:
-        if paragraph.text.strip() not in HIGHLIGHT_LABELS:
-            continue
-        for run in paragraph.runs:
-            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
-
-
 def replace_multiline(paragraph: Paragraph, lines: list[str]) -> None:
     if not lines:
         remove_paragraph(paragraph)
@@ -537,7 +529,6 @@ def generate_meta(
         overview_placeholder, str(data.get("overview_en", ""))
     )
 
-    reapply_label_highlights(doc)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
     fix_docx_namespaces(output_path)
