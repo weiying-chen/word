@@ -30,6 +30,7 @@ EN_NAME_HINT_RE = re.compile(
     r'([A-Za-z][A-Za-z.\s"“”\'‘’\-]*[A-Za-z])'
     r'(?:\s*[\u4e00-\u9fff].*)?$'
 )
+EN_NAME_VALUE_RE = re.compile(r"[A-Za-z][A-Za-z.\s\"'“”‘’\-]*[A-Za-z.]")
 ALLOWED_KEYS = {
     "TITLE_TEXT",
     "SUMMARY",
@@ -58,16 +59,29 @@ def _extract_english_name_hint(text: str) -> str:
 
     inner = stripped[1:-1]
     match = EN_NAME_HINT_RE.match(inner.strip())
-    if not match:
-        return ""
+    if match:
+        name = match.group(1).strip().rstrip(" .,;:-")
+        return (
+            name.replace("“", '"')
+            .replace("”", '"')
+            .replace("‘", "'")
+            .replace("’", "'")
+        )
 
-    name = match.group(1).strip().rstrip(" .,;:-")
-    return (
-        name.replace("“", '"')
-        .replace("”", '"')
-        .replace("‘", "'")
-        .replace("’", "'")
-    )
+    # Fallback: support cues like "(SB) (Anabel) (17秒)".
+    chunks = re.findall(r"[（(]([^（）()]*)[）)]", stripped)
+    for chunk in chunks:
+        candidate = chunk.strip().rstrip(" .,;:-")
+        if candidate.isupper() and len(candidate) <= 3:
+            continue
+        if EN_NAME_VALUE_RE.fullmatch(candidate):
+            return (
+                candidate.replace("“", '"')
+                .replace("”", '"')
+                .replace("‘", "'")
+                .replace("’", "'")
+            )
+    return ""
 
 
 def _parse_super(lines: list[str]) -> dict:
