@@ -38,6 +38,27 @@ def _add_hyperlink_paragraph(doc: Document, display_text: str, url: str) -> None
     paragraph._p.append(hyperlink)
 
 
+def _add_hyperlink_paragraph_with_following_text(
+    doc: Document, display_text: str, url: str, following_text: str
+) -> None:
+    paragraph = doc.add_paragraph("")
+    part = paragraph.part
+    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+    run = OxmlElement("w:r")
+    t = OxmlElement("w:t")
+    t.text = display_text
+    run.append(t)
+    hyperlink.append(run)
+    paragraph._p.append(hyperlink)
+
+    # Simulate Shift+Enter line break with plain text in the same paragraph.
+    paragraph.add_run("\n")
+    paragraph.add_run(following_text)
+
+
 def test_normalize_title_strips_translator_tag() -> None:
     title = "健康節目 - 怎麼坐才算有“坐相”？st/rc"
     assert normalize_title(title) == "健康節目 怎麼坐才算有“坐相”？"
@@ -281,6 +302,30 @@ def test_extracts_full_url_from_truncated_hyperlink(tmp_path: Path) -> None:
     entries = extract_post_entries(schedule_path)
     assert entries[0]["ref_url"].endswith("…")
     assert entries[0]["ref_url_target"].endswith("073646342.html")
+
+
+def test_extracts_ref_title_when_url_and_title_share_paragraph_line_break(
+    tmp_path: Path,
+) -> None:
+    schedule_path = tmp_path / "alex_blocks_hyperlink_same_para_linebreak.docx"
+    doc = Document()
+    doc.add_paragraph("1")
+    doc.add_paragraph("參考資料:")
+    _add_hyperlink_paragraph_with_following_text(
+        doc,
+        "https://news.tvbs.com.tw/health/3154927",
+        "https://news.tvbs.com.tw/health/3154927",
+        "日走萬步「肌肉反變少」！營養師嘆：被拆去當燃料 改用3招護膝",
+    )
+    doc.add_paragraph("要用的影片:")
+    doc.add_paragraph("https://example.com/video")
+    doc.add_paragraph("Program - Test Title (健康節目 - 測試標題)")
+    doc.save(schedule_path)
+
+    entries = extract_post_entries(schedule_path)
+    assert entries[0]["ref_url"] == "https://news.tvbs.com.tw/health/3154927"
+    assert entries[0]["ref_title"] == "日走萬步「肌肉反變少」！營養師嘆：被拆去當燃料 改用3招護膝"
+    assert entries[0]["ref_url_target"] == "https://news.tvbs.com.tw/health/3154927"
 
 
 def test_build_hashtags_strips_quotes_and_spaces() -> None:

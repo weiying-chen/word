@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import argparse
 import re
-import zipfile
 import warnings
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
 
 from docx_utils import add_hyperlink
@@ -26,7 +25,6 @@ SOURCE_LINK_RE = re.compile(r"^https?://\S+$")
 MARKER_TEXT = "<"
 BODY_PLACEHOLDER = "{{BODY}}"
 R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-PR_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
 @dataclass
@@ -153,29 +151,39 @@ def _marker_info(doc: Document) -> tuple[int, str]:
     raise ValueError("template.docx must contain either '<' or '{{BODY}}' marker paragraph.")
 
 
+def _extract_hyperlink_target(paragraph) -> str:
+    for hyperlink in paragraph._p.findall(".//w:hyperlink", paragraph._p.nsmap):
+        r_id = hyperlink.get(qn("r:id"))
+        if not r_id:
+            continue
+        rel = paragraph.part.rels.get(r_id)
+        if rel is None:
+            continue
+        target = getattr(rel, "target_ref", None)
+        if target and isinstance(target, str) and target.startswith("http"):
+            return target
+    return ""
+
+
 def _extract_source_header_lines(source_docx_path: Path) -> list[RenderLine]:
-    with zipfile.ZipFile(source_docx_path) as zf:
-        xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
-        rels_xml = zf.read("word/_rels/document.xml.rels").decode("utf-8", errors="ignore")
-    root = ET.fromstring(xml)
-    rels_root = ET.fromstring(rels_xml)
-    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    rels_ns = {"pr": PR_NS}
-    rel_map = {
-        rel.attrib.get("Id", ""): rel.attrib.get("Target", "")
-        for rel in rels_root.findall(".//pr:Relationship", rels_ns)
-    }
+    source_doc = Document(str(source_docx_path))
     lines: list[RenderLine] = []
-    for p in root.findall(".//w:body/w:p", ns):
-        text = "".join((t.text or "") for t in p.findall(".//w:t", ns)).strip()
-        hyperlink_target = ""
-        for h in p.findall(".//w:hyperlink", ns):
-            rid = h.attrib.get(f"{{{R_NS}}}id", "")
-            target = rel_map.get(rid, "")
-            if target.startswith("http"):
-                hyperlink_target = target
-                break
-        lines.append(RenderLine(text=text, hyperlink=hyperlink_target))
+    for paragraph in source_doc.paragraphs:
+        hyperlink_target = _extract_hyperlink_target(paragraph)
+        split_lines = paragraph.text.splitlines()
+        if not split_lines:
+            lines.append(RenderLine(""))
+            continue
+        has_url_line = any(line.strip().startswith("http") for line in split_lines)
+        for raw_line in split_lines:
+            text = raw_line.strip()
+            line_link = ""
+            if hyperlink_target and text:
+                if has_url_line:
+                    line_link = hyperlink_target if text.startswith("http") else ""
+                else:
+                    line_link = hyperlink_target
+            lines.append(RenderLine(text=text, hyperlink=line_link))
 
     marker_idx = None
     for idx, line in enumerate(lines):

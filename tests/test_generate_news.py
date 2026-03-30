@@ -39,6 +39,20 @@ def _write_source_docx_with_linked_title(path: Path) -> None:
     doc.save(path)
 
 
+def _write_source_docx_with_url_and_title_same_paragraph(path: Path) -> None:
+    doc = Document()
+    para = doc.add_paragraph("")
+    add_hyperlink(
+        para,
+        "https://news.tvbs.com.tw/health/3154927",
+        "https://news.tvbs.com.tw/health/3154927",
+    )
+    para.add_run("\n日走萬步「肌肉反變少」！營養師嘆：被拆去當燃料 改用3招護膝")
+    doc.add_paragraph("<")
+    doc.add_paragraph("old body line")
+    doc.save(path)
+
+
 def _write_template_docx(path: Path, marker: str = "{{BODY}}") -> None:
     doc = Document()
     doc.add_paragraph(marker)
@@ -298,6 +312,31 @@ def test_generate_news_preserves_non_url_header_hyperlink(tmp_path: Path) -> Non
         if rel.reltype == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
     ]
     assert "https://www.daai.tv/news/taiwan/593768" in rel_targets
+
+
+def test_generate_news_splits_url_and_title_when_same_source_paragraph(
+    tmp_path: Path,
+) -> None:
+    source_docx = tmp_path / "source.docx"
+    template_docx = tmp_path / "template.docx"
+    input_path = tmp_path / "news_input.txt"
+    output_path = tmp_path / "news_output.docx"
+
+    _write_source_docx_with_url_and_title_same_paragraph(source_docx)
+    _write_template_docx(template_docx, marker="{{BODY}}")
+    input_path.write_text("BODY:\n1_0001\nBody line.\n", encoding="utf-8")
+
+    generate_news.generate_news(template_docx, source_docx, input_path, output_path)
+
+    doc = Document(output_path)
+    texts = [p.text for p in doc.paragraphs]
+    assert texts[:5] == [
+        "https://news.tvbs.com.tw/health/3154927",
+        "日走萬步「肌肉反變少」！營養師嘆：被拆去當燃料 改用3招護膝",
+        "<",
+        "",
+        "1_0001",
+    ]
 
 
 def test_generate_news_body_placeholder_works_without_source_marker(tmp_path: Path) -> None:

@@ -71,15 +71,17 @@ def iter_non_empty_paragraphs(doc: Document) -> tuple[list[str], list[str | None
     lines: list[str] = []
     url_targets: list[str | None] = []
     for paragraph in doc.paragraphs:
-        text = paragraph.text.strip()
-        if not text:
-            continue
-        lines.append(text)
-        if text.startswith("http"):
-            target = _extract_hyperlink_target(paragraph)
-            url_targets.append(target.strip() if target and target.startswith("http") else None)
-        else:
-            url_targets.append(None)
+        target = _extract_hyperlink_target(paragraph)
+        target = target.strip() if target and target.startswith("http") else None
+        for raw_line in paragraph.text.splitlines():
+            text = raw_line.strip()
+            if not text:
+                continue
+            lines.append(text)
+            if text.startswith("http"):
+                url_targets.append(target)
+            else:
+                url_targets.append(None)
     return lines, url_targets
 
 

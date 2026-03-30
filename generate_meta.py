@@ -135,6 +135,8 @@ def _parse_meta_people_blocks(text: str) -> list[dict[str, str]]:
         role_zh = ""
         if "｜" in label_zh:
             role_zh, name_zh = [part.strip() for part in label_zh.split("｜", 1)]
+            if role_zh and not name_zh:
+                label_zh = role_zh
         else:
             name_zh = label_zh.strip()
 
@@ -196,6 +198,21 @@ def _merge_meta_people_overrides(
                     and entry.get("name_en", "").strip()
                     and entry.get("name_en", "").strip().casefold()
                     in {name_zh.casefold(), person_name_en.casefold()}
+                ),
+                None,
+            )
+        if match is None and role_zh and not name_zh:
+            # Support nameless role overrides written as "角色｜" in meta.txt.
+            # Example:
+            #   恩佳大愛村民｜
+            #   Resident
+            #   Ndeja Tzu Chi Great Love Village
+            match = next(
+                (
+                    entry
+                    for entry in overrides
+                    if entry.get("role_zh", "").strip() == role_zh
+                    and not entry.get("name_zh", "").strip()
                 ),
                 None,
             )
