@@ -257,6 +257,39 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_parse_input_extracts_accented_name_from_mixed_parentheses(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "news_input.txt"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(19秒  Paulino Eusébio Sande）",
+                        "/*SUPER:",
+                        "恩佳小學校長│保利諾·尤西比奧//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(input_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "保利諾·尤西比奧",
+                    "name_en": "Paulino Eusébio Sande",
+                    "role_zh": "恩佳小學校長",
+                    "role_en": "",
+                    "org_en": "",
+                }
+            ],
+        )
+
     def test_parse_input_ignores_instructional_parenthetical_english_and_keeps_full_name(
         self,
     ) -> None:

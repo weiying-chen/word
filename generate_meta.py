@@ -27,10 +27,12 @@ CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 EN_NAME_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z.\s'-]*")
 EN_NAME_HINT_RE = re.compile(
     r'^[\s\d.,，．。:：;；!?！？~\-–—秒分]*'
-    r'([A-Za-z][A-Za-z.\s"“”\'‘’\-]*[A-Za-z])'
+    r'([A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ.\s"“”\'‘’\-]*[A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ])'
     r'(?:\s*[\u4e00-\u9fff].*)?$'
 )
-EN_NAME_VALUE_RE = re.compile(r"[A-Za-z][A-Za-z.\s\"'“”‘’\-]*[A-Za-z.]")
+EN_NAME_VALUE_RE = re.compile(
+    r"[A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ.\s\"'“”‘’\-]*[A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ.]"
+)
 ALLOWED_KEYS = {
     "TITLE_TEXT",
     "SUMMARY",
@@ -54,7 +56,9 @@ def _clean_super_line(text: str) -> str:
 
 def _extract_english_name_hint(text: str) -> str:
     stripped = text.strip()
-    if not (stripped.startswith("(") and stripped.endswith(")")):
+    if not stripped:
+        return ""
+    if stripped[0] not in {"(", "（"} or stripped[-1] not in {")", "）"}:
         return ""
 
     inner = stripped[1:-1]
