@@ -7,6 +7,7 @@ import re
 import zipfile
 import warnings
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
 
 from docx import Document
@@ -24,6 +25,14 @@ BODY_INLINE_LINE_RE = re.compile(r"^\s*(BODY|字幕)\s*[:：]\s*(.*)$")
 SOURCE_LINK_RE = re.compile(r"^https?://\S+$")
 MARKER_TEXT = "<"
 BODY_PLACEHOLDER = "{{BODY}}"
+R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+PR_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+
+@dataclass
+class RenderLine:
+    text: str
+    hyperlink: str = ""
 
 
 def _decode_input_text(path: Path) -> tuple[str, str, bool]:
@@ -83,9 +92,12 @@ def _strip_body_skip_placeholders(text: str) -> str:
     return "\n".join(lines)
 
 
-def _set_line_in_paragraph(paragraph, text: str) -> None:
+def _set_line_in_paragraph(paragraph, text: str, hyperlink: str = "") -> None:
     paragraph.text = ""
     if not text:
+        return
+    if hyperlink:
+        add_hyperlink(paragraph, text, hyperlink)
         return
     if SOURCE_LINK_RE.match(text.strip()):
         link = text.strip()
@@ -99,17 +111,17 @@ def _set_line_in_paragraph(paragraph, text: str) -> None:
     )
 
 
-def _insert_paragraph_after(paragraph, text: str) -> Paragraph:
+def _insert_paragraph_after(paragraph, text: str, hyperlink: str = "") -> Paragraph:
     new_p = OxmlElement("w:p")
     paragraph._p.addnext(new_p)
     new_para = Paragraph(new_p, paragraph._parent)
-    _set_line_in_paragraph(new_para, text)
+    _set_line_in_paragraph(new_para, text, hyperlink)
     return new_para
 
 
-def _add_plain_paragraph(doc: Document, text: str) -> None:
+def _add_plain_paragraph(doc: Document, text: str, hyperlink: str = "") -> None:
     paragraph = doc.add_paragraph("")
-    _set_line_in_paragraph(paragraph, text)
+    _set_line_in_paragraph(paragraph, text, hyperlink)
 
 
 def _render_multiline_block(doc: Document, text: str) -> None:
@@ -141,29 +153,40 @@ def _marker_info(doc: Document) -> tuple[int, str]:
     raise ValueError("template.docx must contain either '<' or '{{BODY}}' marker paragraph.")
 
 
-def _extract_source_header_lines(source_docx_path: Path) -> list[str]:
+def _extract_source_header_lines(source_docx_path: Path) -> list[RenderLine]:
     with zipfile.ZipFile(source_docx_path) as zf:
         xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+        rels_xml = zf.read("word/_rels/document.xml.rels").decode("utf-8", errors="ignore")
     root = ET.fromstring(xml)
+    rels_root = ET.fromstring(rels_xml)
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    lines: list[str] = []
+    rels_ns = {"pr": PR_NS}
+    rel_map = {
+        rel.attrib.get("Id", ""): rel.attrib.get("Target", "")
+        for rel in rels_root.findall(".//pr:Relationship", rels_ns)
+    }
+    lines: list[RenderLine] = []
     for p in root.findall(".//w:body/w:p", ns):
-        text_parts = [
-            t.text or ""
-            for t in p.findall(".//w:t", ns)
-        ]
-        lines.append("".join(text_parts).strip())
+        text = "".join((t.text or "") for t in p.findall(".//w:t", ns)).strip()
+        hyperlink_target = ""
+        for h in p.findall(".//w:hyperlink", ns):
+            rid = h.attrib.get(f"{{{R_NS}}}id", "")
+            target = rel_map.get(rid, "")
+            if target.startswith("http"):
+                hyperlink_target = target
+                break
+        lines.append(RenderLine(text=text, hyperlink=hyperlink_target))
 
     marker_idx = None
     for idx, line in enumerate(lines):
-        if line.strip() == MARKER_TEXT:
+        if line.text.strip() == MARKER_TEXT:
             marker_idx = idx
             break
     if marker_idx is None:
         return []
 
     lines = lines[: marker_idx + 1]
-    while lines and not lines[0].strip():
+    while lines and not lines[0].text.strip():
         lines.pop(0)
     return lines
 
@@ -195,34 +218,35 @@ def generate_news_from_data(
     header_lines = _extract_source_header_lines(source_docx_path)
 
     body = data.get("BODY", "")
-    content_lines: list[str] = []
+    content_lines: list[RenderLine] = []
     if header_lines:
         content_lines.extend(header_lines)
         if body:
-            content_lines.append("")
+            content_lines.append(RenderLine(""))
     if body:
-        content_lines.extend(body.splitlines())
+        content_lines.extend(RenderLine(line) for line in body.splitlines())
 
     lines = content_lines
     if body:
         if marker == BODY_PLACEHOLDER:
             target = doc.paragraphs[marker_idx]
-            first = lines[0] if lines else ""
-            _set_line_in_paragraph(target, first)
+            first = lines[0] if lines else RenderLine("")
+            _set_line_in_paragraph(target, first.text, first.hyperlink)
             current = target
             for line in lines[1:]:
-                current = _insert_paragraph_after(current, line)
+                current = _insert_paragraph_after(current, line.text, line.hyperlink)
         else:
             if lines:
                 doc.add_paragraph("")
-                _render_multiline_block(doc, "\n".join(lines))
+                for line in lines:
+                    _add_plain_paragraph(doc, line.text, line.hyperlink)
     elif marker == BODY_PLACEHOLDER:
         target = doc.paragraphs[marker_idx]
         if lines:
-            _set_line_in_paragraph(target, lines[0])
+            _set_line_in_paragraph(target, lines[0].text, lines[0].hyperlink)
             current = target
             for line in lines[1:]:
-                current = _insert_paragraph_after(current, line)
+                current = _insert_paragraph_after(current, line.text, line.hyperlink)
         else:
             _set_line_in_paragraph(target, "")
 
