@@ -76,6 +76,7 @@ class RenderMetaTests(unittest.TestCase):
                 "English Title",
                 "名字職銜",
                 "",
+                "",
                 "病患｜甲",
                 "Alice",
                 "{{病患}}",
@@ -121,6 +122,7 @@ class RenderMetaTests(unittest.TestCase):
                 "重點標",
                 "",
                 "名字職銜",
+                "",
                 "",
                 "病患｜甲",
                 "Alice",
@@ -472,6 +474,7 @@ class RenderMetaTests(unittest.TestCase):
                     "role_zh": "慈濟志工",
                     "role_en": "Volunteer",
                     "org_en": "",
+                    "label_zh": "慈濟志工｜烏漾達",
                 }
             ],
         )
@@ -521,6 +524,7 @@ class RenderMetaTests(unittest.TestCase):
                 "English Title",
                 "名字職銜",
                 "",
+                "",
                 "慈濟志工｜烏漾達",
                 "Uyanda",
                 "{{慈濟志工}}",
@@ -568,7 +572,7 @@ class RenderMetaTests(unittest.TestCase):
             generate_meta(template_path, body_path, output_path, meta_path=meta_path)
 
             doc = Document(str(output_path))
-            people_paragraph = doc.paragraphs[4]
+            people_paragraph = doc.paragraphs[5]
 
         self.assertEqual(people_paragraph.text, "慈濟志工｜烏漾達")
         self.assertEqual(
@@ -576,7 +580,7 @@ class RenderMetaTests(unittest.TestCase):
             ["慈濟志工｜烏漾達"],
         )
 
-    def test_generate_meta_reapplies_yellow_highlight_to_fixed_labels(self) -> None:
+    def test_generate_meta_preserves_label_highlights_from_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             template_path = tmpdir_path / "meta_template.docx"
@@ -584,6 +588,12 @@ class RenderMetaTests(unittest.TestCase):
             output_path = tmpdir_path / "meta.docx"
 
             self._build_template(template_path)
+            template_doc = Document(str(template_path))
+            for paragraph in template_doc.paragraphs:
+                if paragraph.text in {"重點標", "名字職銜", "YT簡介"}:
+                    for run in paragraph.runs:
+                        run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+            template_doc.save(str(template_path))
             body_path.write_text(
                 "\n".join(
                     [
@@ -660,6 +670,7 @@ class RenderMetaTests(unittest.TestCase):
                 "",
                 "名字職銜",
                 "",
+                "",
                 "艾莉莎的父親",
                 "Mar Jason B. Sergida",
                 "Allyza's father",
@@ -703,6 +714,7 @@ class RenderMetaTests(unittest.TestCase):
                 "重點標",
                 "",
                 "名字職銜",
+                "",
                 "",
                 "家長",
                 "{{家長}}",
@@ -798,6 +810,7 @@ class RenderMetaTests(unittest.TestCase):
                 "Coastal Clinic Restores Access to Care",
                 "名字職銜",
                 "",
+                "",
                 "居民｜陳先生",
                 "Mr. Chen",
                 "{{居民}}",
@@ -869,6 +882,7 @@ class RenderMetaTests(unittest.TestCase):
                 "Test English Title",
                 "名字職銜",
                 "",
+                "",
                 "居民｜受訪者",
                 "Guest (Edited)",
                 "Resident",
@@ -880,6 +894,55 @@ class RenderMetaTests(unittest.TestCase):
                 "",
                 "YT簡介",
                 "Test English overview.",
+            ],
+        )
+
+    def test_meta_people_overrides_support_role_only_labels_by_english_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(11, Timothy Yu)",
+                        "/*SUPER:",
+                        "慈濟人醫會醫師│余俊傑//",
+                        "內容//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "PEOPLE:",
+                        "慈濟人醫會醫師",
+                        "Timothy Yu",
+                        "TIMA Doctor",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(body_path, meta_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "余俊傑",
+                    "name_en": "Timothy Yu",
+                    "role_zh": "慈濟人醫會醫師",
+                    "role_en": "TIMA Doctor",
+                    "org_en": "",
+                    "label_zh": "慈濟人醫會醫師",
+                }
             ],
         )
 
