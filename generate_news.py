@@ -67,14 +67,20 @@ def parse_input(path: Path) -> dict[str, str]:
         if inline and not BODY_LABEL_LINE_RE.match(stripped):
             collected = [inline.group(2)] if inline.group(2) else []
             collected.extend(lines[idx + 1 :])
-            return {"BODY": normalize_input_text("\n".join(collected).rstrip())}
+            normalized = normalize_input_text("\n".join(collected).rstrip())
+            return {"BODY": _strip_body_skip_placeholders(normalized)}
 
         if BODY_LABEL_LINE_RE.match(stripped):
-            return {
-                "BODY": normalize_input_text("\n".join(lines[idx + 1 :]).rstrip())
-            }
+            normalized = normalize_input_text("\n".join(lines[idx + 1 :]).rstrip())
+            return {"BODY": _strip_body_skip_placeholders(normalized)}
 
-    return {"BODY": normalize_input_text(text.rstrip())}
+    normalized = normalize_input_text(text.rstrip())
+    return {"BODY": _strip_body_skip_placeholders(normalized)}
+
+
+def _strip_body_skip_placeholders(text: str) -> str:
+    lines = [line for line in text.splitlines() if line.strip() != "~"]
+    return "\n".join(lines)
 
 
 def _set_line_in_paragraph(paragraph, text: str) -> None:

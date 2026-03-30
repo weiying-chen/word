@@ -159,6 +159,28 @@ def test_generate_news_from_sources_uses_body_text_file(tmp_path: Path) -> None:
     assert texts[-5:] == ["<", "", "1_0001", "中文內文。", "English body line."]
 
 
+def test_generate_news_omits_standalone_tilde_placeholder_lines(tmp_path: Path) -> None:
+    source_docx = tmp_path / "source.docx"
+    template_docx = tmp_path / "template.docx"
+    source_txt = tmp_path / "source.txt"
+    output_path = tmp_path / "news_output.docx"
+
+    _write_source_docx(source_docx)
+    _write_template_docx(template_docx, marker="<")
+    source_txt.write_text(
+        "1_0001\n中文內文。\n~\nEnglish body line.\n",
+        encoding="utf-8",
+    )
+
+    generate_news.generate_news_from_sources(
+        template_docx, source_docx, source_txt, output_path
+    )
+
+    texts = [p.text for p in Document(output_path).paragraphs]
+    assert "~" not in texts
+    assert texts[-5:] == ["<", "", "1_0001", "中文內文。", "English body line."]
+
+
 def test_generate_news_keeps_single_blank_after_marker_when_body_starts_blank(
     tmp_path: Path,
 ) -> None:
