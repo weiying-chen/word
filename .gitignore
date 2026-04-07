@@ -6,3 +6,5 @@ output/
 .venv/
 /*.docx
 /*.txt
+.codex
+.codex/
