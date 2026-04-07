@@ -23,7 +23,7 @@ from docx_utils import (
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
 DATE_ASSIGNMENT_LINE_RE = re.compile(
-    r"^\d{1,2}/\d{1,2}(?:\([^()]*\))?\s*發\s*(\S+)"
+    r"^(?:\d+\.\s*)?\d{1,2}/\d{1,2}(?:\([^()]*\))?\s*發\s*(\S+)"
 )
 BARE_PERSON_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*$")
 PROGRAM_SECTION_RE = re.compile(r"^節目.*則")
@@ -43,7 +43,7 @@ DASH_SPLIT_RE = re.compile(r"\s*-\s*")
 
 
 def _extract_person_name(line: str) -> str | None:
-    for pattern in (PERSON_LINE_RE, DATE_ASSIGNMENT_LINE_RE):
+    for pattern in (DATE_ASSIGNMENT_LINE_RE, PERSON_LINE_RE):
         match = pattern.match(line)
         if match:
             return match.group(1).strip().lower()
