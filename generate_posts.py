@@ -25,6 +25,9 @@ PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
 DATE_ASSIGNMENT_LINE_RE = re.compile(
     r"^(?:\d+\.\s*)?\d{1,2}/\d{1,2}(?:\([^()]*\))?\s*發\s*(\S+)"
 )
+DATE_ASSIGNMENT_PREFIX_RE = re.compile(
+    r"^(?:\d+\.\s*)?(?P<date>\d{1,2}/\d{1,2}|\d{2}/\d{1,2}/\d{1,2})(?:\([^()]*\))?\s*發\s*\S+"
+)
 BARE_PERSON_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*$")
 PROGRAM_SECTION_RE = re.compile(r"^節目.*則")
 BODHI_SECTION_RE = re.compile(r"^(?:人間)?菩提.*則")
@@ -51,6 +54,13 @@ def _extract_person_name(line: str) -> str | None:
     if BARE_PERSON_LINE_RE.fullmatch(stripped):
         return stripped.lower()
     return None
+
+
+def _extract_assignment_date_prefix(line: str, default_year: int) -> str | None:
+    match = DATE_ASSIGNMENT_PREFIX_RE.match(line.strip())
+    if not match:
+        return None
+    return _parse_date_prefix(match.group("date"), default_year=default_year)
 
 
 def _extract_hyperlink_target(paragraph) -> str | None:
@@ -498,16 +508,20 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
             ref_url, ref_title, ref_url_target = _extract_schedule_reference(
                 lines, url_targets, idx + 1
             )
-            entries.append(
-                _build_standard_entry(
-                    video_title=title_line,
-                    video_url=url_line,
-                    video_url_target=url_target or "",
-                    ref_url=ref_url,
-                    ref_url_target=ref_url_target,
-                    ref_title=ref_title,
-                )
+            entry = _build_standard_entry(
+                video_title=title_line,
+                video_url=url_line,
+                video_url_target=url_target or "",
+                ref_url=ref_url,
+                ref_url_target=ref_url_target,
+                ref_title=ref_title,
             )
+            assignment_prefix = _extract_assignment_date_prefix(
+                line, default_year=date.today().year
+            )
+            if assignment_prefix:
+                entry["filename_prefix_override"] = f"{assignment_prefix}_"
+            entries.append(entry)
 
     return entries
 
