@@ -747,6 +747,7 @@ def generate_docs(
             normalize_empty_paragraphs(doc)
         else:
             ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
+            normalize_empty_paragraphs(doc)
             sync_empty_paragraph_indents(doc)
         doc.save(str(output_path))
         output_paths.append(output_path)
