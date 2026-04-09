@@ -482,15 +482,36 @@ def _remap_relationship_ids(source_part, target_part, paragraph_element) -> None
         element.set(qn("r:id"), new_relation_id)
 
 
+def _remap_hyperlink_run_styles(target_paragraph: Paragraph, paragraph_element) -> None:
+    try:
+        hyperlink_style_id = target_paragraph.part.document.styles["Hyperlink"].style_id
+    except KeyError:
+        return
+
+    for hyperlink in paragraph_element.iter(qn("w:hyperlink")):
+        for run in hyperlink.iter(qn("w:r")):
+            run_properties = run.find(qn("w:rPr"))
+            if run_properties is None:
+                run_properties = OxmlElement("w:rPr")
+                run.insert(0, run_properties)
+            run_style = run_properties.find(qn("w:rStyle"))
+            if run_style is None:
+                run_style = OxmlElement("w:rStyle")
+                run_properties.insert(0, run_style)
+            run_style.set(qn("w:val"), hyperlink_style_id)
+
+
 def _clone_paragraph_before(source_paragraph: Paragraph, target_paragraph: Paragraph) -> None:
     cloned = deepcopy(source_paragraph._p)
     _remap_relationship_ids(source_paragraph.part, target_paragraph.part, cloned)
+    _remap_hyperlink_run_styles(target_paragraph, cloned)
     target_paragraph._p.addprevious(cloned)
 
 
 def _clone_paragraph_after(source_paragraph: Paragraph, target_paragraph: Paragraph) -> Paragraph:
     cloned = deepcopy(source_paragraph._p)
     _remap_relationship_ids(source_paragraph.part, target_paragraph.part, cloned)
+    _remap_hyperlink_run_styles(target_paragraph, cloned)
     target_paragraph._p.addnext(cloned)
     return Paragraph(cloned, target_paragraph._parent)
 

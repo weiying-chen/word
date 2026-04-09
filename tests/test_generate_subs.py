@@ -78,6 +78,61 @@ def _write_formatted_source_docx(path: Path) -> None:
     doc.save(path)
 
 
+def _rewrite_hyperlink_style_id(path: Path, style_id: str) -> None:
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    w_ns = ns["w"]
+    with zipfile.ZipFile(path, "r") as zin:
+        styles_xml = etree.fromstring(zin.read("word/styles.xml"))
+        doc_xml = etree.fromstring(zin.read("word/document.xml"))
+        style_nodes = styles_xml.xpath(
+            ".//w:style[w:name[@w:val='Hyperlink']]",
+            namespaces=ns,
+        )
+        if style_nodes:
+            style_nodes[0].set("{%s}styleId" % w_ns, style_id)
+        else:
+            style = etree.SubElement(
+                styles_xml,
+                "{%s}style" % w_ns,
+                attrib={
+                    "{%s}type" % w_ns: "character",
+                    "{%s}styleId" % w_ns: style_id,
+                },
+            )
+            etree.SubElement(style, "{%s}name" % w_ns, attrib={"{%s}val" % w_ns: "Hyperlink"})
+            r_pr = etree.SubElement(style, "{%s}rPr" % w_ns)
+            etree.SubElement(
+                r_pr,
+                "{%s}color" % w_ns,
+                attrib={"{%s}val" % w_ns: "0563C1", "{%s}themeColor" % w_ns: "hyperlink"},
+            )
+            etree.SubElement(r_pr, "{%s}u" % w_ns, attrib={"{%s}val" % w_ns: "single"})
+
+        for node in doc_xml.xpath(".//w:hyperlink//w:rStyle", namespaces=ns):
+            node.set("{%s}val" % w_ns, style_id)
+
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        with zipfile.ZipFile(tmp_path, "w") as zout:
+            for info in zin.infolist():
+                data = zin.read(info.filename)
+                if info.filename == "word/styles.xml":
+                    data = etree.tostring(
+                        styles_xml,
+                        encoding="UTF-8",
+                        standalone=True,
+                        xml_declaration=True,
+                    )
+                elif info.filename == "word/document.xml":
+                    data = etree.tostring(
+                        doc_xml,
+                        encoding="UTF-8",
+                        standalone=True,
+                        xml_declaration=True,
+                    )
+                zout.writestr(info, data)
+    tmp_path.replace(path)
+
+
 def _assert_yt_title_replaced_for_encoded_input(
     tmp_path: Path,
     encoded_text: bytes,
@@ -403,6 +458,45 @@ def test_generate_subs_preserves_source_hyperlink_and_highlight_formatting(
     subtitle_highlight = subtitle_run.find("w:rPr/w:highlight", ns)
     assert subtitle_highlight is not None
     assert subtitle_highlight.get("{%s}val" % ns["w"]) == source_subtitle_highlight
+
+
+def test_generate_subs_remaps_cloned_hyperlink_style_id_to_template_style(
+    tmp_path: Path,
+) -> None:
+    template_path = Path("templates/subs_template.docx")
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_formatted_source_docx(source_docx)
+    _rewrite_hyperlink_style_id(source_docx, "a7")
+    input_path.write_text("INTRO: Intro\n", encoding="utf-8")
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        styles_xml = etree.fromstring(zf.read("word/styles.xml"))
+        doc_xml = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    hyperlink_style_nodes = styles_xml.xpath(
+        ".//w:style[w:name[@w:val='Hyperlink']]",
+        namespaces=ns,
+    )
+    assert hyperlink_style_nodes
+    hyperlink_style_id = hyperlink_style_nodes[0].get("{%s}styleId" % ns["w"])
+    assert hyperlink_style_id
+
+    hyperlink_style_run = None
+    for paragraph in doc_xml.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in paragraph.findall(".//w:t", ns))
+        if "https://example.com/source" not in text:
+            continue
+        hyperlink_style_run = paragraph.find(".//w:hyperlink//w:rPr/w:rStyle", ns)
+        break
+
+    assert hyperlink_style_run is not None
+    assert hyperlink_style_run.get("{%s}val" % ns["w"]) == hyperlink_style_id
 
 def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -> None:
     template_path = Path("templates/subs_template.docx")
