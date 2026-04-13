@@ -41,6 +41,7 @@ CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 QUOTE_CHARS = "\"'“”‘’"
 ALEX_REF_LABELS = {"參考資料:", "參考資料："}
 ALEX_VIDEO_LABELS = {"要用的影片:", "要用的影片："}
+PAIRING_LABELS = {"搭配", "搭配:", "搭配："}
 PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
 DASH_SPLIT_RE = re.compile(r"\s*-\s*")
 
@@ -273,12 +274,12 @@ def _extract_schedule_reference(
         line = lines[idx]
         if _extract_person_name(line) or STOP_SECTION_RE.match(line):
             break
-        if line.strip() == "搭配":
+        if line.strip() in PAIRING_LABELS:
             ref_url, ref_title, ref_url_target, _ = _extract_ref_from_label(
                 lines,
                 url_targets,
                 idx,
-                stop_labels={"搭配"},
+                stop_labels=PAIRING_LABELS,
                 stop_by_person=True,
                 parse_first_line_date=False,
                 default_year=date.today().year,
