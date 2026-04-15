@@ -41,7 +41,7 @@ INPUT_KEY_SET = PLACEHOLDER_KEY_SET | {"BODY"}
 GENERIC_PLACEHOLDER_RE = re.compile(r"^\{\{([A-Z_]+)\}\}$")
 SOURCE_LINK_RE = re.compile(r"^https?://\S+")
 SUBTITLE_LINE_RE = re.compile(
-    r"^\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
+    r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
 SYMBOL_FONT_NAME = "Segoe UI Symbol"
 CJK_FONT_NAME = "新細明體"
@@ -53,7 +53,6 @@ SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
 SUBS_OUTPUT_SUFFIX = "_al"
-COMMA_RE = re.compile(r"[,\uFF0C]+")
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
 
 
@@ -71,7 +70,6 @@ def normalize_title_text(text: str) -> str:
     if not text:
         return text
     normalized = normalize_input_text(text)
-    normalized = COMMA_RE.sub(" ", normalized)
     return re.sub(r"[ \t]+", " ", normalized).strip()
 
 

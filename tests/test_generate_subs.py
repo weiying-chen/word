@@ -372,7 +372,7 @@ def test_generate_subs_replaces_box_drawing_horizontal(tmp_path: Path) -> None:
     assert "為什麼要蓋醫院 - 貧中帶病拖垮家庭" in [p.text for p in doc.paragraphs]
 
 
-def test_generate_subs_replaces_commas_in_title_with_spaces(tmp_path: Path) -> None:
+def test_generate_subs_preserves_commas_in_title(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     source_docx = tmp_path / "source.docx"
     input_path = tmp_path / "input.txt"
@@ -387,7 +387,7 @@ def test_generate_subs_replaces_commas_in_title_with_spaces(tmp_path: Path) -> N
 
     generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
     doc = Document(output_path)
-    assert "大愛真健康 - 改善長者走路與平衡 溫和髖關節保養" in [
+    assert "大愛真健康 - 改善長者走路與平衡，溫和髖關節保養" in [
         p.text for p in doc.paragraphs
     ]
 
@@ -759,3 +759,52 @@ def test_generate_subs_keeps_blank_line_after_subtitle_label_with_input_body(
     label_idx = texts.index("字幕：")
     assert texts[label_idx + 1] == ""
     assert texts[label_idx + 2] == "00:01:00:00\t00:01:02:00\tInput body line."
+
+
+def test_generate_subs_treats_xxx_prefixed_timecode_as_subtitle_line(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "https://en.wikibooks.org/wiki/Traditional_Chinese_Medicine/Prescriptions",
+                "*Five-Juice Drink*",
+                "*五汁饮*",
+                "",
+                "XXX\t00:08:29:00\t00:08:43:11\t像梨子汁啊 然後荸薺啊",
+                "Juices made from pear and water chestnut.",
+                "XXX",
+                "and asparagus can all help with hydration.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    timing_paragraph = None
+    url_paragraph = None
+    for paragraph in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in paragraph.findall(".//w:t", ns))
+        if text.startswith("XXX00:08:29:0000:08:43:11"):
+            timing_paragraph = paragraph
+        if text == "https://en.wikibooks.org/wiki/Traditional_Chinese_Medicine/Prescriptions":
+            url_paragraph = paragraph
+
+    assert timing_paragraph is not None
+    assert url_paragraph is not None
+    assert url_paragraph.findall("w:hyperlink", ns)
+    assert timing_paragraph.find("w:r/w:rPr/w:highlight", ns) is None
