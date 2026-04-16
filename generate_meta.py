@@ -476,6 +476,20 @@ def replace_or_remove_paragraph_text(paragraph: Paragraph | None, text: str) -> 
         paragraph.text = ""
 
 
+def ensure_single_blank_before_label(doc: Document, label_text: str) -> None:
+    while True:
+        label_para = find_paragraph_by_text(doc, label_text)
+        if label_para is None:
+            return
+        paragraphs = doc.paragraphs
+        idx = next((i for i, p in enumerate(paragraphs) if p._p is label_para._p), -1)
+        if idx < 2:
+            return
+        if paragraphs[idx - 1].text.strip() or paragraphs[idx - 2].text.strip():
+            return
+        remove_paragraph(paragraphs[idx - 2])
+
+
 def _label_without_repeated_english_name(
     label_zh: str,
     *,
@@ -567,9 +581,16 @@ def generate_meta(
     title_placeholder = find_paragraph_by_text(doc, TITLE_PLACEHOLDER)
     replace_or_remove_paragraph_text(title_placeholder, str(data.get("title_en", "")))
 
+    people_lines = build_people_lines(data.get("people", []))
     people_placeholder = find_paragraph_by_text(doc, PEOPLE_PLACEHOLDER)
     if people_placeholder:
-        replace_multiline(people_placeholder, build_people_lines(data.get("people", [])))
+        replace_multiline(people_placeholder, people_lines)
+
+    if not people_lines:
+        people_label = find_paragraph_by_text(doc, "名字職銜")
+        if people_label is not None:
+            remove_paragraph(people_label)
+        ensure_single_blank_before_label(doc, "YT簡介")
 
     overview_placeholder = find_paragraph_by_text(doc, OVERVIEW_PLACEHOLDER)
     replace_or_remove_paragraph_text(
