@@ -96,6 +96,28 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     for index in sorted(remove_indexes, reverse=True):
         _remove_paragraph(paragraphs[index])
 
+    paragraphs = list(doc.paragraphs)
+    remove_blank_indexes: set[int] = set()
+    current_section: str | None = None
+    for idx, paragraph in enumerate(paragraphs):
+        section = _section_kind(paragraph)
+        if section is not None:
+            current_section = section
+            continue
+        if current_section != "subs":
+            continue
+        if paragraph.text.strip():
+            continue
+        if idx == 0 or idx + 1 >= len(paragraphs):
+            continue
+        prev_paragraph = paragraphs[idx - 1]
+        next_paragraph = paragraphs[idx + 1]
+        if _is_subtitle_paragraph(prev_paragraph) and _is_subtitle_paragraph(next_paragraph):
+            remove_blank_indexes.add(idx)
+
+    for index in sorted(remove_blank_indexes, reverse=True):
+        _remove_paragraph(paragraphs[index])
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
 
