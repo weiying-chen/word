@@ -73,6 +73,7 @@ class RenderMetaTests(unittest.TestCase):
             texts,
             [
                 "重點標",
+                "",
                 "English Title",
                 "名字職銜",
                 "",
@@ -86,6 +87,7 @@ class RenderMetaTests(unittest.TestCase):
                 "{{醫師}}",
                 "",
                 "YT簡介",
+                "",
                 "English overview.",
             ],
         )
@@ -658,6 +660,41 @@ class RenderMetaTests(unittest.TestCase):
         self.assertEqual(labels["名字職銜"], [WD_COLOR_INDEX.YELLOW])
         self.assertEqual(labels["YT簡介"], [WD_COLOR_INDEX.YELLOW])
 
+    def test_generate_meta_inserts_blank_after_chinese_labels(self) -> None:
+        source_text = "\n".join(
+            [
+                "TITLE: English Title",
+                "OVERVIEW: English overview.",
+                "",
+                "BODY:",
+                "(  13   Alice )",
+                "/*SUPER:",
+                "病患│甲//",
+                "引言一//",
+                "*/",
+                "",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            payload_path = tmpdir_path / "news_input.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            payload_path.write_text(source_text, encoding="utf-8")
+
+            generate_meta(template_path, payload_path, output_path)
+            texts = [p.text for p in Document(str(output_path)).paragraphs]
+
+        idx_title = texts.index("重點標")
+        idx_people = texts.index("名字職銜")
+        idx_overview = texts.index("YT簡介")
+        self.assertEqual(texts[idx_title + 1], "")
+        self.assertEqual(texts[idx_people + 1], "")
+        self.assertEqual(texts[idx_overview + 1], "")
+
     def test_generate_meta_omits_english_name_from_label_when_repeated_below(self) -> None:
         source_text = "\n".join(
             [
@@ -840,6 +877,7 @@ class RenderMetaTests(unittest.TestCase):
             texts,
             [
                 "重點標",
+                "",
                 "Coastal Clinic Restores Access to Care",
                 "名字職銜",
                 "",
@@ -853,6 +891,7 @@ class RenderMetaTests(unittest.TestCase):
                 "{{醫師}}",
                 "",
                 "YT簡介",
+                "",
                 "A volunteer medical team brought screenings and referrals to local residents.",
             ],
         )
@@ -912,6 +951,7 @@ class RenderMetaTests(unittest.TestCase):
             texts,
             [
                 "重點標",
+                "",
                 "Test English Title",
                 "名字職銜",
                 "",
@@ -926,6 +966,7 @@ class RenderMetaTests(unittest.TestCase):
                 "Clinic Team",
                 "",
                 "YT簡介",
+                "",
                 "Test English overview.",
             ],
         )

@@ -54,6 +54,17 @@ BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
 SUBS_OUTPUT_SUFFIX = "_al"
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
+SECTION_LABELS = {
+    "建議YT標題：",
+    "建議YT標題:",
+    "建議標題：",
+    "建議標題:",
+    "簡介：",
+    "簡介:",
+    "選圖：",
+    "選圖:",
+    *SUBTITLE_LABELS,
+}
 
 
 def normalize_input_text(text: str) -> str:
@@ -605,7 +616,7 @@ def generate_subs(
                 else:
                     replace_placeholder(paragraph, placeholder, value)
                 break
-    ensure_blank_after_labels(doc, {"簡介：", "簡介:", *SUBTITLE_LABELS})
+    ensure_blank_after_labels(doc, SECTION_LABELS)
     subtitle_target = _find_subtitle_target_paragraph(doc)
     body_text = data.get("BODY", "").strip()
     if body_text and subtitle_target is not None:

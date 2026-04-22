@@ -13,6 +13,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.text.paragraph import Paragraph
 from docx.shared import Inches
 
+from docx_utils import ensure_blank_after_labels
 from generate_subs import fix_docx_namespaces, normalize_input_text
 
 
@@ -596,6 +597,7 @@ def generate_meta(
     replace_or_remove_paragraph_text(
         overview_placeholder, str(data.get("overview_en", ""))
     )
+    ensure_blank_after_labels(doc, HIGHLIGHT_LABELS)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))

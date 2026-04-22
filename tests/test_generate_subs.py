@@ -245,13 +245,14 @@ def test_generate_subs_copies_source_header_before_generated_sections(tmp_path: 
     generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
     texts = [p.text for p in Document(output_path).paragraphs]
 
-    assert texts[:7] == [
+    assert texts[:8] == [
         "Source title",
         "https://example.com/source",
         "",
         "Source summary.",
         "",
         "建議YT標題：",
+        "",
         "Suggested title",
     ]
 
@@ -288,6 +289,23 @@ def test_generate_subs_inserts_blank_after_labels(tmp_path: Path) -> None:
     label_idx = [p.text for p in doc.paragraphs].index("簡介：")
     assert not doc.paragraphs[label_idx + 1].text.strip()
     assert doc.paragraphs[label_idx + 2].text.strip() == "Line after label."
+
+
+def test_generate_subs_inserts_blank_after_other_chinese_labels(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["建議YT標題：", "{{YT_TITLE_SUGGESTED}}"])
+    _write_source_docx(source_docx, header_paragraphs=[])
+    input_path.write_text("YT_TITLE_SUGGESTED: Suggested title\n", encoding="utf-8")
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    texts = [p.text for p in Document(output_path).paragraphs]
+    label_idx = texts.index("建議YT標題：")
+    assert texts[label_idx + 1] == ""
+    assert texts[label_idx + 2] == "Suggested title"
 
 
 def test_generate_subs_inserts_blank_after_last_label(tmp_path: Path) -> None:
