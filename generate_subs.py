@@ -497,17 +497,59 @@ def _remap_hyperlink_run_styles(target_paragraph: Paragraph, paragraph_element) 
     except KeyError:
         return
 
+    def set_run_style(run_element) -> None:
+        run_properties = run_element.find(qn("w:rPr"))
+        if run_properties is None:
+            run_properties = OxmlElement("w:rPr")
+            run_element.insert(0, run_properties)
+        run_style = run_properties.find(qn("w:rStyle"))
+        if run_style is None:
+            run_style = OxmlElement("w:rStyle")
+            run_properties.insert(0, run_style)
+        run_style.set(qn("w:val"), hyperlink_style_id)
+
     for hyperlink in paragraph_element.iter(qn("w:hyperlink")):
         for run in hyperlink.iter(qn("w:r")):
-            run_properties = run.find(qn("w:rPr"))
-            if run_properties is None:
-                run_properties = OxmlElement("w:rPr")
-                run.insert(0, run_properties)
-            run_style = run_properties.find(qn("w:rStyle"))
-            if run_style is None:
-                run_style = OxmlElement("w:rStyle")
-                run_properties.insert(0, run_style)
-            run_style.set(qn("w:val"), hyperlink_style_id)
+            set_run_style(run)
+
+    # Also handle field-code hyperlinks in the form:
+    # fldChar(begin) + instrText(HYPERLINK ...) + fldChar(separate) + display runs + fldChar(end)
+    in_field = False
+    in_result = False
+    hyperlink_field = False
+    instruction_text = ""
+    for child in paragraph_element:
+        if child.tag != qn("w:r"):
+            continue
+
+        fld_char = child.find(qn("w:fldChar"))
+        if fld_char is not None:
+            fld_char_type = fld_char.get(qn("w:fldCharType"))
+            if fld_char_type == "begin":
+                in_field = True
+                in_result = False
+                hyperlink_field = False
+                instruction_text = ""
+            elif fld_char_type == "separate" and in_field:
+                in_result = True
+                hyperlink_field = "HYPERLINK" in instruction_text.upper()
+            elif fld_char_type == "end":
+                in_field = False
+                in_result = False
+                hyperlink_field = False
+                instruction_text = ""
+            continue
+
+        if not in_field:
+            continue
+
+        if in_result:
+            if hyperlink_field:
+                set_run_style(child)
+            continue
+
+        for instr_text in child.findall(qn("w:instrText")):
+            instruction_text += instr_text.text or ""
 
 
 def _clone_paragraph_before(source_paragraph: Paragraph, target_paragraph: Paragraph) -> None:
