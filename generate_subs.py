@@ -552,8 +552,66 @@ def _remap_hyperlink_run_styles(target_paragraph: Paragraph, paragraph_element) 
             instruction_text += instr_text.text or ""
 
 
+def _style_ids_with_bold(source_part) -> set[str]:
+    bold_style_ids: set[str] = set()
+    styles_element = source_part.document.styles.element
+
+    for style in styles_element.iter(qn("w:style")):
+        style_id = style.get(qn("w:styleId"))
+        if not style_id:
+            continue
+        run_properties = style.find(qn("w:rPr"))
+        if run_properties is None:
+            continue
+        if run_properties.find(qn("w:b")) is not None or run_properties.find(
+            qn("w:bCs")
+        ) is not None:
+            bold_style_ids.add(style_id)
+
+    return bold_style_ids
+
+
+def _preserve_bold_runs_from_source_styles(source_paragraph: Paragraph, paragraph_element) -> None:
+    bold_style_ids = _style_ids_with_bold(source_paragraph.part)
+    if not bold_style_ids:
+        return
+
+    source_runs = list(source_paragraph._p.iter(qn("w:r")))
+    cloned_runs = list(paragraph_element.iter(qn("w:r")))
+
+    for source_run, cloned_run in zip(source_runs, cloned_runs):
+        source_run_properties = source_run.find(qn("w:rPr"))
+        if source_run_properties is None:
+            continue
+
+        has_direct_bold = (
+            source_run_properties.find(qn("w:b")) is not None
+            or source_run_properties.find(qn("w:bCs")) is not None
+        )
+        if has_direct_bold:
+            continue
+
+        run_style = source_run_properties.find(qn("w:rStyle"))
+        if run_style is None:
+            continue
+        style_id = run_style.get(qn("w:val"))
+        if style_id not in bold_style_ids:
+            continue
+
+        cloned_run_properties = cloned_run.find(qn("w:rPr"))
+        if cloned_run_properties is None:
+            cloned_run_properties = OxmlElement("w:rPr")
+            cloned_run.insert(0, cloned_run_properties)
+
+        if cloned_run_properties.find(qn("w:b")) is None:
+            cloned_run_properties.append(OxmlElement("w:b"))
+        if cloned_run_properties.find(qn("w:bCs")) is None:
+            cloned_run_properties.append(OxmlElement("w:bCs"))
+
+
 def _clone_paragraph_before(source_paragraph: Paragraph, target_paragraph: Paragraph) -> None:
     cloned = deepcopy(source_paragraph._p)
+    _preserve_bold_runs_from_source_styles(source_paragraph, cloned)
     _remap_relationship_ids(source_paragraph.part, target_paragraph.part, cloned)
     _remap_hyperlink_run_styles(target_paragraph, cloned)
     target_paragraph._p.addprevious(cloned)
@@ -561,6 +619,7 @@ def _clone_paragraph_before(source_paragraph: Paragraph, target_paragraph: Parag
 
 def _clone_paragraph_after(source_paragraph: Paragraph, target_paragraph: Paragraph) -> Paragraph:
     cloned = deepcopy(source_paragraph._p)
+    _preserve_bold_runs_from_source_styles(source_paragraph, cloned)
     _remap_relationship_ids(source_paragraph.part, target_paragraph.part, cloned)
     _remap_hyperlink_run_styles(target_paragraph, cloned)
     target_paragraph._p.addnext(cloned)

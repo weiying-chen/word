@@ -219,6 +219,79 @@ def _rewrite_hyperlink_as_field_code(path: Path) -> None:
     tmp_path.replace(path)
 
 
+def _rewrite_summary_as_style_bold_collision(path: Path, summary_text: str) -> None:
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    w_ns = ns["w"]
+
+    with zipfile.ZipFile(path, "r") as zin:
+        styles_xml = etree.fromstring(zin.read("word/styles.xml"))
+        doc_xml = etree.fromstring(zin.read("word/document.xml"))
+
+        style_nodes = styles_xml.xpath(".//w:style[@w:styleId='a3']", namespaces=ns)
+        if style_nodes:
+            style = style_nodes[0]
+            for child in list(style):
+                style.remove(child)
+        else:
+            style = etree.SubElement(
+                styles_xml,
+                "{%s}style" % w_ns,
+                attrib={
+                    "{%s}type" % w_ns: "character",
+                    "{%s}styleId" % w_ns: "a3",
+                },
+            )
+        etree.SubElement(style, "{%s}name" % w_ns, attrib={"{%s}val" % w_ns: "Strong"})
+        etree.SubElement(style, "{%s}basedOn" % w_ns, attrib={"{%s}val" % w_ns: "a0"})
+        etree.SubElement(style, "{%s}uiPriority" % w_ns, attrib={"{%s}val" % w_ns: "22"})
+        etree.SubElement(style, "{%s}qFormat" % w_ns)
+        r_pr = etree.SubElement(style, "{%s}rPr" % w_ns)
+        etree.SubElement(r_pr, "{%s}b" % w_ns)
+        etree.SubElement(r_pr, "{%s}bCs" % w_ns)
+
+        target_paragraph = None
+        for paragraph in doc_xml.findall(".//w:p", ns):
+            text = "".join(t.text or "" for t in paragraph.findall(".//w:t", ns))
+            if text == summary_text:
+                target_paragraph = paragraph
+                break
+        if target_paragraph is None:
+            raise AssertionError("Expected summary paragraph to rewrite.")
+
+        for run in target_paragraph.findall("w:r", ns):
+            run_props = run.find("w:rPr", ns)
+            if run_props is None:
+                run_props = etree.SubElement(run, "{%s}rPr" % w_ns)
+            for child in list(run_props):
+                if child.tag in {"{%s}b" % w_ns, "{%s}bCs" % w_ns}:
+                    run_props.remove(child)
+            run_style = run_props.find("w:rStyle", ns)
+            if run_style is None:
+                run_style = etree.SubElement(run_props, "{%s}rStyle" % w_ns)
+            run_style.set("{%s}val" % w_ns, "a3")
+
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        with zipfile.ZipFile(tmp_path, "w") as zout:
+            for info in zin.infolist():
+                data = zin.read(info.filename)
+                if info.filename == "word/styles.xml":
+                    data = etree.tostring(
+                        styles_xml,
+                        encoding="UTF-8",
+                        standalone=True,
+                        xml_declaration=True,
+                    )
+                elif info.filename == "word/document.xml":
+                    data = etree.tostring(
+                        doc_xml,
+                        encoding="UTF-8",
+                        standalone=True,
+                        xml_declaration=True,
+                    )
+                zout.writestr(info, data)
+    tmp_path.replace(path)
+
+
 def _assert_yt_title_replaced_for_encoded_input(
     tmp_path: Path,
     encoded_text: bytes,
@@ -646,6 +719,36 @@ def test_generate_subs_remaps_field_code_hyperlink_style_id_to_template_style(
         for node in field_paragraph.findall(".//w:rPr/w:rStyle", ns)
     ]
     assert hyperlink_style_id in run_styles
+
+
+def test_generate_subs_preserves_bold_when_source_style_id_collides_with_template(
+    tmp_path: Path,
+) -> None:
+    template_path = Path("templates/subs_template.docx")
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+    summary_text = "Original summary."
+
+    _write_source_docx(source_docx)
+    _rewrite_summary_as_style_bold_collision(source_docx, summary_text)
+    input_path.write_text("INTRO: Intro\n", encoding="utf-8")
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc_xml = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    summary_paragraph = None
+    for paragraph in doc_xml.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in paragraph.findall(".//w:t", ns))
+        if text == summary_text:
+            summary_paragraph = paragraph
+            break
+
+    assert summary_paragraph is not None
+    assert summary_paragraph.findall(".//w:rPr/w:b", ns)
 
 def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -> None:
     template_path = Path("templates/subs_template.docx")
