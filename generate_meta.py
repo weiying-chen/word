@@ -44,14 +44,6 @@ ALLOWED_KEYS = {
 }
 
 
-def _has_section_key(path: Path, key: str) -> bool:
-    section_re = re.compile(rf"^\s*{re.escape(key)}\s*:", re.IGNORECASE)
-    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        if section_re.match(raw):
-            return True
-    return False
-
-
 def _contains_cjk(text: str) -> bool:
     return bool(CJK_RE.search(text))
 
@@ -332,11 +324,9 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
         raise ValueError(f"Unsupported input format: {path}")
 
     data = _parse_news_payload(path, allow_body_fallback=True)
-    meta_has_people_section = False
     if meta_path is not None:
         if meta_path.suffix.lower() != ".txt":
             raise ValueError(f"Unsupported meta input format: {meta_path}")
-        meta_has_people_section = _has_section_key(meta_path, PEOPLE_KEY)
         meta_data = _parse_news_payload(meta_path, allow_body_fallback=False)
         data = {**data, **{k: v for k, v in meta_data.items() if k != "BODY" and v}}
     body_lines = data.get("BODY", "").splitlines()
@@ -411,8 +401,6 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
     meta_people_text = data.get(PEOPLE_KEY, "")
     overrides = _parse_meta_people_blocks(meta_people_text)
     people = _merge_meta_people_overrides(people, overrides)
-    if meta_path is not None and not meta_has_people_section:
-        people = []
     return {
         "title_zh": data.get("TITLE_TEXT", ""),
         "summary_zh": summary[0] if summary else "",
