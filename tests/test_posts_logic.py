@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 from docx import Document
 from docx.oxml import OxmlElement
@@ -179,11 +180,51 @@ def test_bodhi_date_prefix(tmp_path: Path) -> None:
     entries = extract_post_entries(schedule_path)
     assert len(entries) == 1
     entry = entries[0]
-    assert entry["video_title"] == "人間菩提 (1/20首播 善念匯聚成力量)"
+    assert entry["video_title"] == "善念匯聚成力量"
     assert entry["ref_url"] == entry["video_url"]
-    assert entry["ref_title"] == ""
+    assert entry["ref_title"] == "善念匯聚成力量"
     expected_prefix = f"{date.today().year % 100:02d}0120_"
     assert entry["filename_prefix_override"] == expected_prefix
+
+
+def test_bodhi_entry_includes_english_title_from_page(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "bodhi_english_title.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "菩提1則",
+            "1. alex",
+            "1/20首播 廣行環保護人間",
+            "https://www.daai.tv/master/life-wisdom/P90230231?more=true",
+            "--------------------------------",
+        ],
+    )
+
+    with patch(
+        "generate_posts.fetch_bodhi_english_subtitle",
+        return_value="32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore",
+    ):
+        entries = extract_post_entries(schedule_path)
+
+    assert len(entries) == 1
+    entry = entries[0]
+    assert (
+        entry["header_title"]
+        == "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+    )
+    assert (
+        entry["video_title"]
+        == "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+    )
+    assert (
+        entry["ref_title"]
+        == "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+    )
+    assert (
+        entry["hashtags_en"]
+        == "#LifeWisdom #32YearsOfDedicationTzuChisRecyclingEffortsInSingapore #VenerableMasterChengYen #TzuChi"
+    )
+    assert entry["hashtags_zh"] == "#人間菩提 #廣行環保護人間 #證嚴上人 #慈濟"
 
 
 def test_bodhi_section_does_not_leak(tmp_path: Path) -> None:

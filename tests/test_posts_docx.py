@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 from docx import Document
 from docx.shared import Inches
@@ -280,3 +281,97 @@ def test_generated_docx_sets_source_indent_for_labels(tmp_path: Path) -> None:
     assert label_para.paragraph_format.first_line_indent == 0
     assert url_para.paragraph_format.left_indent == Inches(0.5)
     assert url_para.paragraph_format.first_line_indent == 0
+
+
+def test_generated_bodhi_docx_puts_english_title_under_chinese_title(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "bodhi.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "菩提1則",
+            "1. alex",
+            "1/20首播 廣行環保護人間",
+            "https://www.daai.tv/master/life-wisdom/P90230231?more=true",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{HEADER_TITLE}}",
+            "{{HEADER_URL}}",
+            "參考資料：",
+            "{{REF_URL}}",
+            "{{REF_TITLE}}",
+            "要用的影片：",
+            "{{VIDEO_URL}}",
+            "{{VIDEO_TITLE}}",
+            "#hashtagline",
+        ],
+    )
+    output_dir.mkdir()
+
+    en_title = "32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+    with patch("generate_posts.fetch_bodhi_english_subtitle", return_value=en_title):
+        output_paths = generate_docs(
+            schedule_path=schedule_path,
+            template_path=template_path,
+            output_dir=output_dir,
+            filename_prefix="",
+            filename_suffix="",
+        )
+
+    doc = Document(str(output_paths[0]))
+    texts = [p.text for p in doc.paragraphs if p.text.strip()]
+    combined = "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+    assert texts.count(combined) >= 2
+    assert "#hashtagline" in texts
+
+
+def test_generated_bodhi_docx_injects_english_under_fixed_title_lines_not_hashtags(
+    tmp_path: Path,
+) -> None:
+    schedule_path = tmp_path / "bodhi_fixed_title.docx"
+    template_path = tmp_path / "template_fixed.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "菩提1則",
+            "1. alex",
+            "1/20首播 廣行環保護人間",
+            "https://www.daai.tv/master/life-wisdom/P90230231?more=true",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{HEADER_TITLE}}",
+            "{{REF_TITLE}}",
+            "◎標題：廣行環保護人間",
+            "廣行環保護人間",
+            "#廣行環保護人間",
+        ],
+    )
+    output_dir.mkdir()
+
+    en_title = "32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+    with patch("generate_posts.fetch_bodhi_english_subtitle", return_value=en_title):
+        output_paths = generate_docs(
+            schedule_path=schedule_path,
+            template_path=template_path,
+            output_dir=output_dir,
+            filename_prefix="",
+            filename_suffix="",
+        )
+
+    doc = Document(str(output_paths[0]))
+    texts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    assert "◎標題：廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore" in texts
+    assert "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore" in texts
+    assert "#廣行環保護人間" in texts

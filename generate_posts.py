@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import html
 import re
 from datetime import date
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 from docx import Document
 from docx.oxml.ns import qn
@@ -44,6 +46,7 @@ ALEX_VIDEO_LABELS = {"要用的影片:", "要用的影片："}
 PAIRING_LABELS = {"搭配", "搭配:", "搭配："}
 PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
 DASH_SPLIT_RE = re.compile(r"\s*-\s*")
+TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _extract_person_name(line: str) -> str | None:
@@ -225,6 +228,26 @@ def _build_hashtags(program: str, title: str, pascal_case: bool) -> str:
     return " ".join(f"#{tag}" for tag in tags)
 
 
+def _normalize_bodhi_english_title_tag(title: str) -> str:
+    # Keep possessive "s" while stripping apostrophe punctuation.
+    return _normalize_hashtag(title.replace("’", "").replace("'", ""), pascal_case=True)
+
+
+def _build_bodhi_hashtags(cleaned_title: str, english_title: str) -> tuple[str, str]:
+    english_title_tag = _normalize_bodhi_english_title_tag(english_title) if english_title else ""
+    hashtags_en_parts = ["#LifeWisdom"]
+    if english_title_tag:
+        hashtags_en_parts.append(f"#{english_title_tag}")
+    hashtags_en_parts.extend(["#VenerableMasterChengYen", "#TzuChi"])
+
+    chinese_title_tag = _normalize_hashtag(cleaned_title, pascal_case=False)
+    hashtags_zh_parts = ["#人間菩提"]
+    if chinese_title_tag:
+        hashtags_zh_parts.append(f"#{chinese_title_tag}")
+    hashtags_zh_parts.extend(["#證嚴上人", "#慈濟"])
+    return " ".join(hashtags_en_parts), " ".join(hashtags_zh_parts)
+
+
 def _extract_ref_from_label(
     lines: list[str],
     url_targets: list[str | None],
@@ -318,6 +341,70 @@ def _build_standard_entry(
     }
 
 
+def _build_bodhi_entry(
+    *,
+    title_line: str,
+    url_line: str,
+    url_target: str,
+    default_year: int,
+) -> dict[str, str]:
+    raw_title = title_line.strip()
+    cleaned_title, date_prefix = _extract_bodhi_date_prefix(raw_title)
+    english_title = fetch_bodhi_english_subtitle(url_line, cleaned_title)
+    display_title = cleaned_title
+    if english_title:
+        display_title = f"{display_title}\n{english_title}"
+    hashtags_en, hashtags_zh = _build_bodhi_hashtags(cleaned_title, english_title)
+    entry = {
+        "filename_title": "人間菩提",
+        "header_title": _clean_title_for_display(display_title),
+        "header_url": url_line,
+        "header_url_target": url_target,
+        "video_url": url_line,
+        "video_url_target": url_target,
+        "video_title": _clean_title_for_display(display_title),
+        "ref_url": url_line,
+        "ref_url_target": url_target,
+        "ref_title": _clean_title_for_display(display_title),
+        "hashtags_en": hashtags_en,
+        "hashtags_zh": hashtags_zh,
+        "reference_only": "true",
+    }
+    if date_prefix:
+        parsed_prefix = _parse_date_prefix(date_prefix, default_year=default_year)
+        if parsed_prefix:
+            entry["filename_prefix_override"] = f"{parsed_prefix}_"
+    return entry
+
+
+def _build_standard_schedule_entry(
+    *,
+    line: str,
+    title_line: str,
+    url_line: str,
+    url_target: str,
+    lines: list[str],
+    url_targets: list[str | None],
+    start_idx: int,
+    default_year: int,
+) -> dict[str, str]:
+    ref_url, ref_title, ref_url_target = _extract_schedule_reference(
+        lines, url_targets, start_idx
+    )
+    entry = _build_standard_entry(
+        video_title=title_line,
+        video_url=url_line,
+        video_url_target=url_target,
+        ref_url=ref_url,
+        ref_url_target=ref_url_target,
+        ref_title=ref_title,
+    )
+    assignment_prefix = _extract_assignment_date_prefix(line, default_year=default_year)
+    if assignment_prefix:
+        entry["filename_prefix_override"] = f"{assignment_prefix}_"
+    return entry
+
+
 def _parse_date_prefix(text: str, default_year: int | None = None) -> str | None:
     stripped = text.strip()
     match = YYMD_DATE_RE.match(stripped)
@@ -353,6 +440,49 @@ def _extract_bodhi_date_prefix(title_line: str) -> tuple[str, str | None]:
         rest = rest[len("首播") :].lstrip()
     cleaned_title = rest.strip() or stripped
     return cleaned_title, f"{mm:02d}/{dd:02d}"
+
+
+def _looks_like_english_title(text: str) -> bool:
+    candidate = re.sub(r"\s+", " ", text).strip()
+    if len(candidate) < 8:
+        return False
+    if _is_cjk(candidate):
+        return False
+    if not re.search(r"[A-Za-z]", candidate):
+        return False
+    if candidate.startswith("http"):
+        return False
+    return True
+
+
+def fetch_bodhi_english_subtitle(url: str, chinese_title: str) -> str:
+    if not url or not chinese_title:
+        return ""
+    try:
+        req = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7",
+            },
+        )
+        with urlopen(req, timeout=8) as resp:
+            raw = resp.read()
+    except Exception:
+        return ""
+
+    page = raw.decode("utf-8", errors="ignore")
+    if not page:
+        return ""
+
+    for match in re.finditer(re.escape(chinese_title), page):
+        snippet = page[match.end() : match.end() + 1500]
+        text = TAG_RE.sub("\n", snippet)
+        text = html.unescape(text)
+        for line in (segment.strip() for segment in text.splitlines()):
+            if _looks_like_english_title(line):
+                return line
+    return ""
 
 
 def _detect_schedule_format(lines: list[str]) -> str:
@@ -446,6 +576,7 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
     if schedule_format == "blocks":
         return extract_post_entries_from_blocks(schedule_path)
 
+    default_year = date.today().year
     entries: list[dict[str, str]] = []
     in_program_section = False
     in_bodhi_section = False
@@ -478,50 +609,24 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
             url_target = None
         if person == "alex":
             if in_bodhi_section:
-                raw_title = title_line.strip()
-                cleaned_title, date_prefix = _extract_bodhi_date_prefix(raw_title)
-                display_title = f"人間菩提 ({raw_title})"
-                hashtags_en, hashtags_zh = build_hashtags_from_title_line(display_title)
-                filename_title = "人間菩提"
-                entry = {
-                    "filename_title": filename_title,
-                    "header_title": _clean_title_for_display(display_title),
-                    "header_url": url_line,
-                    "header_url_target": url_target or "",
-                    "video_url": url_line,
-                    "video_url_target": url_target or "",
-                    "video_title": _clean_title_for_display(display_title),
-                    "ref_url": url_line,
-                    "ref_url_target": url_target or "",
-                    "ref_title": "",
-                    "hashtags_en": hashtags_en,
-                    "hashtags_zh": hashtags_zh,
-                    "reference_only": "true",
-                }
-                if date_prefix:
-                    parsed_prefix = _parse_date_prefix(
-                        date_prefix, default_year=date.today().year
-                    )
-                    if parsed_prefix:
-                        entry["filename_prefix_override"] = f"{parsed_prefix}_"
+                entry = _build_bodhi_entry(
+                    title_line=title_line,
+                    url_line=url_line,
+                    url_target=url_target or "",
+                    default_year=default_year,
+                )
                 entries.append(entry)
                 continue
-            ref_url, ref_title, ref_url_target = _extract_schedule_reference(
-                lines, url_targets, idx + 1
+            entry = _build_standard_schedule_entry(
+                line=line,
+                title_line=title_line,
+                url_line=url_line,
+                url_target=url_target or "",
+                lines=lines,
+                url_targets=url_targets,
+                start_idx=idx + 1,
+                default_year=default_year,
             )
-            entry = _build_standard_entry(
-                video_title=title_line,
-                video_url=url_line,
-                video_url_target=url_target or "",
-                ref_url=ref_url,
-                ref_url_target=ref_url_target,
-                ref_title=ref_title,
-            )
-            assignment_prefix = _extract_assignment_date_prefix(
-                line, default_year=date.today().year
-            )
-            if assignment_prefix:
-                entry["filename_prefix_override"] = f"{assignment_prefix}_"
             entries.append(entry)
 
     return entries
@@ -564,7 +669,7 @@ def remove_paragraph(paragraph) -> None:
     element.getparent().remove(element)
 
 
-def strip_reference_block(doc: Document, ref_url: str) -> None:
+def strip_reference_block(doc: Document, ref_url: str, *, keep_ref_title: bool = False) -> None:
     ref_label = "參考資料："
     video_label = "要用的影片："
     ref_url_idx = None
@@ -587,9 +692,14 @@ def strip_reference_block(doc: Document, ref_url: str) -> None:
         end_idx = len(doc.paragraphs)
 
     remove_indices = []
+    preserved_ref_title = False
     for idx in range(start_idx, end_idx):
         if idx == ref_url_idx:
             continue
+        if keep_ref_title and ref_url_idx is not None and idx > ref_url_idx and not preserved_ref_title:
+            if doc.paragraphs[idx].text.strip():
+                preserved_ref_title = True
+                continue
         remove_indices.append(idx)
     for idx in reversed(remove_indices):
         remove_paragraph(doc.paragraphs[idx])
@@ -633,6 +743,25 @@ def normalize_empty_paragraphs(doc: Document) -> None:
             remove_paragraph(paragraph)
         else:
             prev_empty = True
+
+
+def inject_bodhi_english_under_chinese_title(
+    doc: Document, chinese_title: str, english_title: str
+) -> None:
+    if not chinese_title or not english_title:
+        return
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        if not text:
+            continue
+        if text.startswith("#"):
+            continue
+        if chinese_title not in text:
+            continue
+        if english_title in text:
+            continue
+        paragraph.text = f"{paragraph.text}\n{english_title}"
+
 
 def replace_placeholders(
     doc: Document,
@@ -756,7 +885,15 @@ def generate_docs(
             hyperlink_targets=hyperlink_targets,
         )
         if entry.get("reference_only"):
-            strip_reference_block(doc, entry.get("ref_url", ""))
+            title_lines = entry.get("header_title", "").splitlines()
+            if len(title_lines) >= 2:
+                chinese_title = title_lines[0].strip()
+                english_title = title_lines[1].strip()
+                inject_bodhi_english_under_chinese_title(
+                    doc, chinese_title, english_title
+                )
+        if entry.get("reference_only"):
+            strip_reference_block(doc, entry.get("ref_url", ""), keep_ref_title=True)
             strip_bodhi_video_labels(doc)
             strip_bodhi_title_block(doc)
             normalize_empty_paragraphs(doc)
