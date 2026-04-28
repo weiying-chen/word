@@ -692,28 +692,29 @@ def generate_subs(
                     thumbnail_path = Path(value)
                     if not thumbnail_path.is_absolute():
                         thumbnail_path = input_base / thumbnail_path
-                    if thumbnail_path.exists():
-                        clear_paragraph(paragraph)
-                        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                        paragraph.paragraph_format.left_indent = 0
-                        paragraph.paragraph_format.right_indent = 0
-                        paragraph.paragraph_format.first_line_indent = 0
-                        run = paragraph.add_run()
-                        run.add_picture(str(thumbnail_path), width=metrics["usable_width"])
-                        thumbnail_credit = data.get("THUMBNAIL_CREDIT", "").strip()
-                        if thumbnail_credit:
-                            credit_paragraph = insert_paragraph_after(paragraph, "")
-                            credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                            credit_paragraph.paragraph_format.left_indent = 0
-                            credit_paragraph.paragraph_format.right_indent = 0
-                            credit_paragraph.paragraph_format.first_line_indent = 0
-                            _add_text_runs(
-                                credit_paragraph,
-                                thumbnail_credit,
-                                run_style=annotation_style,
-                            )
-                    else:
-                        replace_placeholder(paragraph, placeholder, value)
+                    if not thumbnail_path.is_file():
+                        raise FileNotFoundError(
+                            f"THUMBNAIL file not found: {thumbnail_path}"
+                        )
+                    clear_paragraph(paragraph)
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    paragraph.paragraph_format.left_indent = 0
+                    paragraph.paragraph_format.right_indent = 0
+                    paragraph.paragraph_format.first_line_indent = 0
+                    run = paragraph.add_run()
+                    run.add_picture(str(thumbnail_path), width=metrics["usable_width"])
+                    thumbnail_credit = data.get("THUMBNAIL_CREDIT", "").strip()
+                    if thumbnail_credit:
+                        credit_paragraph = insert_paragraph_after(paragraph, "")
+                        credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        credit_paragraph.paragraph_format.left_indent = 0
+                        credit_paragraph.paragraph_format.right_indent = 0
+                        credit_paragraph.paragraph_format.first_line_indent = 0
+                        _add_text_runs(
+                            credit_paragraph,
+                            thumbnail_credit,
+                            run_style=annotation_style,
+                        )
                 else:
                     replace_placeholder(paragraph, placeholder, value)
                 break
@@ -758,12 +759,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    generate_subs(
-        Path(args.template),
-        Path(args.source_docx),
-        Path(args.input),
-        with_subs_output_suffix(Path(args.output)),
-    )
+    try:
+        generate_subs(
+            Path(args.template),
+            Path(args.source_docx),
+            Path(args.input),
+            with_subs_output_suffix(Path(args.output)),
+        )
+    except FileNotFoundError as exc:
+        raise SystemExit(f"[error] {exc}")
 
 
 if __name__ == "__main__":

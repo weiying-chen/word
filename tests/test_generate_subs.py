@@ -789,25 +789,8 @@ def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -
         encoding="utf-8",
     )
 
-    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
-    doc = Document(output_path)
-    texts = [p.text for p in doc.paragraphs]
-
-    # Key structure order should match current output behavior.
-    idx_summary_a = texts.index("Summary line A.")
-    idx_summary_b = texts.index("Summary line B.")
-    idx_yt_label = texts.index("建議YT標題：")
-    idx_title_label = texts.index("建議標題：")
-    idx_intro_label = texts.index("簡介：")
-    idx_thumb_label = texts.index("選圖：")
-    idx_thumb_value = texts.index("missing.png")
-    idx_subtitle_label = texts.index("字幕：")
-    idx_body_src = texts.index("00:00:01:00\t00:00:02:00\t測試")
-
-    assert idx_summary_a < idx_summary_b < idx_yt_label
-    assert idx_yt_label < idx_title_label < idx_intro_label < idx_thumb_label < idx_subtitle_label
-    assert idx_subtitle_label < idx_body_src
-    assert idx_subtitle_label == idx_thumb_value + 2
+    with pytest.raises(FileNotFoundError, match=r"THUMBNAIL file not found: .*missing\.png"):
+        generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
 
 
 def test_generate_subs_treats_bom_prefixed_first_subtitle_as_body(tmp_path: Path) -> None:
