@@ -556,6 +556,7 @@ class RenderMetaTests(unittest.TestCase):
             texts,
             [
                 "重點標",
+                "",
                 "English Title",
                 "名字職銜",
                 "",
@@ -565,6 +566,7 @@ class RenderMetaTests(unittest.TestCase):
                 "{{慈濟志工}}",
                 "",
                 "YT簡介",
+                "",
                 "English overview.",
             ],
         )
