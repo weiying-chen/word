@@ -15,6 +15,7 @@ from docx.oxml.ns import qn
 from docx_utils import (
     add_highlighted_run,
     add_hyperlink,
+    apply_font_size_to_runs,
     apply_highlight_to_runs,
     clear_paragraph,
     ensure_blank_after_labels,
@@ -646,6 +647,7 @@ def replace_in_runs(paragraph, placeholder: str, value: str) -> bool:
 
 
 def apply_source_style(paragraph) -> None:
+    apply_font_size_to_runs(paragraph, font_size_pt=10)
     apply_highlight_to_runs(paragraph)
 
 
@@ -807,7 +809,7 @@ def replace_placeholders(
                 continue
             if placeholder in highlight_keys and value:
                 clear_paragraph(paragraph)
-                add_highlighted_run(paragraph, value)
+                add_highlighted_run(paragraph, value, font_size_pt=10)
                 paragraph_text = paragraph.text
                 continue
             if not replace_in_runs(paragraph, placeholder, value):
