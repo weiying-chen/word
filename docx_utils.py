@@ -53,7 +53,7 @@ def add_highlighted_run(
     text: str,
     *,
     font_size_pt: int | None = 10,
-    highlight_color=WD_COLOR_INDEX.TURQUOISE,
+    highlight_color,
 ):
     run = paragraph.add_run(text)
     if font_size_pt is not None:
@@ -70,7 +70,7 @@ def apply_font_size_to_runs(paragraph, *, font_size_pt: int) -> None:
 def apply_highlight_to_runs(
     paragraph,
     *,
-    highlight_color=WD_COLOR_INDEX.TURQUOISE,
+    highlight_color,
 ) -> None:
     for run in paragraph.runs:
         run.font.highlight_color = highlight_color

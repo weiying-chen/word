@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from docx import Document
+from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml.ns import qn
 
 from docx_utils import (
@@ -648,7 +649,7 @@ def replace_in_runs(paragraph, placeholder: str, value: str) -> bool:
 
 def apply_source_style(paragraph) -> None:
     apply_font_size_to_runs(paragraph, font_size_pt=10)
-    apply_highlight_to_runs(paragraph)
+    apply_highlight_to_runs(paragraph, highlight_color=WD_COLOR_INDEX.TURQUOISE)
 
 
 def sync_empty_paragraph_indents(doc: Document) -> None:
@@ -809,7 +810,12 @@ def replace_placeholders(
                 continue
             if placeholder in highlight_keys and value:
                 clear_paragraph(paragraph)
-                add_highlighted_run(paragraph, value, font_size_pt=10)
+                add_highlighted_run(
+                    paragraph,
+                    value,
+                    font_size_pt=10,
+                    highlight_color=WD_COLOR_INDEX.TURQUOISE,
+                )
                 paragraph_text = paragraph.text
                 continue
             if not replace_in_runs(paragraph, placeholder, value):
