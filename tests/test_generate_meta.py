@@ -1022,6 +1022,47 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_generate_meta_omits_role_placeholder_when_only_name_en_is_provided(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(6． Patient)",
+                        "/*SUPER:",
+                        "患者│個案A//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "PEOPLE:",
+                        "患者",
+                        "Patient",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            generate_meta(template_path, body_path, output_path, meta_path=meta_path)
+            texts = [p.text for p in Document(str(output_path)).paragraphs]
+
+        assert "Patient" in texts
+        assert "{{患者}}" not in texts
+
 
 def test_default_output_path_uses_source_stem(tmp_path: Path) -> None:
     source = tmp_path / "sample_story_final.docx"

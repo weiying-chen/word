@@ -227,6 +227,15 @@ def _merge_meta_people_overrides(
             value = match.get(key, "").strip()
             if value:
                 person[key] = value
+        # Allow label+name-only overrides (e.g. "患者" + "Patient") to omit
+        # auto-generated role placeholders.
+        if (
+            not match.get("role_zh", "").strip()
+            and match.get("name_en", "").strip()
+            and not match.get("role_en", "").strip()
+            and not match.get("org_en", "").strip()
+        ):
+            person["omit_role_placeholder"] = "true"
 
     return merged
 
@@ -524,11 +533,16 @@ def build_people_lines(people: list[dict]) -> list[str]:
         elif name_zh:
             lines.append(f"{{{{{name_zh}}}}}")
         role_en = person.get("role_en", "").strip()
-        if not role_en:
+        org_en = person.get("org_en", "").strip()
+        omit_role_placeholder = (
+            str(person.get("omit_role_placeholder", "")).strip().lower() == "true"
+        )
+        if role_en:
+            lines.append(role_en)
+        elif not omit_role_placeholder:
             placeholder_key = role_zh or "ROLE_EN"
             role_en = f"{{{{{placeholder_key}}}}}"
-        lines.append(role_en)
-        org_en = person.get("org_en", "").strip()
+            lines.append(role_en)
         if org_en:
             lines.append(org_en)
         if idx < len(people) - 1:
