@@ -10,7 +10,6 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from docx import Document
-from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml.ns import qn
 
 from docx_utils import (
@@ -23,6 +22,7 @@ from docx_utils import (
     get_default_tab_stop_inches,
     set_source_indent,
 )
+from style_tokens import REFERENCE_HIGHLIGHT_DEFAULT, REFERENCE_TEXT_SIZE_PT
 
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
@@ -648,8 +648,8 @@ def replace_in_runs(paragraph, placeholder: str, value: str) -> bool:
 
 
 def apply_source_style(paragraph) -> None:
-    apply_font_size_to_runs(paragraph, font_size_pt=10)
-    apply_highlight_to_runs(paragraph, highlight_color=WD_COLOR_INDEX.TURQUOISE)
+    apply_font_size_to_runs(paragraph, font_size_pt=REFERENCE_TEXT_SIZE_PT)
+    apply_highlight_to_runs(paragraph, highlight_color=REFERENCE_HIGHLIGHT_DEFAULT)
 
 
 def sync_empty_paragraph_indents(doc: Document) -> None:
@@ -813,8 +813,8 @@ def replace_placeholders(
                 add_highlighted_run(
                     paragraph,
                     value,
-                    font_size_pt=10,
-                    highlight_color=WD_COLOR_INDEX.TURQUOISE,
+                    font_size_pt=REFERENCE_TEXT_SIZE_PT,
+                    highlight_color=REFERENCE_HIGHLIGHT_DEFAULT,
                 )
                 paragraph_text = paragraph.text
                 continue

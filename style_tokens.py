@@ -1,0 +1,14 @@
+from __future__ import annotations
+
+from docx.enum.text import WD_COLOR_INDEX
+from docx.shared import RGBColor
+
+
+# Shared semantic tokens for reference/source-like content.
+REFERENCE_TEXT_SIZE_PT = 10
+REFERENCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
+REFERENCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
+REFERENCE_LINK_RGB = RGBColor(0x05, 0x63, 0xC1)
+
+# Shared semantic tokens for section labels.
+SECTION_LABEL_BLUE_RGB = RGBColor(0x00, 0x70, 0xC0)

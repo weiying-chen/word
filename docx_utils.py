@@ -7,6 +7,8 @@ from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.shared import Inches, Pt
 from docx.text.paragraph import Paragraph
 
+from style_tokens import REFERENCE_LINK_RGB
+
 
 def get_default_tab_stop_inches(doc) -> float:
     settings = doc.part.settings.element
@@ -104,7 +106,7 @@ def add_hyperlink(
     r_style.set(qn("w:val"), "Hyperlink")
     r_pr.append(r_style)
     r_color = OxmlElement("w:color")
-    r_color.set(qn("w:val"), "0563C1")
+    r_color.set(qn("w:val"), str(REFERENCE_LINK_RGB))
     r_pr.append(r_color)
     if highlight:
         r_highlight = OxmlElement("w:highlight")

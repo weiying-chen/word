@@ -13,11 +13,10 @@ from pathlib import Path
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.text import WD_COLOR_INDEX
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import RGBColor, Inches, Pt
+from docx.shared import Inches, Pt
 from docx.text.paragraph import Paragraph
 
 from docx_utils import (
@@ -26,6 +25,12 @@ from docx_utils import (
     ensure_blank_after_labels,
     get_default_tab_stop_inches,
     set_source_indent,
+)
+from style_tokens import (
+    REFERENCE_HIGHLIGHT_DEFAULT,
+    REFERENCE_HIGHLIGHT_MARKED,
+    REFERENCE_LINK_RGB,
+    REFERENCE_TEXT_SIZE_PT,
 )
 
 
@@ -47,8 +52,8 @@ SYMBOL_FONT_NAME = "Segoe UI Symbol"
 CJK_FONT_NAME = "新細明體"
 CJK_MIDDLE_DOT = "\u2027"
 HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
-SOURCE_HIGHLIGHT_DEFAULT = WD_COLOR_INDEX.TURQUOISE
-SOURCE_HIGHLIGHT_MARKED = WD_COLOR_INDEX.BRIGHT_GREEN
+SOURCE_HIGHLIGHT_DEFAULT = REFERENCE_HIGHLIGHT_DEFAULT
+SOURCE_HIGHLIGHT_MARKED = REFERENCE_HIGHLIGHT_MARKED
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
@@ -294,7 +299,7 @@ def _add_marked_runs(
             part_text,
             run_style=run_style,
             highlight_color=highlight_color,
-            font_size_pt=10 if apply_default_size else None,
+            font_size_pt=REFERENCE_TEXT_SIZE_PT if apply_default_size else None,
         )
 
 
@@ -385,7 +390,7 @@ def ensure_annotation_style(doc: Document):
         style = styles[style_name]
     else:
         style = styles.add_style(style_name, WD_STYLE_TYPE.CHARACTER)
-    style.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+    style.font.color.rgb = REFERENCE_LINK_RGB
     return style_name
 
 
@@ -396,7 +401,7 @@ def ensure_hyperlink_style(doc: Document):
         style = styles[style_name]
     else:
         style = styles.add_style(style_name, WD_STYLE_TYPE.CHARACTER)
-    style.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+    style.font.color.rgb = REFERENCE_LINK_RGB
     style.font.underline = True
     return style_name
 
