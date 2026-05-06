@@ -523,6 +523,10 @@ def test_generate_subs_adds_thumbnail_credit_after_image(tmp_path: Path) -> None
         has_drawing = p.find(".//w:drawing", ns) is not None
         paragraphs.append((text, styles, has_drawing))
 
+    label_idx = next(i for i, (text, _, _) in enumerate(paragraphs) if text == "選圖：")
+    assert paragraphs[label_idx + 1][0] == ""
+    assert not paragraphs[label_idx + 1][2]
+
     image_idx = next(i for i, (_, _, has_drawing) in enumerate(paragraphs) if has_drawing)
     credit_text, credit_styles, _ = paragraphs[image_idx + 1]
 

@@ -30,6 +30,13 @@ def set_source_indent(paragraph, indent_inches: float) -> None:
 
 
 def ensure_blank_after_labels(doc, labels: set[str]) -> None:
+    def _has_non_blank_content(paragraph: Paragraph) -> bool:
+        if paragraph.text.strip():
+            return True
+        # Paragraphs that only contain drawings (e.g. inserted thumbnail images)
+        # still need a blank spacer after section labels.
+        return paragraph._p.find(".//w:drawing", paragraph._p.nsmap) is not None
+
     for para in list(doc.paragraphs):
         if para.text.strip() not in labels:
             continue
@@ -42,7 +49,7 @@ def ensure_blank_after_labels(doc, labels: set[str]) -> None:
             Paragraph(new_p, para._parent)
             continue
         next_para = Paragraph(next_elm, para._parent)
-        if next_para.text.strip():
+        if _has_non_blank_content(next_para):
             new_p = OxmlElement("w:p")
             para._p.addnext(new_p)
             Paragraph(new_p, para._parent)
