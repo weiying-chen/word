@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
@@ -106,11 +107,55 @@ def _find_regular_translation_rows(table) -> list[int]:
     return rows
 
 
+def _remove_row(table, row_idx: int) -> None:
+    table.rows[row_idx]._tr.getparent().remove(table.rows[row_idx]._tr)
+
+
+def _insert_cloned_row_before(table, source_row_idx: int, before_row_idx: int) -> None:
+    cloned = deepcopy(table.rows[source_row_idx]._tr)
+    table.rows[before_row_idx]._tr.addprevious(cloned)
+
+
+def _find_regular_translation_block(table) -> tuple[int, int]:
+    start_idx = None
+    next_section_idx = None
+    for idx in range(len(table.rows)):
+        first = table.cell(idx, 0).text.strip()
+        second = table.cell(idx, 1).text.strip()
+        if start_idx is None and first == "日期" and "字幕翻譯" in second:
+            start_idx = idx + 1
+            continue
+        if start_idx is not None and first == "日期" and "審稿" in second:
+            next_section_idx = idx
+            break
+    if start_idx is None or next_section_idx is None or start_idx >= next_section_idx:
+        raise ValueError("Unable to locate regular translation row block in template.")
+    return start_idx, next_section_idx
+
+
+def _ensure_regular_translation_row_count(table, desired_count: int) -> list[int]:
+    start_idx, next_section_idx = _find_regular_translation_block(table)
+    current_count = next_section_idx - start_idx
+    target = max(1, desired_count)
+
+    while current_count < target:
+        _insert_cloned_row_before(table, start_idx, next_section_idx)
+        next_section_idx += 1
+        current_count += 1
+
+    while current_count > target:
+        _remove_row(table, next_section_idx - 1)
+        next_section_idx -= 1
+        current_count -= 1
+
+    return list(range(start_idx, start_idx + target))
+
+
 def fill_regular_translation_table(doc: Document, assignments: list[dict]) -> None:
     if not doc.tables:
         return
     table = doc.tables[0]
-    row_indexes = _find_regular_translation_rows(table)
+    row_indexes = _ensure_regular_translation_row_count(table, len(assignments))
     for slot, row_idx in enumerate(row_indexes):
         assignment = assignments[slot] if slot < len(assignments) else None
         if not assignment:
