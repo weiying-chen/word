@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from docx import Document
@@ -11,8 +12,9 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx_utils import apply_highlight_to_runs
 
 
-ALLOWED_KEYS = {"NAME", "MONTH"}
+ALLOWED_KEYS = {"NAME"}
 GOAL_LABEL_TEXT = "本月精進目標:"
+MONTH_KEY = "MONTH"
 
 
 def resolve_template_path(template_path: Path) -> Path:
@@ -40,6 +42,19 @@ def parse_input(path: Path) -> dict[str, str]:
     return data
 
 
+def parse_export_month(assignments_path: Path) -> str:
+    payload = json.loads(assignments_path.read_text(encoding="utf-8"))
+    value = str(payload.get("exportMonth", "")).strip()
+    if not value:
+        return ""
+
+    if len(value) == 7 and value[4] == "-":
+        year_text, month_text = value.split("-", 1)
+        if year_text.isdigit() and month_text.isdigit():
+            return f"{int(year_text)}年{int(month_text)}月"
+    return value
+
+
 def replace_placeholders(doc: Document, mapping: dict[str, str]) -> None:
     for paragraph in doc.paragraphs:
         text = paragraph.text
@@ -61,8 +76,14 @@ def apply_review_highlights(doc: Document) -> None:
             )
 
 
-def generate_review(template_path: Path, input_path: Path, output_path: Path) -> None:
+def generate_review(
+    template_path: Path,
+    input_path: Path,
+    output_path: Path,
+    assignments_path: Path,
+) -> None:
     data = parse_input(input_path)
+    data[MONTH_KEY] = parse_export_month(assignments_path)
     doc = Document(str(resolve_template_path(template_path)))
     replace_placeholders(doc, data)
     apply_review_highlights(doc)
@@ -89,9 +110,19 @@ def main() -> None:
         default="output/review_output.docx",
         help="Path to write the rendered review DOCX.",
     )
+    parser.add_argument(
+        "--assignments-json",
+        default="assignments.json",
+        help="Path to assignments JSON that provides exportMonth.",
+    )
     args = parser.parse_args()
 
-    generate_review(Path(args.template), Path(args.source_txt), Path(args.output))
+    generate_review(
+        Path(args.template),
+        Path(args.source_txt),
+        Path(args.output),
+        Path(args.assignments_json),
+    )
 
 
 if __name__ == "__main__":

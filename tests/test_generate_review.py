@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
@@ -15,9 +16,10 @@ def _write_review_template(path: Path) -> None:
     doc.save(path)
 
 
-def test_generate_review_renders_header_fields_from_txt(tmp_path: Path) -> None:
+def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     source_txt = tmp_path / "review.txt"
+    assignments_json = tmp_path / "assignments.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
@@ -25,13 +27,21 @@ def test_generate_review_renders_header_fields_from_txt(tmp_path: Path) -> None:
         "\n".join(
             [
                 "NAME: 王小明",
-                "MONTH: 2022年11月",
             ]
         ),
         encoding="utf-8",
     )
+    assignments_json.write_text(
+        json.dumps({"exportMonth": "2022-11"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
-    generate_review.generate_review(template_path, source_txt, output_path)
+    generate_review.generate_review(
+        template_path,
+        source_txt,
+        output_path,
+        assignments_json,
+    )
 
     out_doc = Document(output_path)
     assert [p.text for p in out_doc.paragraphs] == [
@@ -54,7 +64,6 @@ def test_parse_input_supports_key_value_fields(tmp_path: Path) -> None:
         "\n".join(
             [
                 "NAME: Alice",
-                "MONTH: 2022年12月",
             ]
         ),
         encoding="utf-8",
@@ -62,7 +71,7 @@ def test_parse_input_supports_key_value_fields(tmp_path: Path) -> None:
 
     data = generate_review.parse_input(source_txt)
 
-    assert data == {"NAME": "Alice", "MONTH": "2022年12月"}
+    assert data == {"NAME": "Alice"}
 
 
 def test_resolve_template_path_accepts_relative_repo_template() -> None:
