@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
+from docx.shared import Pt
 
-from docx_utils import apply_highlight_to_runs
+from docx_utils import apply_highlight_to_runs, clear_paragraph
 
 
 ALLOWED_KEYS = {"NAME"}
 GOAL_LABEL_TEXT = "本月精進目標:"
 MONTH_KEY = "MONTH"
+ASSIGNMENTS_KEY = "assignments"
+HEADER_FONT_SIZE_PT = 12
 
 
 def resolve_template_path(template_path: Path) -> Path:
@@ -42,8 +46,7 @@ def parse_input(path: Path) -> dict[str, str]:
     return data
 
 
-def parse_export_month(assignments_path: Path) -> str:
-    payload = json.loads(assignments_path.read_text(encoding="utf-8"))
+def parse_export_month(payload: dict) -> str:
     value = str(payload.get("exportMonth", "")).strip()
     if not value:
         return ""
@@ -53,6 +56,84 @@ def parse_export_month(assignments_path: Path) -> str:
         if year_text.isdigit() and month_text.isdigit():
             return f"{int(year_text)}年{int(month_text)}月"
     return value
+
+
+def parse_assignments_payload(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _format_month_day(deadline_iso: str) -> str:
+    if not deadline_iso:
+        return ""
+    text = deadline_iso.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(text)
+    return f"{dt.month}/{dt.day}"
+
+
+def _format_work_minutes(work_minutes: int | str | None) -> str:
+    if work_minutes in (None, ""):
+        return ""
+    minutes = int(work_minutes)
+    hours, remain = divmod(minutes, 60)
+    parts: list[str] = []
+    if hours:
+        parts.append(f"{hours}時")
+    if remain:
+        parts.append(f"{remain}分")
+    return "".join(parts) if parts else "0分"
+
+
+def _set_cell_lines(cell, lines: list[str]) -> None:
+    paragraph = cell.paragraphs[0]
+    clear_paragraph(paragraph)
+    if lines:
+        for idx, line in enumerate(lines):
+            run = paragraph.add_run(line)
+            if idx < len(lines) - 1:
+                run.add_break()
+    for extra in list(cell.paragraphs[1:]):
+        extra._element.getparent().remove(extra._element)
+
+
+def _find_regular_translation_rows(table) -> list[int]:
+    rows: list[int] = []
+    for idx in range(1, len(table.rows)):
+        first = table.cell(idx, 0).text.strip()
+        second = table.cell(idx, 1).text.strip()
+        if first == "日期" and "審稿" in second:
+            break
+        rows.append(idx)
+    return rows
+
+
+def fill_regular_translation_table(doc: Document, assignments: list[dict]) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    row_indexes = _find_regular_translation_rows(table)
+    for slot, row_idx in enumerate(row_indexes):
+        assignment = assignments[slot] if slot < len(assignments) else None
+        if not assignment:
+            _set_cell_lines(table.cell(row_idx, 0), [])
+            _set_cell_lines(table.cell(row_idx, 1), [])
+            _set_cell_lines(table.cell(row_idx, 2), [])
+            _set_cell_lines(table.cell(row_idx, 3), [])
+            continue
+
+        _set_cell_lines(
+            table.cell(row_idx, 0),
+            [_format_month_day(str(assignment.get("deadlineIso", "")).strip())],
+        )
+        item_lines = [f"{slot + 1}.", str(assignment.get("title", "")).strip()]
+        work_text = _format_work_minutes(assignment.get("workMinutes"))
+        if work_text:
+            item_lines.append(f"實際作業時間:{work_text}")
+        _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])
+
+        comments = assignment.get("comments", [])
+        comment_lines = [f"• {str(c).strip()}" for c in comments if str(c).strip()]
+        _set_cell_lines(table.cell(row_idx, 2), comment_lines)
+        _set_cell_lines(table.cell(row_idx, 3), [])
 
 
 def replace_placeholders(doc: Document, mapping: dict[str, str]) -> None:
@@ -76,6 +157,14 @@ def apply_review_highlights(doc: Document) -> None:
             )
 
 
+def apply_header_font_size(doc: Document, size_pt: int = HEADER_FONT_SIZE_PT) -> None:
+    for idx, paragraph in enumerate(doc.paragraphs[:4]):
+        if not paragraph.runs:
+            paragraph.add_run(paragraph.text)
+        for run in paragraph.runs:
+            run.font.size = Pt(size_pt)
+
+
 def generate_review(
     template_path: Path,
     input_path: Path,
@@ -83,10 +172,13 @@ def generate_review(
     assignments_path: Path,
 ) -> None:
     data = parse_input(input_path)
-    data[MONTH_KEY] = parse_export_month(assignments_path)
+    payload = parse_assignments_payload(assignments_path)
+    data[MONTH_KEY] = parse_export_month(payload)
     doc = Document(str(resolve_template_path(template_path)))
     replace_placeholders(doc, data)
+    apply_header_font_size(doc)
     apply_review_highlights(doc)
+    fill_regular_translation_table(doc, payload.get(ASSIGNMENTS_KEY, []))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
 
