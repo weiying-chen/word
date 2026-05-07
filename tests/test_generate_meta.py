@@ -92,7 +92,7 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
-    def test_generate_meta_removes_empty_title_and_overview_placeholders(self) -> None:
+    def test_generate_meta_raises_when_title_and_overview_missing(self) -> None:
         source_text = "\n".join(
             [
                 "BODY:",
@@ -114,26 +114,11 @@ class RenderMetaTests(unittest.TestCase):
             self._build_template(template_path)
             payload_path.write_text(source_text, encoding="utf-8")
 
-            generate_meta(template_path, payload_path, output_path)
-
-            texts = [p.text for p in Document(str(output_path)).paragraphs]
-
-        self.assertEqual(
-            texts,
-            [
-                "重點標",
-                "",
-                "名字職銜",
-                "",
-                "",
-                "病患｜甲",
-                "Alice",
-                "{{病患}}",
-                "",
-                "YT簡介",
-                "",
-            ],
-        )
+            with self.assertRaisesRegex(
+                ValueError,
+                r"\[error\] Missing required field: TITLE\n\[error\] Missing required field: OVERVIEW",
+            ):
+                generate_meta(template_path, payload_path, output_path)
 
     def test_parse_input_extracts_meta_fields_and_people(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -596,6 +581,9 @@ class RenderMetaTests(unittest.TestCase):
             meta_path.write_text(
                 "\n".join(
                     [
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
+                        "",
                         "PEOPLE:",
                         "慈濟志工｜烏漾達",
                         "Uyanda",
@@ -609,7 +597,7 @@ class RenderMetaTests(unittest.TestCase):
             generate_meta(template_path, body_path, output_path, meta_path=meta_path)
 
             doc = Document(str(output_path))
-            people_paragraph = doc.paragraphs[5]
+            people_paragraph = doc.paragraphs[6]
 
         self.assertEqual(people_paragraph.text, "慈濟志工｜烏漾達")
         self.assertEqual(
@@ -712,6 +700,9 @@ class RenderMetaTests(unittest.TestCase):
 
         meta_text = "\n".join(
             [
+                "TITLE: English Title",
+                "OVERVIEW: English overview.",
+                "",
                 "PEOPLE:",
                 "艾莉莎的父親｜Mar Jason B. Sergida",
                 "Mar Jason B. Sergida",
@@ -740,6 +731,7 @@ class RenderMetaTests(unittest.TestCase):
             [
                 "重點標",
                 "",
+                "English Title",
                 "名字職銜",
                 "",
                 "",
@@ -749,6 +741,7 @@ class RenderMetaTests(unittest.TestCase):
                 "",
                 "YT簡介",
                 "",
+                "English overview.",
             ],
         )
 
@@ -763,6 +756,9 @@ class RenderMetaTests(unittest.TestCase):
             body_path.write_text(
                 "\n".join(
                     [
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
+                        "",
                         "BODY:",
                         "(8．)",
                         "/*SUPER:",
@@ -785,6 +781,7 @@ class RenderMetaTests(unittest.TestCase):
             [
                 "重點標",
                 "",
+                "English Title",
                 "名字職銜",
                 "",
                 "",
@@ -793,15 +790,18 @@ class RenderMetaTests(unittest.TestCase):
                 "",
                 "YT簡介",
                 "",
+                "English overview.",
             ],
         )
 
-    def test_missing_en_fields_render_empty(self) -> None:
+    def test_generate_meta_raises_when_overview_missing(self) -> None:
         source_text = "\n".join(
             [
                 "TITLE_TEXT: 中文標題",
                 "SUMMARY:",
                 "中文摘要",
+                "",
+                "TITLE: English Title",
                 "",
                 "BODY:",
                 "",
@@ -814,18 +814,13 @@ class RenderMetaTests(unittest.TestCase):
             payload_path = tmpdir_path / "news_input.txt"
             output_path = tmpdir_path / "meta.docx"
 
-            doc = Document()
-            doc.add_paragraph("{{TITLE_EN}}")
-            doc.add_paragraph("{{OVERVIEW_EN}}")
-            doc.save(str(template_path))
+            self._build_template(template_path)
             payload_path.write_text(source_text, encoding="utf-8")
 
-            generate_meta(template_path, payload_path, output_path)
-
-            doc = Document(str(output_path))
-            texts = [p.text for p in doc.paragraphs]
-
-        self.assertEqual(texts, ["", ""])
+            with self.assertRaisesRegex(
+                ValueError, r"\[error\] Missing required field: OVERVIEW"
+            ):
+                generate_meta(template_path, payload_path, output_path)
 
     def test_renders_from_news_txt_input(self) -> None:
         source_text = "\n".join(
@@ -1048,6 +1043,9 @@ class RenderMetaTests(unittest.TestCase):
             meta_path.write_text(
                 "\n".join(
                     [
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
+                        "",
                         "PEOPLE:",
                         "患者",
                         "Patient",

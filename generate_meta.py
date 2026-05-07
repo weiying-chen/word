@@ -578,6 +578,16 @@ def generate_meta(
     meta_path: Path | None = None,
 ) -> None:
     data = parse_input(input_path, meta_path)
+    missing_fields: list[str] = []
+    if not str(data.get("title_en", "")).strip():
+        missing_fields.append(TITLE_KEY)
+    if not str(data.get("overview_en", "")).strip():
+        missing_fields.append(OVERVIEW_KEY)
+    if missing_fields:
+        raise ValueError(
+            "\n".join(f"[error] Missing required field: {field}" for field in missing_fields)
+        )
+
     doc = Document(str(resolve_template_path(template_path)))
     apply_default_margins(doc)
 
@@ -640,7 +650,12 @@ def main() -> None:
     )
 
     meta_path = Path(args.meta_txt) if args.meta_txt else None
-    generate_meta(Path(args.template), Path(args.source_txt), output_path, meta_path=meta_path)
+    try:
+        generate_meta(
+            Path(args.template), Path(args.source_txt), output_path, meta_path=meta_path
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc))
 
 
 if __name__ == "__main__":
