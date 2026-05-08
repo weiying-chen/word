@@ -12,10 +12,12 @@ from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.shared import Pt
 from docx.text.paragraph import Paragraph
 
 from docx_utils import add_hyperlink
 from generate_subs import fix_docx_namespaces, normalize_input_text, remove_paragraph
+from style_tokens import BODY_TEXT_SIZE_PT
 
 
 SHOT_ID_RE = re.compile(r"^\d+_\d+$")
@@ -25,6 +27,7 @@ SOURCE_LINK_RE = re.compile(r"^https?://\S+$")
 MARKER_TEXT = "<"
 BODY_PLACEHOLDER = "{{BODY}}"
 R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+NEWS_FONT_SIZE_PT = BODY_TEXT_SIZE_PT
 
 
 @dataclass
@@ -96,12 +99,17 @@ def _set_line_in_paragraph(paragraph, text: str, hyperlink: str = "") -> None:
         return
     if hyperlink:
         add_hyperlink(paragraph, text, hyperlink)
+        for run in paragraph.runs:
+            run.font.size = Pt(NEWS_FONT_SIZE_PT)
         return
     if SOURCE_LINK_RE.match(text.strip()):
         link = text.strip()
         add_hyperlink(paragraph, link, link)
+        for run in paragraph.runs:
+            run.font.size = Pt(NEWS_FONT_SIZE_PT)
         return
     run = paragraph.add_run(text)
+    run.font.size = Pt(NEWS_FONT_SIZE_PT)
     run.font.highlight_color = (
         WD_COLOR_INDEX.BRIGHT_GREEN
         if SHOT_ID_RE.match(text.strip())

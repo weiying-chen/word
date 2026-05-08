@@ -7,7 +7,7 @@ from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.shared import Inches, Pt
 from docx.text.paragraph import Paragraph
 
-from style_tokens import REFERENCE_LINK_RGB
+from style_tokens import REFERENCE_LINK_RGB, REFERENCE_TEXT_SIZE_PT
 
 
 def get_default_tab_stop_inches(doc) -> float:
@@ -61,7 +61,7 @@ def add_highlighted_run(
     paragraph,
     text: str,
     *,
-    font_size_pt: int | None = 10,
+    font_size_pt: int | None = REFERENCE_TEXT_SIZE_PT,
     highlight_color,
 ):
     run = paragraph.add_run(text)

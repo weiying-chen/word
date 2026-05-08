@@ -5,10 +5,12 @@ import warnings
 import zipfile
 
 from docx import Document
+from docx.shared import Pt
 from lxml import etree
 
 from docx_utils import add_hyperlink
 import generate_news
+from style_tokens import BODY_TEXT_SIZE_PT
 
 
 def _write_source_docx(path: Path) -> None:
@@ -157,6 +159,8 @@ def test_generate_news_preserves_header_and_replaces_body(tmp_path: Path) -> Non
         run.font.highlight_color and run.font.highlight_color.name == "BRIGHT_GREEN"
         for run in doc.paragraphs[12].runs
     )
+    assert all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in doc.paragraphs[2].runs if run.text)
+    assert all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in doc.paragraphs[3].runs if run.text)
 
     with zipfile.ZipFile(output_path) as zf:
         document_xml = etree.fromstring(zf.read("word/document.xml"))

@@ -6,6 +6,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 
 import generate_review
+from style_tokens import BODY_TEXT_SIZE_PT
 
 
 def _write_review_template(path: Path) -> None:
@@ -67,7 +68,7 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
     assert all(
         run.font.highlight_color == WD_COLOR_INDEX.YELLOW for run in goal_label_runs
     )
-    assert all(run.font.size == Pt(12) for run in goal_label_runs)
+    assert all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in goal_label_runs)
 
 
 def test_parse_input_supports_key_value_fields(tmp_path: Path) -> None:
