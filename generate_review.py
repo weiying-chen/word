@@ -13,14 +13,14 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 
 from docx_utils import apply_highlight_to_runs, clear_paragraph
-from style_tokens import BODY_TEXT_SIZE_PT
+from style_tokens import REVIEW_TEXT_SIZE_PT
 
 
 ALLOWED_KEYS = {"NAME"}
 GOAL_LABEL_TEXT = "本月精進目標:"
 MONTH_KEY = "MONTH"
 ASSIGNMENTS_KEY = "assignments"
-HEADER_FONT_SIZE_PT = BODY_TEXT_SIZE_PT
+HEADER_FONT_SIZE_PT = REVIEW_TEXT_SIZE_PT
 
 
 def resolve_template_path(template_path: Path) -> Path:

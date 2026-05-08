@@ -74,6 +74,27 @@ def add_highlighted_run(
 def apply_font_size_to_runs(paragraph, *, font_size_pt: int) -> None:
     for run in paragraph.runs:
         run.font.size = Pt(font_size_pt)
+    size_val = str(int(font_size_pt * 2))
+    for run_element in paragraph._p.iter(qn("w:r")):
+        run_properties = run_element.find(qn("w:rPr"))
+        if run_properties is None:
+            run_properties = OxmlElement("w:rPr")
+            run_element.insert(0, run_properties)
+        run_size = run_properties.find(qn("w:sz"))
+        if run_size is None:
+            run_size = OxmlElement("w:sz")
+            run_properties.append(run_size)
+        run_size.set(qn("w:val"), size_val)
+        run_size_cs = run_properties.find(qn("w:szCs"))
+        if run_size_cs is None:
+            run_size_cs = OxmlElement("w:szCs")
+            run_properties.append(run_size_cs)
+        run_size_cs.set(qn("w:val"), size_val)
+
+
+def apply_font_size_to_document_runs(doc, *, font_size_pt: int) -> None:
+    for paragraph in doc.paragraphs:
+        apply_font_size_to_runs(paragraph, font_size_pt=font_size_pt)
 
 
 def apply_highlight_to_runs(

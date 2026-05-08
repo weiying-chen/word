@@ -15,6 +15,7 @@ from docx.oxml.ns import qn
 from docx_utils import (
     add_highlighted_run,
     add_hyperlink,
+    apply_font_size_to_document_runs,
     apply_font_size_to_runs,
     apply_highlight_to_runs,
     clear_paragraph,
@@ -22,7 +23,7 @@ from docx_utils import (
     get_default_tab_stop_inches,
     set_source_indent,
 )
-from style_tokens import REFERENCE_HIGHLIGHT_DEFAULT, REFERENCE_TEXT_SIZE_PT
+from style_tokens import BODY_TEXT_SIZE_PT, REFERENCE_HIGHLIGHT_DEFAULT, REFERENCE_TEXT_SIZE_PT
 
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
@@ -856,6 +857,7 @@ def generate_docs(
         filename = f"{entry_prefix}{entry['filename_title']}小編文{filename_suffix}.docx"
         output_path = make_unique_path(output_dir / filename)
         doc = Document(str(template_path))
+        apply_font_size_to_document_runs(doc, font_size_pt=BODY_TEXT_SIZE_PT)
         default_tab_stop = get_default_tab_stop_inches(doc)
         mapping = {
             "{{HEADER_TITLE}}": entry["header_title"],

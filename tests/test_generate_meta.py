@@ -5,6 +5,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
+from docx.shared import Pt
 
 from generate_meta import (
     default_output_path,
@@ -12,6 +13,7 @@ from generate_meta import (
     parse_input,
     resolve_template_path,
 )
+from style_tokens import BODY_TEXT_SIZE_PT
 
 
 class RenderMetaTests(unittest.TestCase):
@@ -1060,6 +1062,47 @@ class RenderMetaTests(unittest.TestCase):
 
         assert "Patient" in texts
         assert "{{患者}}" not in texts
+
+    def test_generate_meta_enforces_body_font_size_from_shared_token(self) -> None:
+        source_text = "\n".join(
+            [
+                "TITLE: English Title",
+                "OVERVIEW: English overview.",
+                "",
+                "BODY:",
+                "(  13   Alice )",
+                "/*SUPER:",
+                "病患│甲//",
+                "引言一//",
+                "*/",
+                "",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            payload_path = tmpdir_path / "news_input.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            template_doc = Document(str(template_path))
+            template_doc.styles["Normal"].font.size = Pt(10)
+            template_doc.save(str(template_path))
+            payload_path.write_text(source_text, encoding="utf-8")
+
+            generate_meta(template_path, payload_path, output_path)
+
+            doc = Document(str(output_path))
+            title_para = next(p for p in doc.paragraphs if p.text == "English Title")
+            overview_para = next(p for p in doc.paragraphs if p.text == "English overview.")
+
+        self.assertTrue(
+            all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in title_para.runs if run.text)
+        )
+        self.assertTrue(
+            all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in overview_para.runs if run.text)
+        )
 
 
 def test_default_output_path_uses_source_stem(tmp_path: Path) -> None:

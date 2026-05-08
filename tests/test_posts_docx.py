@@ -3,11 +3,13 @@ from unittest.mock import patch
 
 from docx import Document
 from docx.shared import Inches
+from docx.shared import Pt
 
 import zipfile
 import xml.etree.ElementTree as ET
 
 from generate_posts import generate_docs
+from style_tokens import BODY_TEXT_SIZE_PT, REFERENCE_TEXT_SIZE_PT
 
 
 def _write_docx(path: Path, paragraphs: list[str]) -> None:
@@ -375,3 +377,44 @@ def test_generated_bodhi_docx_injects_english_under_fixed_title_lines_not_hashta
     assert "◎標題：廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore" in texts
     assert "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore" in texts
     assert "#廣行環保護人間" in texts
+
+
+def test_generated_posts_enforces_body_12pt_and_source_10pt(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "節目1則",
+            "1. alex",
+            "Program - Test Title st/rc",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "News title",
+            "--------------------------------",
+        ],
+    )
+    doc = Document()
+    doc.styles["Normal"].font.size = Pt(10)
+    for text in ["{{HEADER_TITLE}}", "{{REF_TITLE}}", "{{VIDEO_TITLE}}"]:
+        doc.add_paragraph(text)
+    doc.save(template_path)
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+    rendered = Document(str(output_paths[0]))
+
+    header_para = next(p for p in rendered.paragraphs if p.text.strip() == "Program - Test Title")
+    source_para = next(p for p in rendered.paragraphs if p.text.strip() == "News title")
+
+    assert all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in header_para.runs if run.text)
+    assert all(run.font.size == Pt(REFERENCE_TEXT_SIZE_PT) for run in source_para.runs if run.text)

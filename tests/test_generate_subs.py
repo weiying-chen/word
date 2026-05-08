@@ -5,10 +5,12 @@ import warnings
 import pytest
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
+from docx.shared import Pt
 from lxml import etree
 
 from docx_utils import add_hyperlink
 import generate_subs
+from style_tokens import BODY_TEXT_SIZE_PT
 
 
 def _write_docx(path: Path, paragraphs: list[str]) -> None:
@@ -388,7 +390,11 @@ def test_generate_subs_copies_source_header_before_generated_sections(tmp_path: 
     input_path = tmp_path / "input.txt"
     output_path = tmp_path / "output.docx"
 
-    _write_docx(template_path, ["建議YT標題：", "{{YT_TITLE_SUGGESTED}}", "字幕："])
+    template_doc = Document()
+    template_doc.styles["Normal"].font.size = Pt(10)
+    for text in ["建議YT標題：", "{{YT_TITLE_SUGGESTED}}", "字幕："]:
+        template_doc.add_paragraph(text)
+    template_doc.save(template_path)
     _write_source_docx(
         source_docx,
         header_paragraphs=[
@@ -402,7 +408,8 @@ def test_generate_subs_copies_source_header_before_generated_sections(tmp_path: 
     input_path.write_text("YT_TITLE_SUGGESTED: Suggested title\n", encoding="utf-8")
 
     generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
-    texts = [p.text for p in Document(output_path).paragraphs]
+    rendered = Document(output_path)
+    texts = [p.text for p in rendered.paragraphs]
 
     assert texts[:8] == [
         "Source title",
@@ -414,6 +421,10 @@ def test_generate_subs_copies_source_header_before_generated_sections(tmp_path: 
         "",
         "Suggested title",
     ]
+    source_title_para = next(p for p in rendered.paragraphs if p.text == "Source title")
+    source_url_para = next(p for p in rendered.paragraphs if p.text == "https://example.com/source")
+    assert all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in source_title_para.runs if run.text)
+    assert all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in source_url_para.runs if run.text)
 
 
 def test_generate_subs_removes_empty_intro_paragraph(tmp_path: Path) -> None:
@@ -925,6 +936,79 @@ def test_generate_subs_middle_dot_uses_cjk_font(tmp_path: Path) -> None:
     assert fonts.get("{%s}ascii" % ns["w"]) == "新細明體"
     assert fonts.get("{%s}hAnsi" % ns["w"]) == "新細明體"
     assert fonts.get("{%s}cs" % ns["w"]) == "新細明體"
+
+
+def test_generate_subs_keeps_non_source_text_12pt_and_source_text_10pt(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    doc = Document()
+    doc.styles["Normal"].font.size = Pt(10)
+    doc.add_paragraph("{{INTRO}}")
+    doc.save(template_path)
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "INTRO:",
+                "Normal narrative line.",
+                "https://example.com/source",
+                "Source annotation line.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    rendered = Document(output_path)
+
+    normal_para = next(p for p in rendered.paragraphs if p.text == "Normal narrative line.")
+    source_para = next(p for p in rendered.paragraphs if p.text == "Source annotation line.")
+
+    assert all(run.font.size == Pt(12) for run in normal_para.runs if run.text)
+    assert all(run.font.size == Pt(10) for run in source_para.runs if run.text)
+
+
+def test_generate_subs_enforces_12pt_for_labels_even_if_template_is_10pt(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    doc = Document()
+    doc.styles["Normal"].font.size = Pt(10)
+    doc.add_paragraph("建議YT標題：")
+    doc.add_paragraph("{{YT_TITLE_SUGGESTED}}")
+    doc.add_paragraph("簡介：")
+    doc.add_paragraph("{{INTRO}}")
+    doc.add_paragraph("字幕：")
+    doc.save(template_path)
+
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "YT_TITLE_SUGGESTED: Suggested title",
+                "INTRO:",
+                "Normal intro line.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    rendered = Document(output_path)
+
+    label_para = next(p for p in rendered.paragraphs if p.text.strip() == "建議YT標題：")
+    assert all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in label_para.runs if run.text)
 
 
 def test_with_subs_output_suffix_appends_al_once() -> None:

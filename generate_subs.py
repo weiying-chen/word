@@ -21,12 +21,15 @@ from docx.text.paragraph import Paragraph
 
 from docx_utils import (
     add_hyperlink,
+    apply_font_size_to_runs,
+    apply_font_size_to_document_runs,
     clear_paragraph,
     ensure_blank_after_labels,
     get_default_tab_stop_inches,
     set_source_indent,
 )
 from style_tokens import (
+    BODY_TEXT_SIZE_PT,
     REFERENCE_HIGHLIGHT_DEFAULT,
     REFERENCE_HIGHLIGHT_MARKED,
     REFERENCE_LINK_RGB,
@@ -204,6 +207,7 @@ def replace_placeholder(paragraph, placeholder: str, value: str) -> bool:
         return False
 
     paragraph.text = paragraph.text.replace(placeholder, value)
+    apply_font_size_to_runs(paragraph, font_size_pt=BODY_TEXT_SIZE_PT)
     apply_symbol_fonts_in_paragraph(paragraph)
     return True
 
@@ -262,7 +266,7 @@ def _add_text_runs(
     *,
     run_style: str | None = None,
     highlight_color=None,
-    font_size_pt: int | None = None,
+    font_size_pt: int | None = BODY_TEXT_SIZE_PT,
 ) -> None:
     for chunk, is_symbol in _split_symbol_chunks(text):
         if not chunk:
@@ -299,7 +303,9 @@ def _add_marked_runs(
             part_text,
             run_style=run_style,
             highlight_color=highlight_color,
-            font_size_pt=REFERENCE_TEXT_SIZE_PT if apply_default_size else None,
+            font_size_pt=(
+                REFERENCE_TEXT_SIZE_PT if apply_default_size else BODY_TEXT_SIZE_PT
+            ),
         )
 
 
@@ -664,6 +670,10 @@ def generate_subs(
         anchor = doc.paragraphs[0]
         for paragraph in source_header:
             _clone_paragraph_before(paragraph, anchor)
+
+    # Normalize document text to the shared body size before specialized
+    # source/annotation replacements apply 10pt where needed.
+    apply_font_size_to_document_runs(doc, font_size_pt=BODY_TEXT_SIZE_PT)
 
     for paragraph in list(doc.paragraphs):
         if "{{INTRO}}" in paragraph.text:

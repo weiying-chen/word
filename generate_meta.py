@@ -13,8 +13,9 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.text.paragraph import Paragraph
 from docx.shared import Inches
 
-from docx_utils import ensure_blank_after_labels
+from docx_utils import apply_font_size_to_document_runs, ensure_blank_after_labels
 from generate_subs import fix_docx_namespaces, normalize_input_text
+from style_tokens import BODY_TEXT_SIZE_PT
 
 
 TITLE_PLACEHOLDER = "{{TITLE_EN}}"
@@ -610,6 +611,7 @@ def generate_meta(
         overview_placeholder, str(data.get("overview_en", ""))
     )
     ensure_blank_after_labels(doc, HIGHLIGHT_LABELS)
+    apply_font_size_to_document_runs(doc, font_size_pt=BODY_TEXT_SIZE_PT)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
