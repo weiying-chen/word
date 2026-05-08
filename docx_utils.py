@@ -75,6 +75,24 @@ def apply_font_size_to_runs(paragraph, *, font_size_pt: int) -> None:
     for run in paragraph.runs:
         run.font.size = Pt(font_size_pt)
     size_val = str(int(font_size_pt * 2))
+    paragraph_properties = paragraph._p.find(qn("w:pPr"))
+    if paragraph_properties is None:
+        paragraph_properties = OxmlElement("w:pPr")
+        paragraph._p.insert(0, paragraph_properties)
+    paragraph_run_properties = paragraph_properties.find(qn("w:rPr"))
+    if paragraph_run_properties is None:
+        paragraph_run_properties = OxmlElement("w:rPr")
+        paragraph_properties.append(paragraph_run_properties)
+    paragraph_size = paragraph_run_properties.find(qn("w:sz"))
+    if paragraph_size is None:
+        paragraph_size = OxmlElement("w:sz")
+        paragraph_run_properties.append(paragraph_size)
+    paragraph_size.set(qn("w:val"), size_val)
+    paragraph_size_cs = paragraph_run_properties.find(qn("w:szCs"))
+    if paragraph_size_cs is None:
+        paragraph_size_cs = OxmlElement("w:szCs")
+        paragraph_run_properties.append(paragraph_size_cs)
+    paragraph_size_cs.set(qn("w:val"), size_val)
     for run_element in paragraph._p.iter(qn("w:r")):
         run_properties = run_element.find(qn("w:rPr"))
         if run_properties is None:

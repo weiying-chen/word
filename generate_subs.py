@@ -746,6 +746,11 @@ def generate_subs(
         for paragraph in source_body:
             current = _clone_paragraph_after(paragraph, current)
 
+    for paragraph in doc.paragraphs:
+        if paragraph.text.strip():
+            continue
+        apply_font_size_to_runs(paragraph, font_size_pt=BODY_TEXT_SIZE_PT)
+
     doc.save(str(output_path))
     fix_docx_namespaces(output_path)
 
