@@ -805,6 +805,9 @@ def replace_placeholders(
                 clear_paragraph(paragraph)
                 if placeholder in plain_hyperlink_keys:
                     add_hyperlink(paragraph, value, target, highlight=False)
+                    apply_font_size_to_runs(
+                        paragraph, font_size_pt=BODY_TEXT_SIZE_PT
+                    )
                 else:
                     add_hyperlink(paragraph, value, target, highlight=True)
                 paragraph_text = paragraph.text

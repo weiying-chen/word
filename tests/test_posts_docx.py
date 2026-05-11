@@ -418,3 +418,60 @@ def test_generated_posts_enforces_body_12pt_and_source_10pt(tmp_path: Path) -> N
 
     assert all(run.font.size == Pt(BODY_TEXT_SIZE_PT) for run in header_para.runs if run.text)
     assert all(run.font.size == Pt(REFERENCE_TEXT_SIZE_PT) for run in source_para.runs if run.text)
+
+
+def test_generated_posts_keeps_header_url_12pt_and_ref_url_10pt(
+    tmp_path: Path,
+) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "節目1則",
+            "1. alex",
+            "Program - Test Title st/rc",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "News title",
+            "--------------------------------",
+        ],
+    )
+    doc = Document()
+    doc.styles["Normal"].font.size = Pt(10)
+    for text in ["{{HEADER_URL}}", "{{REF_URL}}"]:
+        doc.add_paragraph(text)
+    doc.save(template_path)
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+    output_path = output_paths[0]
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc_xml = ET.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    by_text: dict[str, ET.Element] = {}
+    for para in doc_xml.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in para.findall(".//w:t", ns)).strip()
+        if text:
+            by_text[text] = para
+
+    header_url_para = by_text["https://example.com/video"]
+    ref_url_para = by_text["https://example.com/news"]
+
+    header_run = header_url_para.find(".//w:hyperlink/w:r/w:rPr/w:sz", ns)
+    ref_run = ref_url_para.find(".//w:hyperlink/w:r/w:rPr/w:sz", ns)
+    assert header_run is not None
+    assert ref_run is not None
+    assert header_run.get("{%s}val" % ns["w"]) == str(BODY_TEXT_SIZE_PT * 2)
+    assert ref_run.get("{%s}val" % ns["w"]) == str(REFERENCE_TEXT_SIZE_PT * 2)
