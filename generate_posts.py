@@ -140,6 +140,14 @@ def _split_program_title(title_line: str) -> tuple[str, str]:
     return cleaned.strip(), cleaned.strip()
 
 
+def _split_cjk_parenthetical_title(title_line: str) -> tuple[str, str]:
+    parts = [part.strip() for part in title_line.split(" - ") if part.strip()]
+    if len(parts) >= 2:
+        # Some inputs append a trailing speaker name segment.
+        return parts[0], parts[1]
+    return _split_program_title(title_line)
+
+
 def _strip_trailing_filename_punct(text: str) -> str:
     return text.rstrip(" \t\r\n。．.？?！!：:;；,，")
 
@@ -161,7 +169,9 @@ def build_filename_title_from_title_line(title_line: str) -> str:
             break
 
     source = cjk_parenthetical or _clean_title_for_display(title_line)
-    if " - " in source:
+    if cjk_parenthetical:
+        program, episode = _split_cjk_parenthetical_title(source)
+    elif " - " in source:
         program, episode = (part.strip() for part in source.split(" - ", 1))
     else:
         program, episode = _split_program_title(source)
@@ -191,7 +201,7 @@ def build_hashtags_from_title_line(title_line: str) -> tuple[str, str]:
     hashtags_en = _build_hashtags(en_program, en_title, pascal_case=True)
 
     if cjk_parenthetical:
-        zh_program, zh_title = _split_program_title(cjk_parenthetical)
+        zh_program, zh_title = _split_cjk_parenthetical_title(cjk_parenthetical)
     else:
         zh_program, zh_title = _split_program_title(display)
     hashtags_zh = _build_hashtags(zh_program, zh_title, pascal_case=False)
