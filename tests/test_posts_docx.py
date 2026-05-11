@@ -475,3 +475,48 @@ def test_generated_posts_keeps_header_url_12pt_and_ref_url_10pt(
     assert ref_run is not None
     assert header_run.get("{%s}val" % ns["w"]) == str(BODY_TEXT_SIZE_PT * 2)
     assert ref_run.get("{%s}val" % ns["w"]) == str(REFERENCE_TEXT_SIZE_PT * 2)
+
+
+def test_generated_bodhi_docx_adds_blank_after_ref_label(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "bodhi.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "菩提1則",
+            "1. alex",
+            "1/20首播 廣行環保護人間",
+            "https://www.daai.tv/master/life-wisdom/P90230231?more=true",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "參考資料：",
+            "{{REF_URL}}",
+            "{{REF_TITLE}}",
+            "要用的影片：",
+            "{{VIDEO_URL}}",
+            "{{VIDEO_TITLE}}",
+        ],
+    )
+    output_dir.mkdir()
+
+    with patch(
+        "generate_posts.fetch_bodhi_english_subtitle",
+        return_value="32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore",
+    ):
+        output_paths = generate_docs(
+            schedule_path=schedule_path,
+            template_path=template_path,
+            output_dir=output_dir,
+            filename_prefix="",
+            filename_suffix="",
+        )
+
+    doc = Document(str(output_paths[0]))
+    label_idx = next(i for i, p in enumerate(doc.paragraphs) if p.text.strip() == "參考資料：")
+    assert doc.paragraphs[label_idx + 1].text.strip() == ""

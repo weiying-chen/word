@@ -698,6 +698,8 @@ def strip_reference_block(doc: Document, ref_url: str, *, keep_ref_title: bool =
     remove_indices = []
     preserved_ref_title = False
     for idx in range(start_idx, end_idx):
+        if doc.paragraphs[idx].text.strip() == ref_label:
+            continue
         if idx == ref_url_idx:
             continue
         if keep_ref_title and ref_url_idx is not None and idx > ref_url_idx and not preserved_ref_title:
@@ -909,6 +911,7 @@ def generate_docs(
             strip_reference_block(doc, entry.get("ref_url", ""), keep_ref_title=True)
             strip_bodhi_video_labels(doc)
             strip_bodhi_title_block(doc)
+            ensure_blank_after_labels(doc, {"參考資料："})
             normalize_empty_paragraphs(doc)
         else:
             ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
