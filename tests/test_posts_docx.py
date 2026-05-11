@@ -283,6 +283,7 @@ def test_generated_docx_sets_source_indent_for_labels(tmp_path: Path) -> None:
     assert label_para.paragraph_format.first_line_indent == 0
     assert url_para.paragraph_format.left_indent == Inches(0.5)
     assert url_para.paragraph_format.first_line_indent == 0
+    assert all(run.font.size == Pt(REFERENCE_TEXT_SIZE_PT) for run in label_para.runs if run.text)
 
 
 def test_generated_bodhi_docx_puts_english_title_under_chinese_title(tmp_path: Path) -> None:

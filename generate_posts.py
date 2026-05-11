@@ -795,6 +795,7 @@ def replace_placeholders(
         paragraph_text = paragraph.text
         if paragraph_text.strip() in indent_labels:
             set_source_indent(paragraph, indent_inches)
+            apply_source_style(paragraph)
         for placeholder, value in mapping.items():
             if placeholder not in paragraph_text:
                 continue
