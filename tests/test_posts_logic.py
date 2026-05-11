@@ -391,3 +391,12 @@ def test_cjk_parenthetical_drops_trailing_speaker_name() -> None:
     assert hashtags_en == "#BenevolenceAndWisdom #KrisYaoOnGlobalWarming"
     assert hashtags_zh == "#仁心慧語 #傷心地球"
     assert build_filename_title_from_title_line(title) == "仁心慧語 傷心地球"
+
+
+def test_plain_cjk_title_drops_trailing_speaker_name() -> None:
+    title = "仁心慧語 - 傷心地球 - 姚仁喜"
+    hashtags_en, hashtags_zh = build_hashtags_from_title_line(title)
+
+    assert hashtags_en == "#仁心慧語 #傷心地球"
+    assert hashtags_zh == "#仁心慧語 #傷心地球"
+    assert build_filename_title_from_title_line(title) == "仁心慧語 傷心地球"

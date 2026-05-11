@@ -123,6 +123,11 @@ def _is_cjk(text: str) -> bool:
 
 def _split_program_title(title_line: str) -> tuple[str, str]:
     cleaned = _clean_title_for_display(title_line)
+    if " - " in cleaned and _is_cjk(cleaned):
+        parts = [part.strip() for part in cleaned.split(" - ") if part.strip()]
+        if len(parts) >= 2:
+            # For CJK titles, a trailing 3rd segment is often a speaker name.
+            return parts[0], parts[1]
     if " - " in cleaned:
         program, title = cleaned.split(" - ", 1)
         return program.strip(), title.strip()
@@ -171,8 +176,6 @@ def build_filename_title_from_title_line(title_line: str) -> str:
     source = cjk_parenthetical or _clean_title_for_display(title_line)
     if cjk_parenthetical:
         program, episode = _split_cjk_parenthetical_title(source)
-    elif " - " in source:
-        program, episode = (part.strip() for part in source.split(" - ", 1))
     else:
         program, episode = _split_program_title(source)
 
