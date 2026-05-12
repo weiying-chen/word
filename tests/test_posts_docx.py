@@ -521,3 +521,83 @@ def test_generated_bodhi_docx_adds_blank_after_ref_label(tmp_path: Path) -> None
     doc = Document(str(output_paths[0]))
     label_idx = next(i for i, p in enumerate(doc.paragraphs) if p.text.strip() == "參考資料：")
     assert doc.paragraphs[label_idx + 1].text.strip() == ""
+
+
+def test_generated_posts_title_is_12pt_and_source_block_is_10pt(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "alex_blocks.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "1",
+            "參考資料:",
+            "https://example.com/news",
+            "26/1/23",
+            "News title",
+            "News summary zh",
+            "News title en",
+            "News summary en",
+            "要用的影片:",
+            "https://example.com/video",
+            "Program - Test Title (健康節目 - 測試標題)",
+            "Video desc en",
+            "Video desc zh",
+        ],
+    )
+    doc = Document()
+    doc.styles["Normal"].font.size = Pt(10)
+    for text in [
+        "標題",
+        "{{HEADER_TITLE}}",
+        "參考資料：",
+        "{{REF_URL}}",
+        "{{REF_TITLE}}",
+        "{{REF_SUMMARY_ZH}}",
+        "英文翻譯：",
+        "{{REF_TITLE_EN}}",
+        "{{REF_SUMMARY_EN}}",
+        "要用的影片：",
+        "{{VIDEO_URL}}",
+        "{{VIDEO_TITLE}}",
+        "{{VIDEO_DESC_EN}}",
+        "{{VIDEO_DESC_ZH}}",
+    ]:
+        doc.add_paragraph(text)
+    doc.save(template_path)
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+    rendered = Document(str(output_paths[0]))
+
+    p_by_text = {p.text.strip(): p for p in rendered.paragraphs if p.text.strip()}
+    assert all(
+        run.font.size == Pt(BODY_TEXT_SIZE_PT)
+        for run in p_by_text["標題"].runs
+        if run.text
+    )
+
+    source_texts = [
+        "參考資料：",
+        "https://example.com/news",
+        "News title\nNews summary zh\nNews title en\nNews summary en",
+        "英文翻譯：",
+        "要用的影片：",
+        "https://example.com/video",
+        "Program - Test Title (健康節目 - 測試標題)",
+        "Video desc en",
+        "Video desc zh",
+    ]
+    for text in source_texts:
+        assert all(
+            run.font.size == Pt(REFERENCE_TEXT_SIZE_PT)
+            for run in p_by_text[text].runs
+            if run.text
+        ), text
