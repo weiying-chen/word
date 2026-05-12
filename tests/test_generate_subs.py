@@ -808,6 +808,33 @@ def test_generate_subs_layout_matches_current_output_structure(tmp_path: Path) -
         generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
 
 
+def test_generate_subs_reports_all_missing_thumbnails(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["選圖：", "{{THUMBNAIL}}"])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "THUMBNAIL: missing_a.png",
+                "THUMBNAIL: missing_b.png",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    error_text = str(exc_info.value)
+    assert "THUMBNAIL file not found:" in error_text
+    assert "missing_a.png" in error_text
+    assert "missing_b.png" in error_text
+
+
 def test_generate_subs_treats_bom_prefixed_first_subtitle_as_body(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     source_docx = tmp_path / "source.docx"

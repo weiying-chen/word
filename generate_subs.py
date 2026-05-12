@@ -117,6 +117,7 @@ def _decode_input_text(path: Path) -> tuple[str, str, bool]:
 
 def parse_input(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
+    thumbnail_values: list[str] = []
     text, encoding_used, used_fallback = _decode_input_text(path)
     if used_fallback:
         warnings.warn(
@@ -161,12 +162,36 @@ def parse_input(path: Path) -> dict[str, str]:
             data[key] = normalize_title_text(value)
         else:
             data[key] = normalize_input_text(value)
+            if key == "THUMBNAIL" and value.strip():
+                thumbnail_values.append(normalize_input_text(value).strip())
         idx += 1
 
     data.setdefault("INTRO", "")
     data.setdefault("BODY", "")
+    if thumbnail_values:
+        data["__THUMBNAIL_VALUES__"] = "\n".join(thumbnail_values)
 
     return data
+
+
+def _validate_thumbnail_paths(data: dict[str, str], input_base: Path) -> None:
+    raw_values = data.get("__THUMBNAIL_VALUES__", "")
+    if not raw_values:
+        return
+    missing: list[Path] = []
+    for raw_value in raw_values.splitlines():
+        value = raw_value.strip()
+        if not value:
+            continue
+        thumbnail_path = Path(value)
+        if not thumbnail_path.is_absolute():
+            thumbnail_path = input_base / thumbnail_path
+        if not thumbnail_path.is_file():
+            missing.append(thumbnail_path)
+    if missing:
+        raise FileNotFoundError(
+            "\n".join(f"THUMBNAIL file not found: {path}" for path in missing)
+        )
 
 
 def _run_contains_symbol(text: str) -> bool:
@@ -658,6 +683,7 @@ def generate_subs(
 ) -> None:
     data = parse_input(input_path)
     input_base = input_path.parent
+    _validate_thumbnail_paths(data, input_base)
     _, source_header, source_body = _extract_source_paragraphs(source_docx_path)
     doc = Document(str(template_path))
     apply_default_margins(doc)
@@ -787,7 +813,10 @@ def main() -> None:
             with_subs_output_suffix(Path(args.output)),
         )
     except FileNotFoundError as exc:
-        raise SystemExit(f"[error] {exc}")
+        lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
+        if not lines:
+            raise SystemExit("[error] File not found")
+        raise SystemExit("\n".join(f"[error] {line}" for line in lines))
 
 
 if __name__ == "__main__":
