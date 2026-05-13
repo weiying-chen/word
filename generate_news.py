@@ -16,6 +16,7 @@ from docx.shared import Pt
 from docx.text.paragraph import Paragraph
 
 from docx_utils import add_hyperlink
+from docx_utils import apply_font_size_to_runs
 from generate_subs import fix_docx_namespaces, normalize_input_text, remove_paragraph
 from style_tokens import BODY_TEXT_SIZE_PT
 
@@ -99,14 +100,12 @@ def _set_line_in_paragraph(paragraph, text: str, hyperlink: str = "") -> None:
         return
     if hyperlink:
         add_hyperlink(paragraph, text, hyperlink)
-        for run in paragraph.runs:
-            run.font.size = Pt(NEWS_FONT_SIZE_PT)
+        apply_font_size_to_runs(paragraph, font_size_pt=NEWS_FONT_SIZE_PT)
         return
     if SOURCE_LINK_RE.match(text.strip()):
         link = text.strip()
         add_hyperlink(paragraph, link, link)
-        for run in paragraph.runs:
-            run.font.size = Pt(NEWS_FONT_SIZE_PT)
+        apply_font_size_to_runs(paragraph, font_size_pt=NEWS_FONT_SIZE_PT)
         return
     run = paragraph.add_run(text)
     run.font.size = Pt(NEWS_FONT_SIZE_PT)

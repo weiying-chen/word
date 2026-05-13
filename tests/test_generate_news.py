@@ -172,6 +172,15 @@ def test_generate_news_preserves_header_and_replaces_body(tmp_path: Path) -> Non
         len(paragraph.findall("w:hyperlink", ns)) for paragraph in paragraphs
     )
     assert hyperlink_count == 1
+    top_url_para = next(
+        p
+        for p in paragraphs
+        if "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+        == "https://example.com/news/story"
+    )
+    top_url_size = top_url_para.find(".//w:hyperlink/w:r/w:rPr/w:sz", ns)
+    assert top_url_size is not None
+    assert top_url_size.get("{%s}val" % ns["w"]) == str(BODY_TEXT_SIZE_PT * 2)
 
 
 def test_generate_news_from_sources_uses_body_text_file(tmp_path: Path) -> None:
