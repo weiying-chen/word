@@ -219,3 +219,51 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
     assert comment_runs
     assert all(run.font.size is None for run in row_cell_runs)
     assert all(run.font.size is None for run in comment_runs)
+
+
+def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    source_txt = tmp_path / "review.txt"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "A",
+                    "deadline": "2026-05-08T00:00:00.000Z",
+                    "workMinutes": 60,
+                    "contentSeconds": 210,
+                    "comments": ["c1"],
+                },
+                {
+                    "name": "B",
+                    "deadline": "2026-05-09T00:00:00.000Z",
+                    "workMinutes": 120,
+                    "comments": ["c2"],
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(
+        template_path,
+        source_txt,
+        output_path,
+        tasks_json,
+    )
+
+    out_doc = Document(output_path)
+    assert out_doc.paragraphs[2].text == "2026年5月"
+    table = out_doc.tables[0]
+    assert table.cell(1, 0).text.strip() == "5/8"
+    assert table.cell(1, 1).text.strip() == "1.\nA\n長度:3分30秒\n實際作業時間:1時"
+    assert table.cell(2, 0).text.strip() == "5/9"
+    assert table.cell(2, 1).text.strip() == "2.\nB\n實際作業時間:2時"

@@ -48,20 +48,50 @@ def parse_input(path: Path) -> dict[str, str]:
     return data
 
 
-def parse_export_month(payload: dict) -> str:
-    value = str(payload.get("exportMonth", "")).strip()
-    if not value:
+def _format_year_month_text(value: str) -> str:
+    text = value.strip()
+    if not text:
         return ""
-
-    if len(value) == 7 and value[4] == "-":
-        year_text, month_text = value.split("-", 1)
+    if len(text) == 7 and text[4] == "-":
+        year_text, month_text = text.split("-", 1)
         if year_text.isdigit() and month_text.isdigit():
             return f"{int(year_text)}年{int(month_text)}月"
-    return value
+    return text
 
 
-def parse_tasks_payload(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+def parse_tasks_payload(path: Path) -> list[dict]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        return raw.get(TASKS_KEY, [])
+    return []
+
+
+def derive_month_from_tasks(path: Path, tasks: list[dict]) -> str:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict):
+        export_month = _format_year_month_text(str(raw.get("exportMonth", "")))
+        if export_month:
+            return export_month
+
+    deadlines: list[datetime] = []
+    for task in tasks:
+        deadline_text = str(task.get("deadline", "")).strip()
+        if not deadline_text:
+            deadline_text = str(task.get("deadlineIso", "")).strip()
+        if not deadline_text:
+            continue
+        try:
+            deadlines.append(datetime.fromisoformat(deadline_text.replace("Z", "+00:00")))
+        except ValueError:
+            continue
+
+    if not deadlines:
+        return ""
+
+    latest = max(deadlines)
+    return f"{latest.year}年{latest.month}月"
 
 
 def _format_month_day(deadline_iso: str) -> str:
@@ -83,6 +113,19 @@ def _format_work_minutes(work_minutes: int | str | None) -> str:
     if remain:
         parts.append(f"{remain}分")
     return "".join(parts) if parts else "0分"
+
+
+def _format_content_seconds(content_seconds: int | str | None) -> str:
+    if content_seconds in (None, ""):
+        return ""
+    total = int(content_seconds)
+    minutes, seconds = divmod(total, 60)
+    parts: list[str] = []
+    if minutes:
+        parts.append(f"{minutes}分")
+    if seconds:
+        parts.append(f"{seconds}秒")
+    return "".join(parts) if parts else "0秒"
 
 
 def _set_cell_lines(cell, lines: list[str]) -> None:
@@ -168,9 +211,19 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [_format_month_day(str(task.get("deadlineIso", "")).strip())],
+            [
+                _format_month_day(
+                    str(task.get("deadline", "") or task.get("deadlineIso", "")).strip()
+                )
+            ],
         )
-        item_lines = [f"{slot + 1}.", str(task.get("title", "")).strip()]
+        item_lines = [
+            f"{slot + 1}.",
+            str(task.get("name", "") or task.get("title", "")).strip(),
+        ]
+        length_text = _format_content_seconds(task.get("contentSeconds"))
+        if length_text:
+            item_lines.append(f"長度:{length_text}")
         work_text = _format_work_minutes(task.get("workMinutes"))
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
@@ -218,13 +271,13 @@ def generate_review(
     tasks_path: Path,
 ) -> None:
     data = parse_input(input_path)
-    payload = parse_tasks_payload(tasks_path)
-    data[MONTH_KEY] = parse_export_month(payload)
+    tasks = parse_tasks_payload(tasks_path)
+    data[MONTH_KEY] = derive_month_from_tasks(tasks_path, tasks)
     doc = Document(str(resolve_template_path(template_path)))
     replace_placeholders(doc, data)
     apply_header_font_size(doc)
     apply_review_highlights(doc)
-    fill_regular_translation_table(doc, payload.get(TASKS_KEY, []))
+    fill_regular_translation_table(doc, tasks)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
 
