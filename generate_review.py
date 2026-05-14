@@ -19,7 +19,7 @@ from style_tokens import REVIEW_TEXT_SIZE_PT
 ALLOWED_KEYS = {"NAME"}
 GOAL_LABEL_TEXT = "本月精進目標:"
 MONTH_KEY = "MONTH"
-ASSIGNMENTS_KEY = "assignments"
+TASKS_KEY = "tasks"
 HEADER_FONT_SIZE_PT = REVIEW_TEXT_SIZE_PT
 
 
@@ -60,7 +60,7 @@ def parse_export_month(payload: dict) -> str:
     return value
 
 
-def parse_assignments_payload(path: Path) -> dict:
+def parse_tasks_payload(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -152,14 +152,14 @@ def _ensure_regular_translation_row_count(table, desired_count: int) -> list[int
     return list(range(start_idx, start_idx + target))
 
 
-def fill_regular_translation_table(doc: Document, assignments: list[dict]) -> None:
+def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
     if not doc.tables:
         return
     table = doc.tables[0]
-    row_indexes = _ensure_regular_translation_row_count(table, len(assignments))
+    row_indexes = _ensure_regular_translation_row_count(table, len(tasks))
     for slot, row_idx in enumerate(row_indexes):
-        assignment = assignments[slot] if slot < len(assignments) else None
-        if not assignment:
+        task = tasks[slot] if slot < len(tasks) else None
+        if not task:
             _set_cell_lines(table.cell(row_idx, 0), [])
             _set_cell_lines(table.cell(row_idx, 1), [])
             _set_cell_lines(table.cell(row_idx, 2), [])
@@ -168,15 +168,15 @@ def fill_regular_translation_table(doc: Document, assignments: list[dict]) -> No
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [_format_month_day(str(assignment.get("deadlineIso", "")).strip())],
+            [_format_month_day(str(task.get("deadlineIso", "")).strip())],
         )
-        item_lines = [f"{slot + 1}.", str(assignment.get("title", "")).strip()]
-        work_text = _format_work_minutes(assignment.get("workMinutes"))
+        item_lines = [f"{slot + 1}.", str(task.get("title", "")).strip()]
+        work_text = _format_work_minutes(task.get("workMinutes"))
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
         _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])
 
-        comments = assignment.get("comments", [])
+        comments = task.get("comments", [])
         comment_lines = [f"• {str(c).strip()}" for c in comments if str(c).strip()]
         _set_cell_lines(table.cell(row_idx, 2), comment_lines)
         _set_cell_lines(table.cell(row_idx, 3), [])
@@ -215,16 +215,16 @@ def generate_review(
     template_path: Path,
     input_path: Path,
     output_path: Path,
-    assignments_path: Path,
+    tasks_path: Path,
 ) -> None:
     data = parse_input(input_path)
-    payload = parse_assignments_payload(assignments_path)
+    payload = parse_tasks_payload(tasks_path)
     data[MONTH_KEY] = parse_export_month(payload)
     doc = Document(str(resolve_template_path(template_path)))
     replace_placeholders(doc, data)
     apply_header_font_size(doc)
     apply_review_highlights(doc)
-    fill_regular_translation_table(doc, payload.get(ASSIGNMENTS_KEY, []))
+    fill_regular_translation_table(doc, payload.get(TASKS_KEY, []))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
 
@@ -249,9 +249,9 @@ def main() -> None:
         help="Path to write the rendered review DOCX.",
     )
     parser.add_argument(
-        "--assignments-json",
-        default="assignments.json",
-        help="Path to assignments JSON that provides exportMonth.",
+        "--tasks-json",
+        default="tasks.json",
+        help="Path to tasks JSON that provides exportMonth.",
     )
     args = parser.parse_args()
 
@@ -259,7 +259,7 @@ def main() -> None:
         Path(args.template),
         Path(args.source_txt),
         Path(args.output),
-        Path(args.assignments_json),
+        Path(args.tasks_json),
     )
 
 

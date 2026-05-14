@@ -27,10 +27,10 @@ from style_tokens import BODY_TEXT_SIZE_PT, REFERENCE_HIGHLIGHT_DEFAULT, REFEREN
 
 
 PERSON_LINE_RE = re.compile(r"^\d+\.\s*(\S+)")
-DATE_ASSIGNMENT_LINE_RE = re.compile(
+DATE_TASK_LINE_RE = re.compile(
     r"^(?:\d+\.\s*)?\d{1,2}/\d{1,2}(?:\([^()]*\))?\s*發\s*(\S+)"
 )
-DATE_ASSIGNMENT_PREFIX_RE = re.compile(
+DATE_TASK_PREFIX_RE = re.compile(
     r"^(?:\d+\.\s*)?(?P<date>\d{1,2}/\d{1,2}|\d{2}/\d{1,2}/\d{1,2})(?:\([^()]*\))?\s*發\s*\S+"
 )
 BARE_PERSON_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*$")
@@ -53,7 +53,7 @@ TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _extract_person_name(line: str) -> str | None:
-    for pattern in (DATE_ASSIGNMENT_LINE_RE, PERSON_LINE_RE):
+    for pattern in (DATE_TASK_LINE_RE, PERSON_LINE_RE):
         match = pattern.match(line)
         if match:
             return match.group(1).strip().lower()
@@ -63,8 +63,8 @@ def _extract_person_name(line: str) -> str | None:
     return None
 
 
-def _extract_assignment_date_prefix(line: str, default_year: int) -> str | None:
-    match = DATE_ASSIGNMENT_PREFIX_RE.match(line.strip())
+def _extract_task_date_prefix(line: str, default_year: int) -> str | None:
+    match = DATE_TASK_PREFIX_RE.match(line.strip())
     if not match:
         return None
     return _parse_date_prefix(match.group("date"), default_year=default_year)
@@ -415,9 +415,9 @@ def _build_standard_schedule_entry(
         ref_url_target=ref_url_target,
         ref_title=ref_title,
     )
-    assignment_prefix = _extract_assignment_date_prefix(line, default_year=default_year)
-    if assignment_prefix:
-        entry["filename_prefix_override"] = f"{assignment_prefix}_"
+    task_prefix = _extract_task_date_prefix(line, default_year=default_year)
+    if task_prefix:
+        entry["filename_prefix_override"] = f"{task_prefix}_"
     return entry
 
 

@@ -274,8 +274,8 @@ def test_human_bodhi_header_is_treated_as_bodhi_section(tmp_path: Path) -> None:
     assert entries[0]["filename_prefix_override"] == expected_prefix
 
 
-def test_date_assignment_line_for_alex_is_parsed(tmp_path: Path) -> None:
-    schedule_path = tmp_path / "date_assignment.docx"
+def test_date_task_line_for_alex_is_parsed(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "date_task.docx"
     _write_docx(
         schedule_path,
         [

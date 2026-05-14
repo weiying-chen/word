@@ -1,8 +1,8 @@
 {
-  "assignments": [
+  "tasks": [
     {
-      "id": "assignment-1778067432083",
-      "title": "New assignment",
+      "id": "task-1778067432083",
+      "title": "New task",
       "deadlineIso": "2026-05-08T00:00:00.000Z",
       "workMinutes": 480,
       "comments": [

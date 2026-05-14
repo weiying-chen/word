@@ -32,7 +32,7 @@ def _write_review_template(path: Path) -> None:
 def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     source_txt = tmp_path / "review.txt"
-    assignments_json = tmp_path / "assignments.json"
+    tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
@@ -44,7 +44,7 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
         ),
         encoding="utf-8",
     )
-    assignments_json.write_text(
+    tasks_json.write_text(
         json.dumps({"exportMonth": "2022-11"}, ensure_ascii=False),
         encoding="utf-8",
     )
@@ -53,7 +53,7 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
         template_path,
         source_txt,
         output_path,
-        assignments_json,
+        tasks_json,
     )
 
     out_doc = Document(output_path)
@@ -95,16 +95,16 @@ def test_resolve_template_path_accepts_relative_repo_template() -> None:
 def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     source_txt = tmp_path / "review.txt"
-    assignments_json = tmp_path / "assignments.json"
+    tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
     source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
-    assignments_json.write_text(
+    tasks_json.write_text(
         json.dumps(
             {
                 "exportMonth": "2026-05",
-                "assignments": [
+                "tasks": [
                     {
                         "title": "回眸(中翻英)",
                         "deadlineIso": "2026-05-08T00:00:00.000Z",
@@ -122,7 +122,7 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
         template_path,
         source_txt,
         output_path,
-        assignments_json,
+        tasks_json,
     )
 
     out_doc = Document(output_path)
@@ -132,19 +132,19 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
     assert table.cell(1, 2).text.strip() == "• This is a comment"
 
 
-def test_generate_review_inserts_rows_for_multiple_assignments(tmp_path: Path) -> None:
+def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     source_txt = tmp_path / "review.txt"
-    assignments_json = tmp_path / "assignments.json"
+    tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
     source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
-    assignments_json.write_text(
+    tasks_json.write_text(
         json.dumps(
             {
                 "exportMonth": "2026-05",
-                "assignments": [
+                "tasks": [
                     {
                         "title": "A",
                         "deadlineIso": "2026-05-08T00:00:00.000Z",
@@ -168,7 +168,7 @@ def test_generate_review_inserts_rows_for_multiple_assignments(tmp_path: Path) -
         template_path,
         source_txt,
         output_path,
-        assignments_json,
+        tasks_json,
     )
 
     out_doc = Document(output_path)
@@ -182,16 +182,16 @@ def test_generate_review_inserts_rows_for_multiple_assignments(tmp_path: Path) -
 def test_generate_review_uses_template_font_for_generated_table_content(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     source_txt = tmp_path / "review.txt"
-    assignments_json = tmp_path / "assignments.json"
+    tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
     source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
-    assignments_json.write_text(
+    tasks_json.write_text(
         json.dumps(
             {
                 "exportMonth": "2026-05",
-                "assignments": [
+                "tasks": [
                     {
                         "title": "回眸(中翻英)",
                         "deadlineIso": "2026-05-08T00:00:00.000Z",
@@ -209,7 +209,7 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
         template_path,
         source_txt,
         output_path,
-        assignments_json,
+        tasks_json,
     )
 
     out_doc = Document(output_path)
