@@ -213,7 +213,11 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
             table.cell(row_idx, 0),
             [
                 _format_month_day(
-                    str(task.get("deadline", "") or task.get("deadlineIso", "")).strip()
+                    str(
+                        task.get("createdAt", "")
+                        or task.get("deadline", "")
+                        or task.get("deadlineIso", "")
+                    ).strip()
                 )
             ],
         )

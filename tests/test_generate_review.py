@@ -236,6 +236,7 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
             [
                 {
                     "name": "A",
+                    "createdAt": "2026-05-01T01:02:03Z",
                     "deadline": "2026-05-08T00:00:00.000Z",
                     "workMinutes": 60,
                     "contentSeconds": 210,
@@ -243,6 +244,7 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
                 },
                 {
                     "name": "B",
+                    "createdAt": "2026-05-02T04:05:06Z",
                     "deadline": "2026-05-09T00:00:00.000Z",
                     "workMinutes": 120,
                     "comments": ["c2"],
@@ -263,7 +265,7 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
     out_doc = Document(output_path)
     assert out_doc.paragraphs[2].text == "2026年5月"
     table = out_doc.tables[0]
-    assert table.cell(1, 0).text.strip() == "5/8"
+    assert table.cell(1, 0).text.strip() == "5/1"
     assert table.cell(1, 1).text.strip() == "1.\nA\n長度:3分30秒\n實際作業時間:1時"
-    assert table.cell(2, 0).text.strip() == "5/9"
+    assert table.cell(2, 0).text.strip() == "5/2"
     assert table.cell(2, 1).text.strip() == "2.\nB\n實際作業時間:2時"
