@@ -19,7 +19,6 @@ from style_tokens import REVIEW_TEXT_SIZE_PT
 ALLOWED_KEYS = {"NAME"}
 GOAL_LABEL_TEXT = "本月精進目標:"
 MONTH_KEY = "MONTH"
-TASKS_KEY = "tasks"
 HEADER_FONT_SIZE_PT = REVIEW_TEXT_SIZE_PT
 
 
@@ -61,43 +60,33 @@ def _format_year_month_text(value: str) -> str:
 
 def parse_tasks_payload(path: Path) -> list[dict]:
     raw = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(raw, list):
-        return raw
-    if isinstance(raw, dict):
-        return raw.get(TASKS_KEY, [])
-    return []
+    if not isinstance(raw, list):
+        raise ValueError("tasks.json must be a top-level JSON array.")
+    return raw
 
 
-def derive_month_from_tasks(path: Path, tasks: list[dict]) -> str:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(raw, dict):
-        export_month = _format_year_month_text(str(raw.get("exportMonth", "")))
-        if export_month:
-            return export_month
-
-    deadlines: list[datetime] = []
+def derive_month_from_tasks(tasks: list[dict]) -> str:
+    created_times: list[datetime] = []
     for task in tasks:
-        deadline_text = str(task.get("deadline", "")).strip()
-        if not deadline_text:
-            deadline_text = str(task.get("deadlineIso", "")).strip()
-        if not deadline_text:
+        created_at = str(task.get("createdAt", "")).strip()
+        if not created_at:
             continue
         try:
-            deadlines.append(datetime.fromisoformat(deadline_text.replace("Z", "+00:00")))
+            created_times.append(datetime.fromisoformat(created_at.replace("Z", "+00:00")))
         except ValueError:
             continue
 
-    if not deadlines:
+    if not created_times:
         return ""
 
-    latest = max(deadlines)
+    latest = max(created_times)
     return f"{latest.year}年{latest.month}月"
 
 
-def _format_month_day(deadline_iso: str) -> str:
-    if not deadline_iso:
+def _format_month_day(iso_text: str) -> str:
+    if not iso_text:
         return ""
-    text = deadline_iso.replace("Z", "+00:00")
+    text = iso_text.replace("Z", "+00:00")
     dt = datetime.fromisoformat(text)
     return f"{dt.month}/{dt.day}"
 
@@ -213,17 +202,13 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
             table.cell(row_idx, 0),
             [
                 _format_month_day(
-                    str(
-                        task.get("createdAt", "")
-                        or task.get("deadline", "")
-                        or task.get("deadlineIso", "")
-                    ).strip()
+                    str(task.get("createdAt", "")).strip()
                 )
             ],
         )
         item_lines = [
             f"{slot + 1}.",
-            str(task.get("name", "") or task.get("title", "")).strip(),
+            str(task.get("name", "")).strip(),
         ]
         length_text = _format_content_seconds(task.get("contentSeconds"))
         if length_text:
@@ -276,7 +261,7 @@ def generate_review(
 ) -> None:
     data = parse_input(input_path)
     tasks = parse_tasks_payload(tasks_path)
-    data[MONTH_KEY] = derive_month_from_tasks(tasks_path, tasks)
+    data[MONTH_KEY] = derive_month_from_tasks(tasks)
     doc = Document(str(resolve_template_path(template_path)))
     replace_placeholders(doc, data)
     apply_header_font_size(doc)
@@ -308,7 +293,7 @@ def main() -> None:
     parser.add_argument(
         "--tasks-json",
         default="tasks.json",
-        help="Path to tasks JSON that provides exportMonth.",
+        help="Path to tasks JSON array.",
     )
     args = parser.parse_args()
 

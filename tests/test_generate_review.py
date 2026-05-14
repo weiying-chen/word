@@ -45,7 +45,19 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
         encoding="utf-8",
     )
     tasks_json.write_text(
-        json.dumps({"exportMonth": "2022-11"}, ensure_ascii=False),
+        json.dumps(
+            [
+                {
+                    "name": "A",
+                    "createdAt": "2022-11-08T00:00:00.000Z",
+                    "workMinutes": 60,
+                    "contentSeconds": 120,
+                    "comments": [],
+                    "children": [],
+                }
+            ],
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
 
@@ -102,17 +114,16 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
     source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
     tasks_json.write_text(
         json.dumps(
-            {
-                "exportMonth": "2026-05",
-                "tasks": [
-                    {
-                        "title": "回眸(中翻英)",
-                        "deadlineIso": "2026-05-08T00:00:00.000Z",
-                        "workMinutes": 240,
-                        "comments": ["This is a comment"],
-                    }
-                ],
-            },
+            [
+                {
+                    "name": "回眸(中翻英)",
+                    "createdAt": "2026-05-08T00:00:00.000Z",
+                    "workMinutes": 240,
+                    "contentSeconds": 210,
+                    "comments": ["This is a comment"],
+                    "children": [],
+                }
+            ],
             ensure_ascii=False,
         ),
         encoding="utf-8",
@@ -128,7 +139,7 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
     out_doc = Document(output_path)
     table = out_doc.tables[0]
     assert table.cell(1, 0).text.strip() == "5/8"
-    assert table.cell(1, 1).text.strip() == "1.\n回眸(中翻英)\n實際作業時間:4時"
+    assert table.cell(1, 1).text.strip() == "1.\n回眸(中翻英)\n長度:3分30秒\n實際作業時間:4時"
     assert table.cell(1, 2).text.strip() == "• This is a comment"
 
 
@@ -142,23 +153,24 @@ def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None
     source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
     tasks_json.write_text(
         json.dumps(
-            {
-                "exportMonth": "2026-05",
-                "tasks": [
-                    {
-                        "title": "A",
-                        "deadlineIso": "2026-05-08T00:00:00.000Z",
-                        "workMinutes": 60,
-                        "comments": ["c1"],
-                    },
-                    {
-                        "title": "B",
-                        "deadlineIso": "2026-05-09T00:00:00.000Z",
-                        "workMinutes": 120,
-                        "comments": ["c2"],
-                    },
-                ],
-            },
+            [
+                {
+                    "name": "A",
+                    "createdAt": "2026-05-08T00:00:00.000Z",
+                    "workMinutes": 60,
+                    "contentSeconds": 120,
+                    "comments": ["c1"],
+                    "children": [],
+                },
+                {
+                    "name": "B",
+                    "createdAt": "2026-05-09T00:00:00.000Z",
+                    "workMinutes": 120,
+                    "contentSeconds": 180,
+                    "comments": ["c2"],
+                    "children": [],
+                },
+            ],
             ensure_ascii=False,
         ),
         encoding="utf-8",
@@ -173,8 +185,8 @@ def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None
 
     out_doc = Document(output_path)
     table = out_doc.tables[0]
-    assert table.cell(1, 1).text.strip() == "1.\nA\n實際作業時間:1時"
-    assert table.cell(2, 1).text.strip() == "2.\nB\n實際作業時間:2時"
+    assert table.cell(1, 1).text.strip() == "1.\nA\n長度:2分\n實際作業時間:1時"
+    assert table.cell(2, 1).text.strip() == "2.\nB\n長度:3分\n實際作業時間:2時"
     assert table.cell(3, 0).text.strip() == "日期"
     assert table.cell(3, 1).text.strip() == "(例行)字幕審稿"
 
@@ -189,17 +201,16 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
     source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
     tasks_json.write_text(
         json.dumps(
-            {
-                "exportMonth": "2026-05",
-                "tasks": [
-                    {
-                        "title": "回眸(中翻英)",
-                        "deadlineIso": "2026-05-08T00:00:00.000Z",
-                        "workMinutes": 240,
-                        "comments": ["This is a comment"],
-                    }
-                ],
-            },
+            [
+                {
+                    "name": "回眸(中翻英)",
+                    "createdAt": "2026-05-08T00:00:00.000Z",
+                    "workMinutes": 240,
+                    "contentSeconds": 210,
+                    "comments": ["This is a comment"],
+                    "children": [],
+                }
+            ],
             ensure_ascii=False,
         ),
         encoding="utf-8",
@@ -237,17 +248,17 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
                 {
                     "name": "A",
                     "createdAt": "2026-05-01T01:02:03Z",
-                    "deadline": "2026-05-08T00:00:00.000Z",
                     "workMinutes": 60,
                     "contentSeconds": 210,
                     "comments": ["c1"],
+                    "children": [],
                 },
                 {
                     "name": "B",
                     "createdAt": "2026-05-02T04:05:06Z",
-                    "deadline": "2026-05-09T00:00:00.000Z",
                     "workMinutes": 120,
                     "comments": ["c2"],
+                    "children": [],
                 },
             ],
             ensure_ascii=False,
