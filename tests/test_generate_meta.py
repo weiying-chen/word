@@ -8,6 +8,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 
 from generate_meta import (
+    build_people_lines,
     default_output_path,
     generate_meta,
     parse_input,
@@ -500,6 +501,77 @@ class RenderMetaTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_parse_input_keeps_non_person_tail_blocks_from_meta_people(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "(6． Uyanda烏漾達)",
+                        "/*SUPER:",
+                        "慈濟志工│烏漾達//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
+                        "",
+                        "PEOPLE:",
+                        "慈濟志工｜烏漾達",
+                        "Uyanda",
+                        "Volunteer",
+                        "",
+                        "0027",
+                        "(最後上字在畫面上：慈濟 我願意 我們愛你)",
+                        "Tzu Chi, we love you.",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(body_path, meta_path)
+
+        self.assertEqual(
+            data["people_tail_lines"],
+            [
+                "0027",
+                "(最後上字在畫面上：慈濟 我願意 我們愛你)",
+                "Tzu Chi, we love you.",
+            ],
+        )
+
+
+def test_build_people_lines_appends_tail_lines_after_people() -> None:
+    lines = build_people_lines(
+        [
+            {
+                "name_zh": "烏漾達",
+                "name_en": "Uyanda",
+                "role_zh": "慈濟志工",
+                "role_en": "Volunteer",
+                "org_en": "",
+            }
+        ],
+        ["0027", "(最後上字在畫面上：慈濟 我願意 我們愛你)", "Tzu Chi, we love you."],
+    )
+
+    assert lines[-3:] == [
+        "0027",
+        "(最後上字在畫面上：慈濟 我願意 我們愛你)",
+        "Tzu Chi, we love you.",
+    ]
 
     def test_generate_meta_supports_separate_meta_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

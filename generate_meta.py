@@ -111,9 +111,20 @@ def _parse_super(lines: list[str]) -> dict:
     }
 
 
-def _parse_meta_people_blocks(text: str) -> list[dict[str, str]]:
+def _is_non_person_meta_block(first_line: str) -> bool:
+    stripped = first_line.strip()
+    if not stripped:
+        return True
+    if re.fullmatch(r"\d+", stripped):
+        return True
+    if stripped.startswith("(") or stripped.startswith("（"):
+        return True
+    return False
+
+
+def _parse_meta_people_blocks(text: str) -> tuple[list[dict[str, str]], list[str]]:
     if not text.strip():
-        return []
+        return [], []
 
     blocks: list[list[str]] = []
     current: list[str] = []
@@ -129,8 +140,14 @@ def _parse_meta_people_blocks(text: str) -> list[dict[str, str]]:
         blocks.append(current)
 
     entries: list[dict[str, str]] = []
+    trailing_lines: list[str] = []
     for block in blocks:
         if not block:
+            continue
+        if _is_non_person_meta_block(block[0]):
+            if trailing_lines:
+                trailing_lines.append("")
+            trailing_lines.extend(block)
             continue
         label_zh = block[0].strip()
         name_zh = ""
@@ -152,7 +169,7 @@ def _parse_meta_people_blocks(text: str) -> list[dict[str, str]]:
                 "org_en": block[3].strip() if len(block) > 3 else "",
             }
         )
-    return entries
+    return entries, trailing_lines
 
 
 def _merge_meta_people_overrides(
@@ -409,7 +426,7 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
 
     summary = data.get("SUMMARY", "").splitlines()
     meta_people_text = data.get(PEOPLE_KEY, "")
-    overrides = _parse_meta_people_blocks(meta_people_text)
+    overrides, people_tail_lines = _parse_meta_people_blocks(meta_people_text)
     people = _merge_meta_people_overrides(people, overrides)
     return {
         "title_zh": data.get("TITLE_TEXT", ""),
@@ -418,6 +435,7 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
         "supers_zh": supers,
         "report_zh": report_zh,
         "people": people,
+        "people_tail_lines": people_tail_lines,
         "title_en": data.get(TITLE_KEY, ""),
         "overview_en": data.get(OVERVIEW_KEY, ""),
     }
@@ -508,7 +526,7 @@ def _label_without_repeated_english_name(
     return role_zh.strip()
 
 
-def build_people_lines(people: list[dict]) -> list[str]:
+def build_people_lines(people: list[dict], tail_lines: list[str] | None = None) -> list[str]:
     lines: list[str] = []
     if people:
         # Keep one blank line between the "名字職銜" label and the first person entry.
@@ -548,6 +566,12 @@ def build_people_lines(people: list[dict]) -> list[str]:
             lines.append(org_en)
         if idx < len(people) - 1:
             lines.append("")
+
+    extra = tail_lines or []
+    if extra:
+        if lines and lines[-1] != "":
+            lines.append("")
+        lines.extend(extra)
     return lines
 
 
@@ -595,7 +619,10 @@ def generate_meta(
     title_placeholder = find_paragraph_by_text(doc, TITLE_PLACEHOLDER)
     replace_or_remove_paragraph_text(title_placeholder, str(data.get("title_en", "")))
 
-    people_lines = build_people_lines(data.get("people", []))
+    people_lines = build_people_lines(
+        data.get("people", []),
+        data.get("people_tail_lines", []),
+    )
     people_placeholder = find_paragraph_by_text(doc, PEOPLE_PLACEHOLDER)
     if people_placeholder:
         replace_multiline(people_placeholder, people_lines)
