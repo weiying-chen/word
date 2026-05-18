@@ -15,7 +15,7 @@ def _write_review_template(path: Path) -> None:
     doc.add_paragraph("姓名: {{NAME}}")
     doc.add_paragraph("{{MONTH}}")
     doc.add_paragraph("本月精進目標:")
-    table = doc.add_table(rows=3, cols=4)
+    table = doc.add_table(rows=7, cols=4)
     table.cell(0, 0).text = "日期"
     table.cell(0, 1).text = "(例行)字幕翻譯"
     table.cell(0, 2).text = "編輯回饋"
@@ -26,24 +26,26 @@ def _write_review_template(path: Path) -> None:
     table.cell(1, 3).text = ""
     table.cell(2, 0).text = "日期"
     table.cell(2, 1).text = "(例行)字幕審稿"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    table.cell(3, 2).text = ""
+    table.cell(3, 3).text = ""
+    table.cell(4, 0).text = "日期"
+    table.cell(4, 1).text = "臨時工作"
+    table.cell(5, 0).text = ""
+    table.cell(5, 1).text = ""
+    table.cell(5, 2).text = ""
+    table.cell(5, 3).text = ""
+    table.cell(6, 0).text = "本月工作心得:"
     doc.save(path)
 
 
 def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
-    source_txt = tmp_path / "review.txt"
     tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
-    source_txt.write_text(
-        "\n".join(
-            [
-                "NAME: 王小明",
-            ]
-        ),
-        encoding="utf-8",
-    )
     tasks_json.write_text(
         json.dumps(
             [
@@ -63,7 +65,6 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
 
     generate_review.generate_review(
         template_path,
-        source_txt,
         output_path,
         tasks_json,
     )
@@ -71,7 +72,7 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
     out_doc = Document(output_path)
     assert [p.text for p in out_doc.paragraphs] == [
         "外文編譯中心QCD",
-        "姓名: 王小明",
+        "姓名: 陳威穎",
         "2022年11月",
         "本月精進目標:",
     ]
@@ -83,22 +84,6 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
     assert all(run.font.size == Pt(REVIEW_TEXT_SIZE_PT) for run in goal_label_runs)
 
 
-def test_parse_input_supports_key_value_fields(tmp_path: Path) -> None:
-    source_txt = tmp_path / "review.txt"
-    source_txt.write_text(
-        "\n".join(
-            [
-                "NAME: Alice",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    data = generate_review.parse_input(source_txt)
-
-    assert data == {"NAME": "Alice"}
-
-
 def test_resolve_template_path_accepts_relative_repo_template() -> None:
     resolved = generate_review.resolve_template_path(Path("templates/review_template.docx"))
     assert resolved.exists()
@@ -106,12 +91,10 @@ def test_resolve_template_path_accepts_relative_repo_template() -> None:
 
 def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
-    source_txt = tmp_path / "review.txt"
     tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
-    source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
     tasks_json.write_text(
         json.dumps(
             [
@@ -131,7 +114,6 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
 
     generate_review.generate_review(
         template_path,
-        source_txt,
         output_path,
         tasks_json,
     )
@@ -145,12 +127,10 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
 
 def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
-    source_txt = tmp_path / "review.txt"
     tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
-    source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
     tasks_json.write_text(
         json.dumps(
             [
@@ -178,7 +158,6 @@ def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None
 
     generate_review.generate_review(
         template_path,
-        source_txt,
         output_path,
         tasks_json,
     )
@@ -193,12 +172,10 @@ def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None
 
 def test_generate_review_uses_template_font_for_generated_table_content(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
-    source_txt = tmp_path / "review.txt"
     tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
-    source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
     tasks_json.write_text(
         json.dumps(
             [
@@ -218,7 +195,6 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
 
     generate_review.generate_review(
         template_path,
-        source_txt,
         output_path,
         tasks_json,
     )
@@ -236,12 +212,10 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
     tmp_path: Path,
 ) -> None:
     template_path = tmp_path / "review_template.docx"
-    source_txt = tmp_path / "review.txt"
     tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
 
     _write_review_template(template_path)
-    source_txt.write_text("NAME: 王小明\n", encoding="utf-8")
     tasks_json.write_text(
         json.dumps(
             [
@@ -268,7 +242,6 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
 
     generate_review.generate_review(
         template_path,
-        source_txt,
         output_path,
         tasks_json,
     )
@@ -280,3 +253,88 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
     assert table.cell(1, 1).text.strip() == "1.\nA\n長度:3分30秒\n實際作業時間:1時"
     assert table.cell(2, 0).text.strip() == "5/2"
     assert table.cell(2, 1).text.strip() == "2.\nB\n實際作業時間:2時"
+
+
+def test_generate_review_uses_notes_for_editor_feedback(tmp_path: Path) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "A",
+                    "createdAt": "2026-05-01T01:02:03Z",
+                    "workMinutes": 60,
+                    "contentSeconds": 120,
+                    "notes": ["note one", "note two"],
+                    "children": [],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(
+        template_path,
+        output_path,
+        tasks_json,
+    )
+
+    out_doc = Document(output_path)
+    table = out_doc.tables[0]
+    assert table.cell(1, 2).text.strip() == "• note one\n• note two"
+
+
+def test_generate_review_populates_temp_work_from_posts_children_only(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "主任務",
+                    "createdAt": "2026-05-01T01:02:03Z",
+                    "workMinutes": 60,
+                    "contentSeconds": 120,
+                    "children": [
+                        {
+                            "name": "POST A",
+                            "type": "posts",
+                            "createdAt": "2026-05-18T11:37:41.273370Z",
+                            "workMinutes": 50,
+                        },
+                        {
+                            "name": "NEWS B",
+                            "type": "news",
+                            "createdAt": "2026-05-18T11:37:41.273370Z",
+                            "workMinutes": 40,
+                        },
+                    ],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(
+        template_path,
+        output_path,
+        tasks_json,
+    )
+
+    out_doc = Document(output_path)
+    table = out_doc.tables[0]
+    # row 4 is 臨時工作 header, row 5 is first temp work row
+    assert table.cell(5, 0).text.strip() == "5/18"
+    assert table.cell(5, 1).text.strip() == "1.\nPOST A\n實際作業時間:50分"
+    assert "長度:" not in table.cell(5, 1).text
