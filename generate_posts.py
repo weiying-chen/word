@@ -894,6 +894,10 @@ def generate_docs(
                     "{{REF_SUMMARY_ZH}}": "",
                     "{{REF_TITLE_EN}}": "",
                     "{{REF_SUMMARY_EN}}": "",
+                    "{{VIDEO_URL}}": "",
+                    "{{VIDEO_TITLE}}": "",
+                    "{{VIDEO_DESC_EN}}": "",
+                    "{{VIDEO_DESC_ZH}}": "",
                 }
             )
         hyperlink_targets = {

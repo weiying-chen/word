@@ -330,7 +330,7 @@ def test_generated_bodhi_docx_puts_english_title_under_chinese_title(tmp_path: P
     doc = Document(str(output_paths[0]))
     texts = [p.text for p in doc.paragraphs if p.text.strip()]
     combined = "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
-    assert texts.count(combined) >= 2
+    assert texts.count(combined) == 1
     assert "#hashtagline" in texts
 
 
@@ -521,6 +521,60 @@ def test_generated_bodhi_docx_adds_blank_after_ref_label(tmp_path: Path) -> None
     doc = Document(str(output_paths[0]))
     label_idx = next(i for i, p in enumerate(doc.paragraphs) if p.text.strip() == "參考資料：")
     assert doc.paragraphs[label_idx + 1].text.strip() == ""
+
+
+def test_generated_bodhi_docx_does_not_duplicate_ref_url_inside_reference_block(
+    tmp_path: Path,
+) -> None:
+    schedule_path = tmp_path / "bodhi.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    url = "https://www.daai.tv/master/life-wisdom/P90230231?more=true"
+    _write_docx(
+        schedule_path,
+        [
+            "菩提1則",
+            "1. alex",
+            "1/20首播 廣行環保護人間",
+            url,
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{HEADER_TITLE}}",
+            "{{HEADER_URL}}",
+            "參考資料：",
+            "{{REF_URL}}",
+            "{{REF_TITLE}}",
+            "要用的影片：",
+            "{{VIDEO_URL}}",
+            "{{VIDEO_TITLE}}",
+        ],
+    )
+    output_dir.mkdir()
+
+    with patch(
+        "generate_posts.fetch_bodhi_english_subtitle",
+        return_value="32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore",
+    ):
+        output_paths = generate_docs(
+            schedule_path=schedule_path,
+            template_path=template_path,
+            output_dir=output_dir,
+            filename_prefix="",
+            filename_suffix="",
+        )
+
+    doc = Document(str(output_paths[0]))
+    texts = [p.text.strip() for p in doc.paragraphs]
+    # Header URL + one reference URL only.
+    assert texts.count(url) == 2
+    ref_idx = next(i for i, p in enumerate(texts) if p == "參考資料：")
+    tail = texts[ref_idx:]
+    assert tail.count(url) == 1
 
 
 def test_generated_posts_title_is_12pt_and_source_block_is_10pt(tmp_path: Path) -> None:
