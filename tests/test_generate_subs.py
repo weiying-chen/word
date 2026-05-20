@@ -546,6 +546,52 @@ def test_generate_subs_adds_thumbnail_credit_after_image(tmp_path: Path) -> None
     assert paragraphs[image_idx + 2][0] == "After thumbnail."
 
 
+def test_generate_subs_renders_multiple_thumbnails_in_order(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+    image_a_path = tmp_path / "thumbnail_a.png"
+    image_b_path = tmp_path / "thumbnail_b.png"
+
+    _write_docx(template_path, ["選圖：", "{{THUMBNAIL}}", "After thumbnail."])
+    _write_source_docx(source_docx)
+    _write_png(image_a_path)
+    _write_png(image_b_path)
+    input_path.write_text(
+        "\n".join(
+            [
+                f"THUMBNAIL: {image_a_path.name}",
+                f"THUMBNAIL: {image_b_path.name}",
+                "THUMBNAIL_CREDIT: Image created by ChatGPT",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    paragraphs = []
+    for p in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+        has_drawing = p.find(".//w:drawing", ns) is not None
+        paragraphs.append((text, has_drawing))
+
+    image_indexes = [i for i, (_, has_drawing) in enumerate(paragraphs) if has_drawing]
+    assert len(image_indexes) == 2
+    assert paragraphs[image_indexes[0] + 1][0] == "Image created by ChatGPT"
+    assert paragraphs[image_indexes[0] + 2][0] == ""
+    assert paragraphs[image_indexes[0] + 2][1] is False
+    assert image_indexes[1] - image_indexes[0] == 3
+    assert paragraphs[image_indexes[1] + 1][0] == "Image created by ChatGPT"
+    assert paragraphs[image_indexes[1] + 2][0] == "After thumbnail."
+
+
 def test_generate_subs_replaces_box_drawing_horizontal(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     source_docx = tmp_path / "source.docx"
@@ -1158,3 +1204,46 @@ def test_generate_subs_treats_xxx_prefixed_timecode_as_subtitle_line(
     assert url_paragraph is not None
     assert url_paragraph.findall("w:hyperlink", ns)
     assert timing_paragraph.find("w:r/w:rPr/w:highlight", ns) is None
+
+
+def test_generate_subs_highlights_parenthesized_super_block_after_subtitle_line(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕：", "{{BODY}}"])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "00:01:40:03\t00:01:43:10\t風濕熱邪 邪氣鬱阻",
+                "(Wind, dampness, and heat)",
+                "(disrupt the body's balance)",
+                "00:01:44:00\t00:01:46:00\t下一句",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+
+    p1 = next(p for p in doc.paragraphs if p.text.strip() == "(Wind, dampness, and heat)")
+    p2 = next(p for p in doc.paragraphs if p.text.strip() == "(disrupt the body's balance)")
+    p_time = next(
+        p
+        for p in doc.paragraphs
+        if p.text.strip() == "00:01:40:03\t00:01:43:10\t風濕熱邪 邪氣鬱阻"
+    )
+    p3 = next(p for p in doc.paragraphs if p.text.strip() == "00:01:44:00\t00:01:46:00\t下一句")
+
+    assert p_time.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in p_time.runs if r.text
+    )
+    assert p1.runs and all(r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in p1.runs if r.text)
+    assert p2.runs and all(r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in p2.runs if r.text)
+    assert all(r.font.highlight_color is None for r in p3.runs if r.text)

@@ -13,6 +13,7 @@ from pathlib import Path
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_COLOR_INDEX
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -21,6 +22,7 @@ from docx.text.paragraph import Paragraph
 
 from docx_utils import (
     add_hyperlink,
+    apply_highlight_to_runs,
     apply_font_size_to_runs,
     apply_font_size_to_document_runs,
     clear_paragraph,
@@ -51,6 +53,7 @@ SOURCE_LINK_RE = re.compile(r"^https?://\S+")
 SUBTITLE_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
+PARENTHESIZED_LINE_RE = re.compile(r"^[（(].*[）)]$")
 SYMBOL_FONT_NAME = "Segoe UI Symbol"
 CJK_FONT_NAME = "新細明體"
 CJK_MIDDLE_DOT = "\u2027"
@@ -176,6 +179,8 @@ def parse_input(path: Path) -> dict[str, str]:
 
 def _validate_thumbnail_paths(data: dict[str, str], input_base: Path) -> None:
     raw_values = data.get("__THUMBNAIL_VALUES__", "")
+    if not raw_values and data.get("THUMBNAIL", "").strip():
+        raw_values = data.get("THUMBNAIL", "")
     if not raw_values:
         return
     missing: list[Path] = []
@@ -192,6 +197,23 @@ def _validate_thumbnail_paths(data: dict[str, str], input_base: Path) -> None:
         raise FileNotFoundError(
             "\n".join(f"THUMBNAIL file not found: {path}" for path in missing)
         )
+
+
+def _thumbnail_paths_from_data(data: dict[str, str], input_base: Path) -> list[Path]:
+    raw_values = data.get("__THUMBNAIL_VALUES__", "")
+    if not raw_values and data.get("THUMBNAIL", "").strip():
+        raw_values = data.get("THUMBNAIL", "")
+
+    paths: list[Path] = []
+    for raw_value in raw_values.splitlines():
+        value = raw_value.strip()
+        if not value:
+            continue
+        thumbnail_path = Path(value)
+        if not thumbnail_path.is_absolute():
+            thumbnail_path = input_base / thumbnail_path
+        paths.append(thumbnail_path)
+    return paths
 
 
 def _run_contains_symbol(text: str) -> bool:
@@ -352,6 +374,8 @@ def replace_body_paragraph(
 
     current = paragraph
     in_source_block = False
+    previous_was_subtitle_line = False
+    in_parenthesized_super_block = False
 
     def _add_source_runs(target, text: str) -> None:
         _add_marked_runs(
@@ -393,8 +417,21 @@ def replace_body_paragraph(
             current = insert_paragraph_after(current, "")
 
         normalized_line = _normalized_paragraph_text(line)
-        if SUBTITLE_LINE_RE.match(normalized_line):
+        is_subtitle_line = bool(SUBTITLE_LINE_RE.match(normalized_line))
+        if is_subtitle_line:
             in_source_block = False
+            in_parenthesized_super_block = False
+
+        stripped_line = line.strip()
+        is_parenthesized_line = bool(PARENTHESIZED_LINE_RE.match(stripped_line))
+        next_stripped_line = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
+        subtitle_has_super_block = is_subtitle_line and bool(
+            PARENTHESIZED_LINE_RE.match(next_stripped_line)
+        )
+        if is_parenthesized_line and (previous_was_subtitle_line or in_parenthesized_super_block):
+            in_parenthesized_super_block = True
+        elif not is_parenthesized_line:
+            in_parenthesized_super_block = False
 
         cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line)
         is_link = SOURCE_LINK_RE.match(cleaned_line)
@@ -404,9 +441,14 @@ def replace_body_paragraph(
         write_line(
             current,
             cleaned_line if is_link else line,
-            in_source_block and not SUBTITLE_LINE_RE.match(normalized_line),
+            in_source_block and not is_subtitle_line,
             bool(is_link),
         )
+
+        if subtitle_has_super_block or in_parenthesized_super_block:
+            apply_highlight_to_runs(current, highlight_color=WD_COLOR_INDEX.YELLOW)
+
+        previous_was_subtitle_line = is_subtitle_line
 
 
 def remove_paragraph(paragraph) -> None:
@@ -730,23 +772,24 @@ def generate_subs(
                     remove_paragraph(paragraph)
                     break
                 if key == "THUMBNAIL" and value:
-                    thumbnail_path = Path(value)
-                    if not thumbnail_path.is_absolute():
-                        thumbnail_path = input_base / thumbnail_path
-                    if not thumbnail_path.is_file():
-                        raise FileNotFoundError(
-                            f"THUMBNAIL file not found: {thumbnail_path}"
-                        )
+                    thumbnail_paths = _thumbnail_paths_from_data(data, input_base)
+                    if not thumbnail_paths:
+                        thumbnail_paths = [Path(value)]
+                        if not thumbnail_paths[0].is_absolute():
+                            thumbnail_paths[0] = input_base / thumbnail_paths[0]
+
                     clear_paragraph(paragraph)
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     paragraph.paragraph_format.left_indent = 0
                     paragraph.paragraph_format.right_indent = 0
                     paragraph.paragraph_format.first_line_indent = 0
                     run = paragraph.add_run()
-                    run.add_picture(str(thumbnail_path), width=metrics["usable_width"])
+                    run.add_picture(str(thumbnail_paths[0]), width=metrics["usable_width"])
+
+                    current = paragraph
                     thumbnail_credit = data.get("THUMBNAIL_CREDIT", "").strip()
                     if thumbnail_credit:
-                        credit_paragraph = insert_paragraph_after(paragraph, "")
+                        credit_paragraph = insert_paragraph_after(current, "")
                         credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
                         credit_paragraph.paragraph_format.left_indent = 0
                         credit_paragraph.paragraph_format.right_indent = 0
@@ -756,6 +799,33 @@ def generate_subs(
                             thumbnail_credit,
                             run_style=annotation_style,
                         )
+                        current = credit_paragraph
+
+                    for thumbnail_path in thumbnail_paths[1:]:
+                        current = insert_paragraph_after(current, "")
+                        image_paragraph = insert_paragraph_after(current, "")
+                        image_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        image_paragraph.paragraph_format.left_indent = 0
+                        image_paragraph.paragraph_format.right_indent = 0
+                        image_paragraph.paragraph_format.first_line_indent = 0
+                        image_run = image_paragraph.add_run()
+                        image_run.add_picture(
+                            str(thumbnail_path), width=metrics["usable_width"]
+                        )
+                        current = image_paragraph
+
+                        if thumbnail_credit:
+                            credit_paragraph = insert_paragraph_after(current, "")
+                            credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                            credit_paragraph.paragraph_format.left_indent = 0
+                            credit_paragraph.paragraph_format.right_indent = 0
+                            credit_paragraph.paragraph_format.first_line_indent = 0
+                            _add_text_runs(
+                                credit_paragraph,
+                                thumbnail_credit,
+                                run_style=annotation_style,
+                            )
+                            current = credit_paragraph
                 else:
                     replace_placeholder(paragraph, placeholder, value)
                 break
