@@ -508,8 +508,7 @@ def test_generate_subs_adds_thumbnail_credit_after_image(tmp_path: Path) -> None
     input_path.write_text(
         "\n".join(
             [
-                f"THUMBNAIL: {image_path.name}",
-                "THUMBNAIL_CREDIT: Image created by ChatGPT",
+                f"THUMBNAIL: {image_path.name} *",
                 "",
             ]
         ),
@@ -541,7 +540,7 @@ def test_generate_subs_adds_thumbnail_credit_after_image(tmp_path: Path) -> None
     image_idx = next(i for i, (_, _, has_drawing) in enumerate(paragraphs) if has_drawing)
     credit_text, credit_styles, _ = paragraphs[image_idx + 1]
 
-    assert credit_text == "Image created by ChatGPT"
+    assert credit_text == "Image created with ChatGPT."
     assert "Annotation" in credit_styles
     assert paragraphs[image_idx + 2][0] == "After thumbnail."
 
@@ -561,9 +560,8 @@ def test_generate_subs_renders_multiple_thumbnails_in_order(tmp_path: Path) -> N
     input_path.write_text(
         "\n".join(
             [
-                f"THUMBNAIL: {image_a_path.name}",
-                f"THUMBNAIL: {image_b_path.name}",
-                "THUMBNAIL_CREDIT: Image created by ChatGPT",
+                f"THUMBNAIL: {image_a_path.name} *",
+                f"THUMBNAIL: {image_b_path.name} *",
                 "",
             ]
         ),
@@ -584,12 +582,42 @@ def test_generate_subs_renders_multiple_thumbnails_in_order(tmp_path: Path) -> N
 
     image_indexes = [i for i, (_, has_drawing) in enumerate(paragraphs) if has_drawing]
     assert len(image_indexes) == 2
-    assert paragraphs[image_indexes[0] + 1][0] == "Image created by ChatGPT"
+    assert paragraphs[image_indexes[0] + 1][0] == "Image created with ChatGPT."
     assert paragraphs[image_indexes[0] + 2][0] == ""
     assert paragraphs[image_indexes[0] + 2][1] is False
     assert image_indexes[1] - image_indexes[0] == 3
-    assert paragraphs[image_indexes[1] + 1][0] == "Image created by ChatGPT"
+    assert paragraphs[image_indexes[1] + 1][0] == "Image created with ChatGPT."
     assert paragraphs[image_indexes[1] + 2][0] == "After thumbnail."
+
+
+def test_generate_subs_thumbnail_marker_controls_credit_in_same_field(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+    image_a_path = tmp_path / "thumbnail_a.png"
+    image_b_path = tmp_path / "thumbnail_b.png"
+
+    _write_docx(template_path, ["選圖：", "{{THUMBNAIL}}", "After thumbnail."])
+    _write_source_docx(source_docx)
+    _write_png(image_a_path)
+    _write_png(image_b_path)
+    input_path.write_text(
+        "\n".join(
+            [
+                f"THUMBNAIL: {image_a_path.name} *",
+                f"THUMBNAIL: {image_b_path.name}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+    texts = [p.text.strip() for p in doc.paragraphs]
+
+    assert texts.count("Image created with ChatGPT.") == 1
 
 
 def test_generate_subs_replaces_box_drawing_horizontal(tmp_path: Path) -> None:

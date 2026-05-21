@@ -44,7 +44,6 @@ PLACEHOLDER_KEYS = [
     "TITLE_SUGGESTED",
     "INTRO",
     "THUMBNAIL",
-    "THUMBNAIL_CREDIT",
 ]
 PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
 INPUT_KEY_SET = PLACEHOLDER_KEY_SET | {"BODY"}
@@ -76,6 +75,19 @@ SECTION_LABELS = {
     "選圖:",
     *SUBTITLE_LABELS,
 }
+DEFAULT_THUMBNAIL_CREDIT = "Image created with ChatGPT."
+THUMBNAIL_CREDIT_MARKER = "*"
+
+
+def _parse_thumbnail_value(raw_value: str) -> tuple[str, bool]:
+    text = normalize_input_text(raw_value).strip()
+    if not text:
+        return "", False
+    has_credit = False
+    if text.endswith(f" {THUMBNAIL_CREDIT_MARKER}"):
+        text = text[: -len(f" {THUMBNAIL_CREDIT_MARKER}")].rstrip()
+        has_credit = True
+    return text, has_credit
 
 
 def normalize_input_text(text: str) -> str:
@@ -121,6 +133,7 @@ def _decode_input_text(path: Path) -> tuple[str, str, bool]:
 def parse_input(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
     thumbnail_values: list[str] = []
+    thumbnail_credit_flags: list[str] = []
     text, encoding_used, used_fallback = _decode_input_text(path)
     if used_fallback:
         warnings.warn(
@@ -166,13 +179,17 @@ def parse_input(path: Path) -> dict[str, str]:
         else:
             data[key] = normalize_input_text(value)
             if key == "THUMBNAIL" and value.strip():
-                thumbnail_values.append(normalize_input_text(value).strip())
+                thumbnail_path, has_credit = _parse_thumbnail_value(value)
+                if thumbnail_path:
+                    thumbnail_values.append(thumbnail_path)
+                    thumbnail_credit_flags.append("1" if has_credit else "0")
         idx += 1
 
     data.setdefault("INTRO", "")
     data.setdefault("BODY", "")
     if thumbnail_values:
         data["__THUMBNAIL_VALUES__"] = "\n".join(thumbnail_values)
+        data["__THUMBNAIL_CREDIT_FLAGS__"] = "\n".join(thumbnail_credit_flags)
 
     return data
 
@@ -214,6 +231,16 @@ def _thumbnail_paths_from_data(data: dict[str, str], input_base: Path) -> list[P
             thumbnail_path = input_base / thumbnail_path
         paths.append(thumbnail_path)
     return paths
+
+
+def _thumbnail_credit_flags_from_data(data: dict[str, str], count: int) -> list[bool]:
+    raw_flags = data.get("__THUMBNAIL_CREDIT_FLAGS__", "")
+    if not raw_flags:
+        return [False] * count
+    flags = [line.strip() == "1" for line in raw_flags.splitlines()]
+    if len(flags) < count:
+        flags.extend([False] * (count - len(flags)))
+    return flags[:count]
 
 
 def _run_contains_symbol(text: str) -> bool:
@@ -774,9 +801,13 @@ def generate_subs(
                 if key == "THUMBNAIL" and value:
                     thumbnail_paths = _thumbnail_paths_from_data(data, input_base)
                     if not thumbnail_paths:
-                        thumbnail_paths = [Path(value)]
+                        parsed_path, _ = _parse_thumbnail_value(value)
+                        thumbnail_paths = [Path(parsed_path or value)]
                         if not thumbnail_paths[0].is_absolute():
                             thumbnail_paths[0] = input_base / thumbnail_paths[0]
+                    credit_flags = _thumbnail_credit_flags_from_data(
+                        data, len(thumbnail_paths)
+                    )
 
                     clear_paragraph(paragraph)
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -787,8 +818,7 @@ def generate_subs(
                     run.add_picture(str(thumbnail_paths[0]), width=metrics["usable_width"])
 
                     current = paragraph
-                    thumbnail_credit = data.get("THUMBNAIL_CREDIT", "").strip()
-                    if thumbnail_credit:
+                    if credit_flags and credit_flags[0]:
                         credit_paragraph = insert_paragraph_after(current, "")
                         credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
                         credit_paragraph.paragraph_format.left_indent = 0
@@ -796,12 +826,14 @@ def generate_subs(
                         credit_paragraph.paragraph_format.first_line_indent = 0
                         _add_text_runs(
                             credit_paragraph,
-                            thumbnail_credit,
+                            DEFAULT_THUMBNAIL_CREDIT,
                             run_style=annotation_style,
                         )
                         current = credit_paragraph
 
-                    for thumbnail_path in thumbnail_paths[1:]:
+                    for idx_thumb, thumbnail_path in enumerate(
+                        thumbnail_paths[1:], start=1
+                    ):
                         current = insert_paragraph_after(current, "")
                         image_paragraph = insert_paragraph_after(current, "")
                         image_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -814,7 +846,7 @@ def generate_subs(
                         )
                         current = image_paragraph
 
-                        if thumbnail_credit:
+                        if credit_flags[idx_thumb]:
                             credit_paragraph = insert_paragraph_after(current, "")
                             credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
                             credit_paragraph.paragraph_format.left_indent = 0
@@ -822,7 +854,7 @@ def generate_subs(
                             credit_paragraph.paragraph_format.first_line_indent = 0
                             _add_text_runs(
                                 credit_paragraph,
-                                thumbnail_credit,
+                                DEFAULT_THUMBNAIL_CREDIT,
                                 run_style=annotation_style,
                             )
                             current = credit_paragraph
