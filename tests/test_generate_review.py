@@ -167,7 +167,7 @@ def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None
     assert table.cell(1, 1).text.strip() == "1.\nA\n長度:2分\n實際作業時間:1時"
     assert table.cell(2, 1).text.strip() == "2.\nB\n長度:3分\n實際作業時間:2時"
     assert table.cell(3, 0).text.strip() == "日期"
-    assert table.cell(3, 1).text.strip() == "(例行)字幕審稿"
+    assert table.cell(3, 1).text.strip() == "臨時工作"
 
 
 def test_generate_review_uses_template_font_for_generated_table_content(tmp_path: Path) -> None:
@@ -334,7 +334,7 @@ def test_generate_review_populates_temp_work_from_posts_children_only(
 
     out_doc = Document(output_path)
     table = out_doc.tables[0]
-    # row 4 is 臨時工作 header, row 5 is first temp work row
-    assert table.cell(5, 0).text.strip() == "5/18"
-    assert table.cell(5, 1).text.strip() == "1.\nPOST A\n實際作業時間:50分"
-    assert "長度:" not in table.cell(5, 1).text
+    # After removing 字幕審稿 section: row 2 is 臨時工作 header, row 3 is first temp work row
+    assert table.cell(3, 0).text.strip() == "5/18"
+    assert table.cell(3, 1).text.strip() == "1.\nPOST A\n實際作業時間:50分"
+    assert "長度:" not in table.cell(3, 1).text

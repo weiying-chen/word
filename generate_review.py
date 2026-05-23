@@ -217,6 +217,30 @@ def _collect_temp_posts(tasks: list[dict]) -> list[dict]:
     return posts
 
 
+def remove_subtitle_review_section(doc: Document) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    start_idx = None
+    end_idx = None
+
+    for idx in range(len(table.rows)):
+        first = table.cell(idx, 0).text.strip()
+        second = table.cell(idx, 1).text.strip()
+        if start_idx is None and first == "日期" and "字幕審稿" in second:
+            start_idx = idx
+            continue
+        if start_idx is not None and first == "日期" and "臨時工作" in second:
+            end_idx = idx
+            break
+
+    if start_idx is None or end_idx is None or start_idx >= end_idx:
+        return
+
+    for idx in range(end_idx - 1, start_idx - 1, -1):
+        _remove_row(table, idx)
+
+
 def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
     if not doc.tables:
         return
@@ -325,6 +349,7 @@ def generate_review(
     apply_header_font_size(doc)
     apply_review_highlights(doc)
     fill_regular_translation_table(doc, tasks)
+    remove_subtitle_review_section(doc)
     fill_temp_work_table(doc, tasks)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
