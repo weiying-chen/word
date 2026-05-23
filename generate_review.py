@@ -153,6 +153,10 @@ def _remove_row(table, row_idx: int) -> None:
     table.rows[row_idx]._tr.getparent().remove(table.rows[row_idx]._tr)
 
 
+def _remove_paragraph(paragraph) -> None:
+    paragraph._element.getparent().remove(paragraph._element)
+
+
 def _insert_cloned_row_before(table, source_row_idx: int, before_row_idx: int) -> None:
     cloned = deepcopy(table.rows[source_row_idx]._tr)
     table.rows[before_row_idx]._tr.addprevious(cloned)
@@ -239,6 +243,54 @@ def remove_subtitle_review_section(doc: Document) -> None:
 
     for idx in range(end_idx - 1, start_idx - 1, -1):
         _remove_row(table, idx)
+
+
+def remove_subtitle_review_summary_block(doc: Document) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    heading_prefix = "本月總審稿時數(字幕):"
+
+    for row in table.rows:
+        for cell in row.cells:
+            idx = 0
+            while idx < len(cell.paragraphs):
+                text = cell.paragraphs[idx].text.strip()
+                if not text.startswith(heading_prefix):
+                    idx += 1
+                    continue
+
+                _remove_paragraph(cell.paragraphs[idx])
+                removed = 0
+                while idx < len(cell.paragraphs) and removed < 2:
+                    line = cell.paragraphs[idx].text.strip()
+                    if line.startswith("中翻英:") or line.startswith("英翻中:"):
+                        _remove_paragraph(cell.paragraphs[idx])
+                        removed += 1
+                        continue
+                    break
+                if idx < len(cell.paragraphs) and not cell.paragraphs[idx].text.strip():
+                    _remove_paragraph(cell.paragraphs[idx])
+                continue
+
+
+def remove_translation_english_to_chinese_summary_line(doc: Document) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    heading_prefix = "本月總翻譯時數(字幕):"
+
+    for row in table.rows:
+        for cell in row.cells:
+            paragraphs = cell.paragraphs
+            for idx, paragraph in enumerate(paragraphs):
+                if not paragraph.text.strip().startswith(heading_prefix):
+                    continue
+                for j in range(idx + 1, len(cell.paragraphs)):
+                    if cell.paragraphs[j].text.strip().startswith("英翻中:"):
+                        _remove_paragraph(cell.paragraphs[j])
+                        break
+                break
 
 
 def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
@@ -350,6 +402,8 @@ def generate_review(
     apply_review_highlights(doc)
     fill_regular_translation_table(doc, tasks)
     remove_subtitle_review_section(doc)
+    remove_subtitle_review_summary_block(doc)
+    remove_translation_english_to_chinese_summary_line(doc)
     fill_temp_work_table(doc, tasks)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
