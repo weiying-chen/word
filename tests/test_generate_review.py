@@ -444,7 +444,247 @@ def test_generate_review_removes_translation_english_to_chinese_line(tmp_path: P
     generate_review.generate_review(template_path, output_path, tasks_json)
 
     out_doc = Document(output_path)
-    text = "\n".join(p.text for p in out_doc.tables[0].cell(5, 0).paragraphs)
+    text = ""
+    for row in out_doc.tables[0].rows:
+        cell_text = "\n".join(p.text for p in row.cells[0].paragraphs)
+        if "本月總翻譯時數(字幕)" in cell_text:
+            text = cell_text
+            break
     assert "本月總翻譯時數(字幕)" in text
-    assert "中翻英:" in text
+    assert "長度:2分" in text
+    assert "中翻英:" not in text
     assert "英翻中:" not in text
+
+
+def test_generate_review_removes_other_work_subsection(tmp_path: Path) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("外文編譯中心QCD")
+    doc.add_paragraph("姓名: {{NAME}}")
+    doc.add_paragraph("{{MONTH}}")
+    doc.add_paragraph("本月精進目標:")
+    table = doc.add_table(rows=6, cols=4)
+    table.cell(0, 0).text = "日期"
+    table.cell(0, 1).text = "(例行)字幕翻譯"
+    table.cell(1, 0).text = ""
+    table.cell(1, 1).text = ""
+    table.cell(2, 0).text = "日期"
+    table.cell(2, 1).text = "臨時工作"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    table.cell(4, 0).text = "本月工作心得:"
+    summary_cell = table.cell(5, 0)
+    summary_cell.text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    summary_cell.add_paragraph("中翻英:")
+    summary_cell.add_paragraph("")
+    summary_cell.add_paragraph("其他工作:")
+    summary_cell.add_paragraph("定稿標題簡介縮圖:")
+    summary_cell.add_paragraph("寫IG:")
+    summary_cell.add_paragraph("LW edit:")
+    summary_cell.add_paragraph("小編文:")
+    summary_cell.add_paragraph("節目上網:")
+    summary_cell.add_paragraph("製作QA/Quote:")
+    summary_cell.add_paragraph("節錄經典:")
+    summary_cell.add_paragraph("")
+    summary_cell.add_paragraph("行政工作:")
+    summary_cell.add_paragraph("PM選稿子:")
+    doc.save(template_path)
+
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "A",
+                    "createdAt": "2026-05-01T01:02:03Z",
+                    "workMinutes": 60,
+                    "contentSeconds": 120,
+                    "children": [],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    text = "\n".join(p.text for p in out_doc.tables[0].cell(5, 0).paragraphs)
+    assert "其他工作:" not in text
+    assert "定稿標題簡介縮圖:" not in text
+    assert "寫IG:" not in text
+    assert "LW edit:" not in text
+    assert "小編文:" not in text
+    assert "節目上網:" not in text
+    assert "製作QA/Quote:" not in text
+    assert "節錄經典:" not in text
+    assert "行政工作:" in text
+
+
+def test_generate_review_removes_meeting_lines_from_work_notes(tmp_path: Path) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("外文編譯中心QCD")
+    doc.add_paragraph("姓名: {{NAME}}")
+    doc.add_paragraph("{{MONTH}}")
+    doc.add_paragraph("本月精進目標:")
+    table = doc.add_table(rows=6, cols=4)
+    table.cell(0, 0).text = "日期"
+    table.cell(0, 1).text = "(例行)字幕翻譯"
+    table.cell(1, 0).text = ""
+    table.cell(1, 1).text = ""
+    table.cell(2, 0).text = "日期"
+    table.cell(2, 1).text = "臨時工作"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    work_notes = table.cell(4, 0)
+    work_notes.text = "本月工作心得:"
+    work_notes.add_paragraph("工作亮點:")
+    work_notes.add_paragraph("健忘次數與事項:")
+    work_notes.add_paragraph("同心圓會議:")
+    work_notes.add_paragraph("部門內部會議:")
+    table.cell(5, 0).text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    doc.save(template_path)
+
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "A",
+                    "createdAt": "2026-05-01T01:02:03Z",
+                    "workMinutes": 60,
+                    "contentSeconds": 120,
+                    "children": [],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    text = "\n".join(p.text for p in out_doc.tables[0].cell(4, 0).paragraphs)
+    assert "同心圓會議:" not in text
+    assert "部門內部會議:" not in text
+
+
+def test_generate_review_normalizes_translation_summary_spacing(tmp_path: Path) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("外文編譯中心QCD")
+    doc.add_paragraph("姓名: {{NAME}}")
+    doc.add_paragraph("{{MONTH}}")
+    doc.add_paragraph("本月精進目標:")
+    table = doc.add_table(rows=6, cols=4)
+    table.cell(0, 0).text = "日期"
+    table.cell(0, 1).text = "(例行)字幕翻譯"
+    table.cell(1, 0).text = ""
+    table.cell(1, 1).text = ""
+    table.cell(2, 0).text = "日期"
+    table.cell(2, 1).text = "臨時工作"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    table.cell(4, 0).text = "本月工作心得:"
+    summary_cell = table.cell(5, 0)
+    summary_cell.text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    summary_cell.add_paragraph("中翻英:")
+    doc.save(template_path)
+
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "A",
+                    "createdAt": "2026-05-01T01:02:03Z",
+                    "workMinutes": 60,
+                    "contentSeconds": 120,
+                    "children": [],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    text = "\n".join(p.text for p in out_doc.tables[0].cell(5, 0).paragraphs)
+    assert "影片長度總和 非工作時數" not in text
+    assert "影片長度總和非工作時數" in text
+
+
+def test_generate_review_sets_translation_total_length_from_all_tasks_and_children(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("外文編譯中心QCD")
+    doc.add_paragraph("姓名: {{NAME}}")
+    doc.add_paragraph("{{MONTH}}")
+    doc.add_paragraph("本月精進目標:")
+    table = doc.add_table(rows=6, cols=4)
+    table.cell(0, 0).text = "日期"
+    table.cell(0, 1).text = "(例行)字幕翻譯"
+    table.cell(1, 0).text = ""
+    table.cell(1, 1).text = ""
+    table.cell(2, 0).text = "日期"
+    table.cell(2, 1).text = "臨時工作"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    table.cell(4, 0).text = "本月工作心得:"
+    summary_cell = table.cell(5, 0)
+    summary_cell.text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    summary_cell.add_paragraph("中翻英:")
+    summary_cell.add_paragraph("英翻中:")
+    doc.save(template_path)
+
+    # total = 3600 + 300 + 60 = 3960 seconds => 1時6分
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "A",
+                    "createdAt": "2026-05-01T01:02:03Z",
+                    "contentSeconds": 3600,
+                    "children": [
+                        {"name": "C", "type": "posts", "contentSeconds": 60}
+                    ],
+                },
+                {
+                    "name": "B",
+                    "createdAt": "2026-05-02T01:02:03Z",
+                    "contentSeconds": 300,
+                    "children": [],
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    text = ""
+    for row in out_doc.tables[0].rows:
+        cell_text = "\n".join(p.text for p in row.cells[0].paragraphs)
+        if "本月總翻譯時數(字幕)" in cell_text:
+            text = cell_text
+            break
+    assert "長度:1時6分" in text
+    assert "中翻英:" not in text

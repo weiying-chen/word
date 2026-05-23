@@ -293,6 +293,88 @@ def remove_translation_english_to_chinese_summary_line(doc: Document) -> None:
                 break
 
 
+def remove_other_work_summary_block(doc: Document) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    start_prefix = "其他工作:"
+    end_prefix = "行政工作:"
+
+    for row in table.rows:
+        for cell in row.cells:
+            idx = 0
+            while idx < len(cell.paragraphs):
+                text = cell.paragraphs[idx].text.strip()
+                if not text.startswith(start_prefix):
+                    idx += 1
+                    continue
+
+                _remove_paragraph(cell.paragraphs[idx])
+                while idx < len(cell.paragraphs):
+                    next_text = cell.paragraphs[idx].text.strip()
+                    if next_text.startswith(end_prefix):
+                        break
+                    _remove_paragraph(cell.paragraphs[idx])
+                continue
+
+
+def remove_work_notes_meeting_lines(doc: Document) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    target_prefixes = ("同心圓會議:", "部門內部會議:")
+
+    for row in table.rows:
+        for cell in row.cells:
+            idx = 0
+            while idx < len(cell.paragraphs):
+                text = cell.paragraphs[idx].text.strip()
+                if any(text.startswith(prefix) for prefix in target_prefixes):
+                    _remove_paragraph(cell.paragraphs[idx])
+                    continue
+                idx += 1
+
+
+def normalize_translation_summary_heading_spacing(doc: Document) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    old = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    new = "本月總翻譯時數(字幕): (影片長度總和非工作時數)"
+
+    for row in table.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                if old not in paragraph.text:
+                    continue
+                if paragraph.runs:
+                    for run in paragraph.runs:
+                        if old in run.text:
+                            run.text = run.text.replace(old, new)
+                else:
+                    paragraph.text = paragraph.text.replace(old, new)
+
+
+def set_translation_total_length_line(doc: Document, tasks: list[dict]) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    heading_prefix = "本月總翻譯時數(字幕):"
+    total_text = f"長度:{_format_content_seconds(_sum_content_seconds(tasks))}"
+
+    for row in table.rows:
+        for cell in row.cells:
+            paragraphs = cell.paragraphs
+            for idx, paragraph in enumerate(paragraphs):
+                if not paragraph.text.strip().startswith(heading_prefix):
+                    continue
+                for j in range(idx + 1, len(cell.paragraphs)):
+                    if cell.paragraphs[j].text.strip().startswith("中翻英:"):
+                        cell.paragraphs[j].text = total_text
+                        return
+                return
+
+
 def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
     if not doc.tables:
         return
@@ -404,6 +486,10 @@ def generate_review(
     remove_subtitle_review_section(doc)
     remove_subtitle_review_summary_block(doc)
     remove_translation_english_to_chinese_summary_line(doc)
+    remove_other_work_summary_block(doc)
+    remove_work_notes_meeting_lines(doc)
+    normalize_translation_summary_heading_spacing(doc)
+    set_translation_total_length_line(doc, tasks)
     fill_temp_work_table(doc, tasks)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
