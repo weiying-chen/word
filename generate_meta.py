@@ -35,6 +35,9 @@ EN_NAME_HINT_RE = re.compile(
 EN_NAME_VALUE_RE = re.compile(
     r"[A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ.\s\"'“”‘’\-]*[A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ.]"
 )
+DATE_PAREN_SUFFIX_RE = re.compile(
+    r"\s*[（(]\s*\d{2,4}[./-]\d{1,2}[./-]\d{1,2}\s*[）)]\s*$"
+)
 ALLOWED_KEYS = {
     "TITLE_TEXT",
     "SUMMARY",
@@ -111,6 +114,10 @@ def _parse_super(lines: list[str]) -> dict:
     }
 
 
+def _strip_trailing_date_parenthesis(text: str) -> str:
+    return DATE_PAREN_SUFFIX_RE.sub("", text).strip()
+
+
 def _is_non_person_meta_block(first_line: str) -> bool:
     stripped = first_line.strip()
     if not stripped:
@@ -122,7 +129,9 @@ def _is_non_person_meta_block(first_line: str) -> bool:
     return False
 
 
-def _parse_meta_people_blocks(text: str) -> tuple[list[dict[str, str]], list[str]]:
+def _parse_meta_people_blocks(
+    text: str,
+) -> tuple[list[dict[str, str]], list[dict[str, object]]]:
     if not text.strip():
         return [], []
 
@@ -140,14 +149,12 @@ def _parse_meta_people_blocks(text: str) -> tuple[list[dict[str, str]], list[str
         blocks.append(current)
 
     entries: list[dict[str, str]] = []
-    trailing_lines: list[str] = []
+    ordered_blocks: list[dict[str, object]] = []
     for block in blocks:
         if not block:
             continue
         if _is_non_person_meta_block(block[0]):
-            if trailing_lines:
-                trailing_lines.append("")
-            trailing_lines.extend(block)
+            ordered_blocks.append({"kind": "free", "lines": block})
             continue
         label_zh = block[0].strip()
         name_zh = ""
@@ -159,17 +166,17 @@ def _parse_meta_people_blocks(text: str) -> tuple[list[dict[str, str]], list[str
         else:
             name_zh = label_zh.strip()
 
-        entries.append(
-            {
-                "label_zh": label_zh,
-                "name_zh": name_zh,
-                "role_zh": role_zh,
-                "name_en": block[1].strip() if len(block) > 1 else "",
-                "role_en": block[2].strip() if len(block) > 2 else "",
-                "org_en": block[3].strip() if len(block) > 3 else "",
-            }
-        )
-    return entries, trailing_lines
+        entry = {
+            "label_zh": label_zh,
+            "name_zh": name_zh,
+            "role_zh": role_zh,
+            "name_en": block[1].strip() if len(block) > 1 else "",
+            "role_en": block[2].strip() if len(block) > 2 else "",
+            "org_en": block[3].strip() if len(block) > 3 else "",
+        }
+        entries.append(entry)
+        ordered_blocks.append({"kind": "person", "entry": entry})
+    return entries, ordered_blocks
 
 
 def _merge_meta_people_overrides(
@@ -413,7 +420,7 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
         {
             "name_zh": str(s.get("name_zh", "")),
             "name_en": "",
-            "role_zh": str(s.get("role_zh", "")),
+            "role_zh": _strip_trailing_date_parenthesis(str(s.get("role_zh", ""))),
             "role_en": "",
             "org_en": "",
         }
@@ -426,7 +433,7 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
 
     summary = data.get("SUMMARY", "").splitlines()
     meta_people_text = data.get(PEOPLE_KEY, "")
-    overrides, people_tail_lines = _parse_meta_people_blocks(meta_people_text)
+    overrides, people_meta_blocks = _parse_meta_people_blocks(meta_people_text)
     people = _merge_meta_people_overrides(people, overrides)
     return {
         "title_zh": data.get("TITLE_TEXT", ""),
@@ -435,7 +442,8 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
         "supers_zh": supers,
         "report_zh": report_zh,
         "people": people,
-        "people_tail_lines": people_tail_lines,
+        "people_tail_lines": [],
+        "people_meta_blocks": people_meta_blocks,
         "title_en": data.get(TITLE_KEY, ""),
         "overview_en": data.get(OVERVIEW_KEY, ""),
     }
@@ -526,46 +534,138 @@ def _label_without_repeated_english_name(
     return role_zh.strip()
 
 
-def build_people_lines(people: list[dict], tail_lines: list[str] | None = None) -> list[str]:
+def _person_label(person: dict) -> str:
+    role_zh = str(person.get("role_zh", "")).strip()
+    name_zh = str(person.get("name_zh", "")).strip()
+    label_zh = str(person.get("label_zh", "")).strip()
+    if label_zh:
+        return label_zh
+    if role_zh and name_zh:
+        return f"{role_zh}｜{name_zh}"
+    return role_zh or name_zh
+
+
+def _person_lines(person: dict) -> list[str]:
+    role_zh = str(person.get("role_zh", "")).strip()
+    name_zh = str(person.get("name_zh", "")).strip()
+    name_en = str(person.get("name_en", "")).strip()
+    label_zh = _person_label(person)
+    label_zh = _label_without_repeated_english_name(
+        label_zh,
+        role_zh=role_zh,
+        name_en=name_en,
+    )
+
+    lines = [label_zh or ""]
+    if name_en:
+        lines.append(name_en)
+    elif name_zh:
+        lines.append(f"{{{{{name_zh}}}}}")
+
+    role_en = str(person.get("role_en", "")).strip()
+    org_en = str(person.get("org_en", "")).strip()
+    omit_role_placeholder = (
+        str(person.get("omit_role_placeholder", "")).strip().lower() == "true"
+    )
+    if role_en:
+        lines.append(role_en)
+    elif not omit_role_placeholder:
+        placeholder_key = role_zh or "ROLE_EN"
+        lines.append(f"{{{{{placeholder_key}}}}}")
+    if org_en:
+        lines.append(org_en)
+    return lines
+
+
+def _match_person_index(
+    people: list[dict],
+    entry: dict[str, str],
+    used: set[int],
+) -> int | None:
+    label = entry.get("label_zh", "").strip()
+    if label:
+        for idx, person in enumerate(people):
+            if idx in used:
+                continue
+            if _person_label(person).strip() == label:
+                return idx
+
+    name_zh = entry.get("name_zh", "").strip()
+    if name_zh:
+        for idx, person in enumerate(people):
+            if idx in used:
+                continue
+            if str(person.get("name_zh", "")).strip() == name_zh:
+                return idx
+
+    role_zh = entry.get("role_zh", "").strip()
+    if role_zh:
+        target_en = entry.get("name_en", "").strip().casefold()
+        for idx, person in enumerate(people):
+            if idx in used:
+                continue
+            if str(person.get("role_zh", "")).strip() != role_zh:
+                continue
+            if not target_en:
+                return idx
+            person_en = str(person.get("name_en", "")).strip().casefold()
+            person_name_zh = str(person.get("name_zh", "")).strip().casefold()
+            if target_en in {person_en, person_name_zh}:
+                return idx
+
+    return None
+
+
+def build_people_lines(
+    people: list[dict],
+    tail_lines: list[str] | None = None,
+    ordered_blocks: list[dict[str, object]] | None = None,
+) -> list[str]:
     lines: list[str] = []
-    if people:
+    if people or tail_lines or ordered_blocks:
         # Keep one blank line between the "名字職銜" label and the first person entry.
         lines.append("")
-    for idx, person in enumerate(people):
-        role_zh = person.get("role_zh", "").strip()
-        name_zh = person.get("name_zh", "").strip()
-        name_en = person.get("name_en", "").strip()
-        label_zh = person.get("label_zh")
-        if not label_zh:
-            if role_zh and name_zh:
-                label_zh = f"{role_zh}｜{name_zh}"
-            else:
-                label_zh = role_zh or name_zh
-        label_zh = _label_without_repeated_english_name(
-            label_zh or "",
-            role_zh=role_zh,
-            name_en=name_en,
-        )
-        lines.append(label_zh or "")
-        if name_en:
-            lines.append(name_en)
-        elif name_zh:
-            lines.append(f"{{{{{name_zh}}}}}")
-        role_en = person.get("role_en", "").strip()
-        org_en = person.get("org_en", "").strip()
-        omit_role_placeholder = (
-            str(person.get("omit_role_placeholder", "")).strip().lower() == "true"
-        )
-        if role_en:
-            lines.append(role_en)
-        elif not omit_role_placeholder:
-            placeholder_key = role_zh or "ROLE_EN"
-            role_en = f"{{{{{placeholder_key}}}}}"
-            lines.append(role_en)
-        if org_en:
-            lines.append(org_en)
-        if idx < len(people) - 1:
-            lines.append("")
+
+    if ordered_blocks:
+        used: set[int] = set()
+        emitted_any = False
+        for block in ordered_blocks:
+            kind = str(block.get("kind", ""))
+            segment: list[str] = []
+            if kind == "free":
+                segment = [
+                    str(line).strip()
+                    for line in list(block.get("lines", []))
+                    if str(line).strip()
+                ]
+            elif kind == "person":
+                entry = block.get("entry")
+                if isinstance(entry, dict):
+                    match_idx = _match_person_index(people, entry, used)
+                    if match_idx is not None:
+                        used.add(match_idx)
+                        segment = _person_lines(people[match_idx])
+                    else:
+                        segment = _person_lines(entry)
+            if not segment:
+                continue
+            if emitted_any:
+                lines.append("")
+            lines.extend(segment)
+            emitted_any = True
+
+        for idx, person in enumerate(people):
+            if idx in used:
+                continue
+            if emitted_any:
+                lines.append("")
+            lines.extend(_person_lines(person))
+            emitted_any = True
+    else:
+        for idx, person in enumerate(people):
+            lines.extend(_person_lines(person))
+            if idx < len(people) - 1:
+                lines.append("")
 
     extra = tail_lines or []
     if extra:
@@ -622,6 +722,7 @@ def generate_meta(
     people_lines = build_people_lines(
         data.get("people", []),
         data.get("people_tail_lines", []),
+        data.get("people_meta_blocks", []),
     )
     people_placeholder = find_paragraph_by_text(doc, PEOPLE_PLACEHOLDER)
     if people_placeholder:

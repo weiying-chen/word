@@ -363,10 +363,13 @@ def _build_bodhi_entry(
     url_line: str,
     url_target: str,
     default_year: int,
+    explicit_english_title: str = "",
 ) -> dict[str, str]:
     raw_title = title_line.strip()
     cleaned_title, date_prefix = _extract_bodhi_date_prefix(raw_title)
-    english_title = fetch_bodhi_english_subtitle(url_line, cleaned_title)
+    english_title = explicit_english_title.strip() or fetch_bodhi_english_subtitle(
+        url_line, cleaned_title
+    )
     display_title = cleaned_title
     if english_title:
         display_title = f"{display_title}\n{english_title}"
@@ -419,6 +422,34 @@ def _build_standard_schedule_entry(
     if task_prefix:
         entry["filename_prefix_override"] = f"{task_prefix}_"
     return entry
+
+
+def _resolve_bodhi_title_and_url(
+    lines: list[str],
+    url_targets: list[str | None],
+    idx: int,
+) -> tuple[str, str, str, str]:
+    title_line = lines[idx + 1] if idx + 1 < len(lines) else ""
+    explicit_english_title = ""
+    url_line = ""
+    url_target: str | None = None
+
+    candidate1 = lines[idx + 2] if idx + 2 < len(lines) else ""
+    candidate2 = lines[idx + 3] if idx + 3 < len(lines) else ""
+
+    if candidate1.startswith("http"):
+        url_line = candidate1
+        url_target = url_targets[idx + 2] if idx + 2 < len(url_targets) else None
+    elif candidate2.startswith("http"):
+        explicit_english_title = candidate1.strip()
+        url_line = candidate2
+        url_target = url_targets[idx + 3] if idx + 3 < len(url_targets) else None
+
+    if not url_line:
+        url_line = ""
+        url_target = None
+
+    return title_line, explicit_english_title, url_line, (url_target or "")
 
 
 def _parse_date_prefix(text: str, default_year: int | None = None) -> str | None:
@@ -620,7 +651,16 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
         title_line = lines[idx + 1]
         url_line = lines[idx + 2] if idx + 2 < len(lines) else ""
         url_target = url_targets[idx + 2] if idx + 2 < len(url_targets) else None
-        if not url_line.startswith("http"):
+        explicit_english_title = ""
+        if in_bodhi_section:
+            (
+                title_line,
+                explicit_english_title,
+                url_line,
+                resolved_target,
+            ) = _resolve_bodhi_title_and_url(lines, url_targets, idx)
+            url_target = resolved_target or None
+        elif not url_line.startswith("http"):
             url_line = ""
             url_target = None
         if person == "alex":
@@ -630,6 +670,7 @@ def extract_post_entries(schedule_path: Path) -> list[dict[str, str]]:
                     url_line=url_line,
                     url_target=url_target or "",
                     default_year=default_year,
+                    explicit_english_title=explicit_english_title,
                 )
                 entries.append(entry)
                 continue

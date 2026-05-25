@@ -367,6 +367,38 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_parse_input_strips_trailing_date_parenthesis_for_role_only_super(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "news_input.txt"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(Venerable Master Cheng Yen)",
+                        "/*SUPER:",
+                        "證嚴上人開示(2026.1.21)｜//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(input_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "",
+                    "name_en": "Venerable Master Cheng Yen",
+                    "role_zh": "證嚴上人開示",
+                    "role_en": "",
+                    "org_en": "",
+                }
+            ],
+        )
+
     def test_parse_input_supports_separate_meta_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -502,7 +534,7 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
-    def test_parse_input_keeps_non_person_tail_blocks_from_meta_people(self) -> None:
+    def test_parse_input_keeps_non_person_blocks_from_meta_people(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             body_path = tmpdir_path / "source.txt"
@@ -543,14 +575,81 @@ class RenderMetaTests(unittest.TestCase):
 
             data = parse_input(body_path, meta_path)
 
+        blocks = data["people_meta_blocks"]
+        free_block = next(b for b in blocks if b.get("kind") == "free")
         self.assertEqual(
-            data["people_tail_lines"],
+            free_block.get("lines"),
             [
                 "0027",
                 "(最後上字在畫面上：慈濟 我願意 我們愛你)",
                 "Tzu Chi, we love you.",
             ],
         )
+
+    def test_build_people_lines_preserves_meta_people_block_order(self) -> None:
+        people = [
+            {
+                "name_zh": "李麗華",
+                "name_en": "Lee Leyhua",
+                "role_zh": "馬來西亞慈濟志工",
+                "role_en": "",
+                "org_en": "",
+                "label_zh": "馬來西亞慈濟志工｜李麗華",
+            },
+            {
+                "name_zh": "瑪麗亞",
+                "name_en": "Maria Jose",
+                "role_zh": "西班牙志工",
+                "role_en": "Tzu Chi volunteer",
+                "org_en": "Spain",
+                "label_zh": "西班牙志工｜瑪麗亞",
+            },
+        ]
+        ordered_blocks = [
+            {
+                "kind": "free",
+                "lines": [
+                    "0032",
+                    "(接法香",
+                    "把你的手碰觸到水)",
+                    "Take a leaf.",
+                    "Touch the water with your hand.",
+                ],
+            },
+            {
+                "kind": "person",
+                "entry": {
+                    "label_zh": "馬來西亞慈濟志工｜李麗華",
+                    "name_zh": "李麗華",
+                    "role_zh": "馬來西亞慈濟志工",
+                    "name_en": "Lee Leyhua",
+                    "role_en": "",
+                    "org_en": "",
+                },
+            },
+            {
+                "kind": "free",
+                "lines": ["0099", "(中段文字)", "Middle block"],
+            },
+            {
+                "kind": "person",
+                "entry": {
+                    "label_zh": "西班牙志工｜瑪麗亞",
+                    "name_zh": "瑪麗亞",
+                    "role_zh": "西班牙志工",
+                    "name_en": "Maria Jose",
+                    "role_en": "Tzu Chi volunteer",
+                    "org_en": "Spain",
+                },
+            },
+        ]
+
+        lines = build_people_lines(people, ordered_blocks=ordered_blocks)
+        texts = [line for line in lines if line]
+
+        assert texts.index("0032") < texts.index("馬來西亞慈濟志工｜李麗華")
+        assert texts.index("0099") > texts.index("馬來西亞慈濟志工｜李麗華")
+        assert texts.index("0099") < texts.index("西班牙志工｜瑪麗亞")
 
 
 def test_build_people_lines_appends_tail_lines_after_people() -> None:

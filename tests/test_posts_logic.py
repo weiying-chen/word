@@ -274,6 +274,31 @@ def test_human_bodhi_header_is_treated_as_bodhi_section(tmp_path: Path) -> None:
     assert entries[0]["filename_prefix_override"] == expected_prefix
 
 
+def test_bodhi_entry_uses_explicit_english_title_line_when_present(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "bodhi_explicit_en.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "人間菩提7則",
+            "1. alex",
+            "5/18膚慰人間菩薩行",
+            "Give Comfort and Encouragement on the Bodhisattva Path",
+            "https://www.daai.tv/master/life-wisdom/P90230263?more=true",
+            "--------------------------------",
+        ],
+    )
+
+    entries = extract_post_entries(schedule_path)
+
+    assert len(entries) == 1
+    assert entries[0].get("reference_only")
+    assert (
+        entries[0]["header_title"]
+        == "膚慰人間菩薩行\nGive Comfort and Encouragement on the Bodhisattva Path"
+    )
+    assert entries[0]["ref_title"] == entries[0]["header_title"]
+
+
 def test_date_task_line_for_alex_is_parsed(tmp_path: Path) -> None:
     schedule_path = tmp_path / "date_task.docx"
     _write_docx(
