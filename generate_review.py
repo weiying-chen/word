@@ -89,13 +89,38 @@ def _format_content_seconds(content_seconds: int | str | None) -> str:
     if content_seconds in (None, ""):
         return ""
     total = int(content_seconds)
-    minutes, seconds = divmod(total, 60)
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
     parts: list[str] = []
+    if hours:
+        parts.append(f"{hours}時")
     if minutes:
         parts.append(f"{minutes}分")
     if seconds:
         parts.append(f"{seconds}秒")
     return "".join(parts) if parts else "0秒"
+
+
+def _sum_content_seconds(tasks: list[dict]) -> int:
+    total = 0
+
+    def walk(items: list[dict]) -> None:
+        nonlocal total
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            value = item.get("contentSeconds")
+            if value not in (None, ""):
+                try:
+                    total += int(value)
+                except (TypeError, ValueError):
+                    pass
+            children = item.get("children", [])
+            if isinstance(children, list) and children:
+                walk(children)
+
+    walk(tasks)
+    return total
 
 
 def _set_cell_lines(cell, lines: list[str]) -> None:
