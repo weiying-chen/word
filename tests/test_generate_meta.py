@@ -367,6 +367,52 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_parse_input_keeps_repeated_super_speaker_in_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "news_input.txt"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(Michael Shiu)",
+                        "/*SUPER:",
+                        "市議員｜邵浩然//",
+                        "第一段//",
+                        "*/",
+                        "",
+                        "(16，粵語。Michael Shiu)",
+                        "/*SUPER:",
+                        "市議員｜邵浩然//",
+                        "第二段//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(input_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "邵浩然",
+                    "name_en": "Michael Shiu",
+                    "role_zh": "市議員",
+                    "role_en": "",
+                    "org_en": "",
+                },
+                {
+                    "name_zh": "邵浩然",
+                    "name_en": "",
+                    "role_zh": "市議員",
+                    "role_en": "",
+                    "org_en": "",
+                },
+            ],
+        )
+
     def test_parse_input_strips_trailing_date_parenthesis_for_role_only_super(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "news_input.txt"
@@ -650,6 +696,66 @@ class RenderMetaTests(unittest.TestCase):
         assert texts.index("0032") < texts.index("馬來西亞慈濟志工｜李麗華")
         assert texts.index("0099") > texts.index("馬來西亞慈濟志工｜李麗華")
         assert texts.index("0099") < texts.index("西班牙志工｜瑪麗亞")
+
+    def test_build_people_lines_repeats_matching_people_before_next_block(self) -> None:
+        people = [
+            {
+                "name_zh": "邵浩然",
+                "name_en": "MICHAEL",
+                "role_zh": "市議員",
+                "role_en": "Councillor",
+                "org_en": "Richmond Hill",
+                "label_zh": "市議員｜邵浩然",
+            },
+            {
+                "name_zh": "邵浩然",
+                "name_en": "MICHAEL",
+                "role_zh": "市議員",
+                "role_en": "Councillor",
+                "org_en": "Richmond Hill",
+                "label_zh": "市議員｜邵浩然",
+            },
+            {
+                "name_zh": "張肅建",
+                "name_en": "THE OTHER",
+                "role_zh": "志工",
+                "role_en": "Tzu Chi volunteer",
+                "org_en": "",
+                "label_zh": "志工｜張肅建",
+            },
+        ]
+        ordered_blocks = [
+            {
+                "kind": "person",
+                "entry": {
+                    "label_zh": "市議員｜邵浩然",
+                    "name_zh": "邵浩然",
+                    "role_zh": "市議員",
+                    "name_en": "Michael Shiu",
+                    "role_en": "Councillor",
+                    "org_en": "Richmond Hill",
+                },
+            },
+            {
+                "kind": "person",
+                "entry": {
+                    "label_zh": "志工｜張肅建",
+                    "name_zh": "張肅建",
+                    "role_zh": "志工",
+                    "name_en": "???",
+                    "role_en": "Tzu Chi volunteer",
+                    "org_en": "",
+                },
+            },
+        ]
+
+        lines = build_people_lines(people, ordered_blocks=ordered_blocks)
+        texts = [line for line in lines if line]
+        michael_positions = [idx for idx, text in enumerate(texts) if text == "MICHAEL"]
+        other_position = texts.index("THE OTHER")
+        assert len(michael_positions) == 2
+        assert michael_positions[0] < other_position
+        assert michael_positions[1] < other_position
 
 
 def test_build_people_lines_appends_tail_lines_after_people() -> None:
