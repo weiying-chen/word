@@ -6,7 +6,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 
 import generate_review
-from style_tokens import REVIEW_TEXT_SIZE_PT
+from style_tokens import REVIEW_NOTES_TEXT_SIZE_PT, REVIEW_TEXT_SIZE_PT
 
 
 def _write_review_template(path: Path) -> None:
@@ -205,7 +205,7 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
     assert row_cell_runs
     assert comment_runs
     assert all(run.font.size is None for run in row_cell_runs)
-    assert all(run.font.size is None for run in comment_runs)
+    assert all(run.font.size == Pt(REVIEW_NOTES_TEXT_SIZE_PT) for run in comment_runs)
 
 
 def test_generate_review_supports_top_level_tasks_list_with_new_field_names(

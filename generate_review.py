@@ -13,7 +13,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 
 from docx_utils import apply_highlight_to_runs, clear_paragraph
-from style_tokens import REVIEW_TEXT_SIZE_PT
+from style_tokens import REVIEW_NOTES_TEXT_SIZE_PT, REVIEW_TEXT_SIZE_PT
 
 
 GOAL_LABEL_TEXT = "本月精進目標:"
@@ -123,12 +123,14 @@ def _sum_content_seconds(tasks: list[dict]) -> int:
     return total
 
 
-def _set_cell_lines(cell, lines: list[str]) -> None:
+def _set_cell_lines(cell, lines: list[str], *, font_size_pt: int | None = None) -> None:
     paragraph = cell.paragraphs[0]
     clear_paragraph(paragraph)
     if lines:
         for idx, line in enumerate(lines):
             run = paragraph.add_run(line)
+            if font_size_pt is not None:
+                run.font.size = Pt(font_size_pt)
             if idx < len(lines) - 1:
                 run.add_break()
     for extra in list(cell.paragraphs[1:]):
@@ -434,7 +436,11 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
             item_lines.append(f"實際作業時間:{work_text}")
         _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])
 
-        _set_cell_lines(table.cell(row_idx, 2), _extract_feedback_lines(task))
+        _set_cell_lines(
+            table.cell(row_idx, 2),
+            _extract_feedback_lines(task),
+            font_size_pt=REVIEW_NOTES_TEXT_SIZE_PT,
+        )
         _set_cell_lines(table.cell(row_idx, 3), [])
 
 
@@ -463,7 +469,11 @@ def fill_temp_work_table(doc: Document, tasks: list[dict]) -> None:
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
         _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])
-        _set_cell_lines(table.cell(row_idx, 2), _extract_feedback_lines(post))
+        _set_cell_lines(
+            table.cell(row_idx, 2),
+            _extract_feedback_lines(post),
+            font_size_pt=REVIEW_NOTES_TEXT_SIZE_PT,
+        )
         _set_cell_lines(table.cell(row_idx, 3), [])
 
 
