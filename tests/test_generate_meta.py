@@ -789,6 +789,67 @@ class RenderMetaTests(unittest.TestCase):
         assert len(michael_positions) == 1
         assert michael_positions[0] < other_position
 
+    def test_build_people_lines_prefers_super_sequence_when_requested(self) -> None:
+        people = [
+            {
+                "name_zh": "班傑納斯",
+                "name_en": "Baijnath Barai",
+                "role_zh": "藍毘尼志工",
+                "role_en": "Tzu Chi volunteer",
+                "org_en": "Lumbini, Nepal",
+                "label_zh": "藍毘尼志工｜班傑納斯",
+            },
+            {
+                "name_zh": "杜爾加瓦蒂",
+                "name_en": "Dargawati",
+                "role_zh": "慈濟縫紉班老師",
+                "role_en": "Tzu Chi sewing teacher",
+                "org_en": "",
+                "label_zh": "慈濟縫紉班老師｜杜爾加瓦蒂",
+            },
+            {
+                "name_zh": "瑪雅",
+                "name_en": "Maya",
+                "role_zh": "杜爾加瓦蒂的姊姊",
+                "role_en": "Dargawati's sister",
+                "org_en": "",
+                "label_zh": "杜爾加瓦蒂的姊姊｜瑪雅",
+            },
+            {
+                "name_zh": "班傑納斯",
+                "name_en": "Baijnath Barai",
+                "role_zh": "藍毘尼志工",
+                "role_en": "Tzu Chi volunteer",
+                "org_en": "Lumbini, Nepal",
+                "label_zh": "藍毘尼志工｜班傑納斯",
+            },
+            {
+                "name_zh": "杜爾加瓦蒂",
+                "name_en": "Dargawati",
+                "role_zh": "慈濟縫紉班老師",
+                "role_en": "Tzu Chi sewing teacher",
+                "org_en": "",
+                "label_zh": "慈濟縫紉班老師｜杜爾加瓦蒂",
+            },
+        ]
+        ordered_blocks = [
+            {"kind": "person", "entry": {"label_zh": "藍毘尼志工｜班傑納斯"}},
+            {"kind": "person", "entry": {"label_zh": "慈濟縫紉班老師｜杜爾加瓦蒂"}},
+            {"kind": "person", "entry": {"label_zh": "杜爾加瓦蒂的姊姊｜瑪雅"}},
+        ]
+
+        lines = build_people_lines(
+            people,
+            ordered_blocks=ordered_blocks,
+            prefer_people_sequence=True,
+        )
+        texts = [line for line in lines if line]
+        assert texts.count("Baijnath Barai") == 2
+        assert texts.count("Dargawati") == 2
+        assert texts.count("Maya") == 1
+        last_baijnath = len(texts) - 1 - list(reversed(texts)).index("Baijnath Barai")
+        assert texts.index("Maya") < last_baijnath
+
 
 def test_build_people_lines_appends_tail_lines_after_people() -> None:
     lines = build_people_lines(

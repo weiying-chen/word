@@ -436,6 +436,17 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
     meta_people_text = data.get(PEOPLE_KEY, "")
     overrides, people_meta_blocks = _parse_meta_people_blocks(meta_people_text)
     people = _merge_meta_people_overrides(people, overrides)
+    seen_people_keys: set[tuple[str, str]] = set()
+    has_repeated_super_speaker = False
+    for person in people:
+        key = (
+            str(person.get("role_zh", "")).strip(),
+            str(person.get("name_zh", "")).strip(),
+        )
+        if key in seen_people_keys:
+            has_repeated_super_speaker = True
+            break
+        seen_people_keys.add(key)
     return {
         "title_zh": data.get("TITLE_TEXT", ""),
         "summary_zh": summary[0] if summary else "",
@@ -445,6 +456,7 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
         "people": people,
         "people_tail_lines": [],
         "people_meta_blocks": people_meta_blocks,
+        "prefer_people_sequence": has_repeated_super_speaker,
         "title_en": data.get(TITLE_KEY, ""),
         "overview_en": data.get(OVERVIEW_KEY, ""),
     }
@@ -621,13 +633,19 @@ def build_people_lines(
     people: list[dict],
     tail_lines: list[str] | None = None,
     ordered_blocks: list[dict[str, object]] | None = None,
+    prefer_people_sequence: bool = False,
 ) -> list[str]:
     lines: list[str] = []
     if people or tail_lines or ordered_blocks:
         # Keep one blank line between the "名字職銜" label and the first person entry.
         lines.append("")
 
-    if ordered_blocks:
+    if prefer_people_sequence and people:
+        for idx, person in enumerate(people):
+            lines.extend(_person_lines(person))
+            if idx < len(people) - 1:
+                lines.append("")
+    elif ordered_blocks:
         used: set[int] = set()
         emitted_any = False
         has_person_blocks = False
@@ -727,6 +745,7 @@ def generate_meta(
         data.get("people", []),
         data.get("people_tail_lines", []),
         data.get("people_meta_blocks", []),
+        bool(data.get("prefer_people_sequence", False)),
     )
     people_placeholder = find_paragraph_by_text(doc, PEOPLE_PLACEHOLDER)
     if people_placeholder:
