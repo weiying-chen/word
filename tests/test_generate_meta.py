@@ -730,7 +730,7 @@ class RenderMetaTests(unittest.TestCase):
         assert texts.index("0099") > texts.index("馬來西亞慈濟志工｜李麗華")
         assert texts.index("0099") < texts.index("西班牙志工｜瑪麗亞")
 
-    def test_build_people_lines_repeats_matching_people_before_next_block(self) -> None:
+    def test_build_people_lines_uses_ordered_people_blocks_without_fanning_out_duplicates(self) -> None:
         people = [
             {
                 "name_zh": "邵浩然",
@@ -786,9 +786,8 @@ class RenderMetaTests(unittest.TestCase):
         texts = [line for line in lines if line]
         michael_positions = [idx for idx, text in enumerate(texts) if text == "MICHAEL"]
         other_position = texts.index("THE OTHER")
-        assert len(michael_positions) == 2
+        assert len(michael_positions) == 1
         assert michael_positions[0] < other_position
-        assert michael_positions[1] < other_position
 
 
 def test_build_people_lines_appends_tail_lines_after_people() -> None:

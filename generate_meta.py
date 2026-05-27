@@ -617,27 +617,6 @@ def _match_person_index(
     return None
 
 
-def _match_person_indices(
-    people: list[dict],
-    entry: dict[str, str],
-    used: set[int],
-) -> list[int]:
-    first = _match_person_index(people, entry, used)
-    if first is None:
-        return []
-
-    matched = [first]
-    used_local = set(used)
-    used_local.add(first)
-    while True:
-        nxt = _match_person_index(people, entry, used_local)
-        if nxt is None:
-            break
-        matched.append(nxt)
-        used_local.add(nxt)
-    return matched
-
-
 def build_people_lines(
     people: list[dict],
     tail_lines: list[str] | None = None,
@@ -651,6 +630,7 @@ def build_people_lines(
     if ordered_blocks:
         used: set[int] = set()
         emitted_any = False
+        has_person_blocks = False
         for block in ordered_blocks:
             kind = str(block.get("kind", ""))
             segment: list[str] = []
@@ -661,15 +641,13 @@ def build_people_lines(
                     if str(line).strip()
                 ]
             elif kind == "person":
+                has_person_blocks = True
                 entry = block.get("entry")
                 if isinstance(entry, dict):
-                    match_indices = _match_person_indices(people, entry, used)
-                    if match_indices:
-                        for pos, match_idx in enumerate(match_indices):
-                            used.add(match_idx)
-                            if pos > 0:
-                                segment.append("")
-                            segment.extend(_person_lines(people[match_idx]))
+                    match_idx = _match_person_index(people, entry, used)
+                    if match_idx is not None:
+                        used.add(match_idx)
+                        segment = _person_lines(people[match_idx])
                     else:
                         segment = _person_lines(entry)
             if not segment:
@@ -679,13 +657,14 @@ def build_people_lines(
             lines.extend(segment)
             emitted_any = True
 
-        for idx, person in enumerate(people):
-            if idx in used:
-                continue
-            if emitted_any:
-                lines.append("")
-            lines.extend(_person_lines(person))
-            emitted_any = True
+        if not has_person_blocks:
+            for idx, person in enumerate(people):
+                if idx in used:
+                    continue
+                if emitted_any:
+                    lines.append("")
+                lines.extend(_person_lines(person))
+                emitted_any = True
     else:
         for idx, person in enumerate(people):
             lines.extend(_person_lines(person))
