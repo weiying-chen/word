@@ -181,7 +181,7 @@ def test_bodhi_date_prefix(tmp_path: Path) -> None:
     entries = extract_post_entries(schedule_path)
     assert len(entries) == 1
     entry = entries[0]
-    assert entry["video_title"] == "善念匯聚成力量"
+    assert entry["video_title"] == "人間菩提\n1/20首播 善念匯聚成力量"
     assert entry["ref_url"] == entry["video_url"]
     assert entry["ref_title"] == "善念匯聚成力量"
     expected_prefix = f"{date.today().year % 100:02d}0120_"
@@ -211,11 +211,11 @@ def test_bodhi_entry_includes_english_title_from_page(tmp_path: Path) -> None:
     entry = entries[0]
     assert (
         entry["header_title"]
-        == "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+        == "人間菩提\n1/20首播 廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
     )
     assert (
         entry["video_title"]
-        == "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+        == "人間菩提\n1/20首播 廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
     )
     assert (
         entry["ref_title"]
@@ -294,9 +294,12 @@ def test_bodhi_entry_uses_explicit_english_title_line_when_present(tmp_path: Pat
     assert entries[0].get("reference_only")
     assert (
         entries[0]["header_title"]
+        == "人間菩提\n5/18膚慰人間菩薩行\nGive Comfort and Encouragement on the Bodhisattva Path"
+    )
+    assert (
+        entries[0]["ref_title"]
         == "膚慰人間菩薩行\nGive Comfort and Encouragement on the Bodhisattva Path"
     )
-    assert entries[0]["ref_title"] == entries[0]["header_title"]
 
 
 def test_date_task_line_for_alex_is_parsed(tmp_path: Path) -> None:
@@ -320,6 +323,7 @@ def test_date_task_line_for_alex_is_parsed(tmp_path: Path) -> None:
 
     entries = extract_post_entries(schedule_path)
     assert len(entries) == 1
+    assert entries[0]["header_title"] == "4/11(六)\nProgram - Episode"
     assert entries[0]["video_title"] == "Program - Episode"
     assert entries[0]["ref_title"] == "World Parkinson's Day"
 

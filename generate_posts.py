@@ -33,6 +33,9 @@ DATE_TASK_LINE_RE = re.compile(
 DATE_TASK_PREFIX_RE = re.compile(
     r"^(?:\d+\.\s*)?(?P<date>\d{1,2}/\d{1,2}|\d{2}/\d{1,2}/\d{1,2})(?:\([^()]*\))?\s*發\s*\S+"
 )
+DATE_TASK_DISPLAY_RE = re.compile(
+    r"^(?:\d+\.\s*)?(?P<display>\d{1,2}/\d{1,2}(?:\([^()]*\))?)\s*發\s*\S+"
+)
 BARE_PERSON_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*$")
 PROGRAM_SECTION_RE = re.compile(r"^節目.*則")
 BODHI_SECTION_RE = re.compile(r"^(?:人間)?菩提.*則")
@@ -68,6 +71,13 @@ def _extract_task_date_prefix(line: str, default_year: int) -> str | None:
     if not match:
         return None
     return _parse_date_prefix(match.group("date"), default_year=default_year)
+
+
+def _extract_task_date_display(line: str) -> str | None:
+    match = DATE_TASK_DISPLAY_RE.match(line.strip())
+    if not match:
+        return None
+    return match.group("display").strip()
 
 
 def _extract_hyperlink_target(paragraph) -> str | None:
@@ -373,15 +383,20 @@ def _build_bodhi_entry(
     display_title = cleaned_title
     if english_title:
         display_title = f"{display_title}\n{english_title}"
+
+    header_title_lines = ["人間菩提", raw_title]
+    if english_title:
+        header_title_lines.append(english_title)
+    header_title = "\n".join(header_title_lines)
     hashtags_en, hashtags_zh = _build_bodhi_hashtags(cleaned_title, english_title)
     entry = {
         "filename_title": "人間菩提",
-        "header_title": _clean_title_for_display(display_title),
+        "header_title": _clean_title_for_display(header_title),
         "header_url": url_line,
         "header_url_target": url_target,
         "video_url": url_line,
         "video_url_target": url_target,
-        "video_title": _clean_title_for_display(display_title),
+        "video_title": _clean_title_for_display(header_title),
         "ref_url": url_line,
         "ref_url_target": url_target,
         "ref_title": _clean_title_for_display(display_title),
@@ -419,8 +434,11 @@ def _build_standard_schedule_entry(
         ref_title=ref_title,
     )
     task_prefix = _extract_task_date_prefix(line, default_year=default_year)
+    task_display = _extract_task_date_display(line)
     if task_prefix:
         entry["filename_prefix_override"] = f"{task_prefix}_"
+    if task_display:
+        entry["header_title"] = f"{task_display}\n{entry['header_title']}"
     return entry
 
 
@@ -737,7 +755,7 @@ def strip_reference_block(doc: Document, ref_url: str, *, keep_ref_title: bool =
         text = paragraph.text.strip()
         if text == ref_label and start_idx is None:
             start_idx = idx
-        if ref_url and text == ref_url and ref_url_idx is None:
+        if ref_url and text == ref_url and ref_url_idx is None and start_idx is not None:
             ref_url_idx = idx
         if text == video_label and end_idx is None:
             end_idx = idx
@@ -959,7 +977,7 @@ def generate_docs(
             hyperlink_targets=hyperlink_targets,
         )
         if entry.get("reference_only"):
-            title_lines = entry.get("header_title", "").splitlines()
+            title_lines = entry.get("ref_title", "").splitlines()
             if len(title_lines) >= 2:
                 chinese_title = title_lines[0].strip()
                 english_title = title_lines[1].strip()

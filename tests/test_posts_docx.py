@@ -329,6 +329,10 @@ def test_generated_bodhi_docx_puts_english_title_under_chinese_title(tmp_path: P
 
     doc = Document(str(output_paths[0]))
     texts = [p.text for p in doc.paragraphs if p.text.strip()]
+    assert texts[0] == (
+        "人間菩提\n1/20首播 廣行環保護人間\n"
+        "32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
+    )
     combined = "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
     assert texts.count(combined) == 1
     assert "#hashtagline" in texts
@@ -378,6 +382,50 @@ def test_generated_bodhi_docx_injects_english_under_fixed_title_lines_not_hashta
     assert "◎標題：廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore" in texts
     assert "廣行環保護人間\n32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore" in texts
     assert "#廣行環保護人間" in texts
+
+
+def test_bodhi_injection_uses_title_line_not_program_name(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "bodhi_injection_lines.docx"
+    template_path = tmp_path / "template_injection_lines.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "人間菩提1則",
+            "1. alex",
+            "5/18膚慰人間菩薩行",
+            "Give Comfort and Encouragement on the Bodhisattva Path",
+            "https://www.daai.tv/master/life-wisdom/P90230263?more=true",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{HEADER_TITLE}}",
+            "◎標題：膚慰人間菩薩行",
+            "人間菩提",
+            "#人間菩提",
+        ],
+    )
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+
+    doc = Document(str(output_paths[0]))
+    texts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    assert (
+        "◎標題：膚慰人間菩薩行\nGive Comfort and Encouragement on the Bodhisattva Path"
+        in texts
+    )
+    assert "人間菩提\nGive Comfort and Encouragement on the Bodhisattva Path" not in texts
 
 
 def test_generated_posts_enforces_body_12pt_and_source_10pt(tmp_path: Path) -> None:
