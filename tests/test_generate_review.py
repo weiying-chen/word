@@ -103,7 +103,7 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
                     "createdAt": "2026-05-08T00:00:00.000Z",
                     "workMinutes": 240,
                     "contentSeconds": 210,
-                    "comments": ["This is a comment"],
+                    "notes": ["This is a note"],
                     "children": [],
                 }
             ],
@@ -122,7 +122,7 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
     table = out_doc.tables[0]
     assert table.cell(1, 0).text.strip() == "5/8"
     assert table.cell(1, 1).text.strip() == "1.\n回眸(中翻英)\n長度:3分30秒\n實際作業時間:4時"
-    assert table.cell(1, 2).text.strip() == "• This is a comment"
+    assert table.cell(1, 2).text.strip() == "• This is a note"
 
 
 def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None:
@@ -184,7 +184,7 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
                     "createdAt": "2026-05-08T00:00:00.000Z",
                     "workMinutes": 240,
                     "contentSeconds": 210,
-                    "comments": ["This is a comment"],
+                    "notes": ["This is a note"],
                     "children": [],
                 }
             ],
@@ -224,14 +224,14 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
                     "createdAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 210,
-                    "comments": ["c1"],
+                    "notes": ["n1"],
                     "children": [],
                 },
                 {
                     "name": "B",
                     "createdAt": "2026-05-02T04:05:06Z",
                     "workMinutes": 120,
-                    "comments": ["c2"],
+                    "notes": ["n2"],
                     "children": [],
                 },
             ],
@@ -311,6 +311,7 @@ def test_generate_review_populates_temp_work_from_posts_children_only(
                             "type": "posts",
                             "createdAt": "2026-05-18T11:37:41.273370Z",
                             "workMinutes": 50,
+                            "contentSeconds": 120,
                         },
                         {
                             "name": "NEWS B",
@@ -336,8 +337,7 @@ def test_generate_review_populates_temp_work_from_posts_children_only(
     table = out_doc.tables[0]
     # After removing 字幕審稿 section: row 2 is 臨時工作 header, row 3 is first temp work row
     assert table.cell(3, 0).text.strip() == "5/18"
-    assert table.cell(3, 1).text.strip() == "1.\nPOST A\n實際作業時間:50分"
-    assert "長度:" not in table.cell(3, 1).text
+    assert table.cell(3, 1).text.strip() == "1.\nPOST A\n長度:2分\n實際作業時間:50分"
 
 
 def test_generate_review_removes_subtitle_review_summary_block(tmp_path: Path) -> None:
@@ -456,7 +456,7 @@ def test_generate_review_removes_translation_english_to_chinese_line(tmp_path: P
     assert "英翻中:" not in text
 
 
-def test_generate_review_removes_other_work_subsection(tmp_path: Path) -> None:
+def test_generate_review_sets_other_work_news_count_from_children(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     tasks_json = tmp_path / "tasks.json"
     output_path = tmp_path / "review_output.docx"
@@ -481,13 +481,7 @@ def test_generate_review_removes_other_work_subsection(tmp_path: Path) -> None:
     summary_cell.add_paragraph("中翻英:")
     summary_cell.add_paragraph("")
     summary_cell.add_paragraph("其他工作:")
-    summary_cell.add_paragraph("定稿標題簡介縮圖:")
-    summary_cell.add_paragraph("寫IG:")
-    summary_cell.add_paragraph("LW edit:")
-    summary_cell.add_paragraph("小編文:")
-    summary_cell.add_paragraph("節目上網:")
-    summary_cell.add_paragraph("製作QA/Quote:")
-    summary_cell.add_paragraph("節錄經典:")
+    summary_cell.add_paragraph("英文新聞: ?篇")
     summary_cell.add_paragraph("")
     summary_cell.add_paragraph("行政工作:")
     summary_cell.add_paragraph("PM選稿子:")
@@ -501,7 +495,11 @@ def test_generate_review_removes_other_work_subsection(tmp_path: Path) -> None:
                     "createdAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
-                    "children": [],
+                    "children": [
+                        {"name": "N1", "type": "news"},
+                        {"name": "N2", "type": "news"},
+                        {"name": "P1", "type": "posts"},
+                    ],
                 }
             ],
             ensure_ascii=False,
@@ -513,14 +511,8 @@ def test_generate_review_removes_other_work_subsection(tmp_path: Path) -> None:
 
     out_doc = Document(output_path)
     text = "\n".join(p.text for p in out_doc.tables[0].cell(5, 0).paragraphs)
-    assert "其他工作:" not in text
-    assert "定稿標題簡介縮圖:" not in text
-    assert "寫IG:" not in text
-    assert "LW edit:" not in text
-    assert "小編文:" not in text
-    assert "節目上網:" not in text
-    assert "製作QA/Quote:" not in text
-    assert "節錄經典:" not in text
+    assert "其他工作:" in text
+    assert "英文新聞: 2篇" in text
     assert "行政工作:" in text
 
 

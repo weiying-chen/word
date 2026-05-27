@@ -141,10 +141,6 @@ def _extract_feedback_lines(task: dict) -> list[str]:
     raw_notes = task.get("notes")
     if isinstance(raw_notes, list):
         return [f"• {str(note).strip()}" for note in raw_notes if str(note).strip()]
-
-    raw_comments = task.get("comments")
-    if isinstance(raw_comments, list):
-        return [f"• {str(note).strip()}" for note in raw_comments if str(note).strip()]
     return []
 
 
@@ -248,6 +244,20 @@ def _collect_temp_posts(tasks: list[dict]) -> list[dict]:
     return posts
 
 
+def _count_news_children(tasks: list[dict]) -> int:
+    count = 0
+    for task in tasks:
+        children = task.get("children", [])
+        if not isinstance(children, list):
+            continue
+        for child in children:
+            if not isinstance(child, dict):
+                continue
+            if str(child.get("type", "")).strip().lower() == "news":
+                count += 1
+    return count
+
+
 def remove_subtitle_review_section(doc: Document) -> None:
     if not doc.tables:
         return
@@ -320,29 +330,33 @@ def remove_translation_english_to_chinese_summary_line(doc: Document) -> None:
                 break
 
 
-def remove_other_work_summary_block(doc: Document) -> None:
+def set_other_work_news_count_line(doc: Document, tasks: list[dict]) -> None:
     if not doc.tables:
         return
     table = doc.tables[0]
-    start_prefix = "其他工作:"
-    end_prefix = "行政工作:"
+    news_count = _count_news_children(tasks)
+    prefix = "英文新聞:"
+    replacement = f"英文新聞: {news_count}篇"
 
     for row in table.rows:
         for cell in row.cells:
-            idx = 0
-            while idx < len(cell.paragraphs):
-                text = cell.paragraphs[idx].text.strip()
-                if not text.startswith(start_prefix):
-                    idx += 1
-                    continue
+            found_other_work_idx = None
+            for idx, paragraph in enumerate(cell.paragraphs):
+                stripped = paragraph.text.strip()
+                if stripped.startswith(prefix):
+                    paragraph.text = replacement
+                    return
+                if stripped.startswith("其他工作:"):
+                    found_other_work_idx = idx
 
-                _remove_paragraph(cell.paragraphs[idx])
-                while idx < len(cell.paragraphs):
-                    next_text = cell.paragraphs[idx].text.strip()
-                    if next_text.startswith(end_prefix):
-                        break
-                    _remove_paragraph(cell.paragraphs[idx])
-                continue
+            # Fallback: if template has 「其他工作:」 but no 「英文新聞:」 line yet,
+            # write the count into the first non-empty line after 「其他工作:」.
+            if found_other_work_idx is not None:
+                for idx in range(found_other_work_idx + 1, len(cell.paragraphs)):
+                    if not cell.paragraphs[idx].text.strip():
+                        continue
+                    cell.paragraphs[idx].text = replacement
+                    return
 
 
 def remove_work_notes_meeting_lines(doc: Document) -> None:
@@ -396,7 +410,8 @@ def set_translation_total_length_line(doc: Document, tasks: list[dict]) -> None:
                 if not paragraph.text.strip().startswith(heading_prefix):
                     continue
                 for j in range(idx + 1, len(cell.paragraphs)):
-                    if cell.paragraphs[j].text.strip().startswith("中翻英:"):
+                    line = cell.paragraphs[j].text.strip()
+                    if line.startswith("長度:") or line.startswith("中翻英:"):
                         cell.paragraphs[j].text = total_text
                         return
                 return
@@ -465,6 +480,9 @@ def fill_temp_work_table(doc: Document, tasks: list[dict]) -> None:
             [_format_month_day(str(post.get("createdAt", "")).strip())],
         )
         item_lines = [f"{slot + 1}.", str(post.get("name", "")).strip()]
+        length_text = _format_content_seconds(post.get("contentSeconds"))
+        if length_text:
+            item_lines.append(f"長度:{length_text}")
         work_text = _format_work_minutes(post.get("workMinutes"))
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
@@ -521,10 +539,10 @@ def generate_review(
     remove_subtitle_review_section(doc)
     remove_subtitle_review_summary_block(doc)
     remove_translation_english_to_chinese_summary_line(doc)
-    remove_other_work_summary_block(doc)
     remove_work_notes_meeting_lines(doc)
     normalize_translation_summary_heading_spacing(doc)
     set_translation_total_length_line(doc, tasks)
+    set_other_work_news_count_line(doc, tasks)
     fill_temp_work_table(doc, tasks)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
