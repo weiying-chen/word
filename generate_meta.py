@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import unicodedata
 import warnings
 from pathlib import Path
 
@@ -28,7 +29,7 @@ PEOPLE_KEY = "PEOPLE"
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 EN_NAME_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z.\s'-]*")
 EN_NAME_HINT_RE = re.compile(
-    r'^[\s\d.,，．。:：;；!?！？~\-–—秒分]*'
+    r'^[\s\d.,，．。:：;；!?！？~\-–—秒分"“”\'‘’]*'
     r'([A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ.\s"“”\'‘’\-]*[A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỹ])'
     r'(?:\s*[\u4e00-\u9fff].*)?$'
 )
@@ -66,7 +67,7 @@ def _extract_english_name_hint(text: str) -> str:
     if stripped[0] not in {"(", "（"} or stripped[-1] not in {")", "）"}:
         return ""
 
-    inner = stripped[1:-1]
+    inner = unicodedata.normalize("NFKC", stripped[1:-1])
     match = EN_NAME_HINT_RE.match(inner.strip())
     if match:
         name = match.group(1).strip().rstrip(" .,;:-")
@@ -80,7 +81,7 @@ def _extract_english_name_hint(text: str) -> str:
     # Fallback: support cues like "(SB) (Anabel) (17秒)".
     chunks = re.findall(r"[（(]([^（）()]*)[）)]", stripped)
     for chunk in chunks:
-        candidate = chunk.strip().rstrip(" .,;:-")
+        candidate = unicodedata.normalize("NFKC", chunk).strip().rstrip(" .,;:-")
         if candidate.isupper() and len(candidate) <= 3:
             continue
         if EN_NAME_VALUE_RE.fullmatch(candidate):

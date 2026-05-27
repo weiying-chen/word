@@ -280,6 +280,39 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_parse_input_extracts_fullwidth_latin_name_from_parentheses(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "news_input.txt"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        '(3" Ｍaya)',
+                        "/*SUPER:",
+                        "杜爾加瓦蒂的姊姊｜瑪雅//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(input_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "瑪雅",
+                    "name_en": "Maya",
+                    "role_zh": "杜爾加瓦蒂的姊姊",
+                    "role_en": "",
+                    "org_en": "",
+                }
+            ],
+        )
+
     def test_parse_input_ignores_instructional_parenthetical_english_and_keeps_full_name(
         self,
     ) -> None:
