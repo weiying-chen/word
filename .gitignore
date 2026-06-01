@@ -9,3 +9,6 @@ output/
 .codex
 .codex/
 tasks.json
+episodes.json
+episodes_raw.json
+sources/
