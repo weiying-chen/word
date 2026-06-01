@@ -1,4 +1,8 @@
-from daai_program_extract import extract_episode_rows_from_html
+from daai_program_extract import (
+    build_episodes,
+    extract_episode_rows_from_html,
+    extract_youtube_fields,
+)
 
 
 def test_extract_episode_rows_falls_back_when_episode_json_is_broken() -> None:
@@ -42,3 +46,34 @@ def test_extract_episode_rows_falls_back_when_episode_json_is_broken() -> None:
     assert rows[1]["date"] == "2026-05-06"
     assert rows[1]["title"] == "肝癌不開刀"
     assert rows[1]["ytid"] == ""
+
+
+def test_extract_youtube_fields_parses_title_description_and_last_timestamp() -> None:
+    html = """
+    <meta property="og:title" content="【大愛醫生館】 腰椎連環「扁」 20260521">
+    <script>
+    var ytInitialPlayerResponse = {"videoDetails":{"shortDescription":"line1\\n00:11｜片頭\\n07:18｜腰椎連環「扁」"}}
+    </script>
+    """
+    fields = extract_youtube_fields(html)
+    assert fields["youtubeTitle"] == "【大愛醫生館】 腰椎連環「扁」 20260521"
+    assert "00:11｜片頭" in fields["youtubeDescription"]
+    assert fields["descriptionLastTimestampLine"] == "07:18｜腰椎連環「扁」"
+
+
+def test_build_episodes_uses_required_output_keys() -> None:
+    rows = [
+        {
+            "episode_index": 8,
+            "epid": "6797",
+            "date": "2026-05-20",
+            "title": "肺腺癌先禮後兵",
+            "ytid": "P0uiRM2no18",
+        }
+    ]
+    episodes = build_episodes(rows)
+    assert episodes[0]["episodeIndex"] == 8
+    assert episodes[0]["epId"] == "6797"
+    assert episodes[0]["titleZh"] == "肺腺癌先禮後兵"
+    assert episodes[0]["ytId"] == "P0uiRM2no18"
+    assert episodes[0]["youtubeUrl"] == "https://www.youtube.com/watch?v=P0uiRM2no18"
