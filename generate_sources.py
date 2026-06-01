@@ -15,6 +15,7 @@ from style_tokens import BODY_TEXT_SIZE_PT
 
 
 HARDCODED_TIMESTAMP_LINE = "07:27-09:20 (1分53秒)"
+DESCRIPTION_TIMESTAMP_RE = re.compile(r"^\s*(?P<mm>\d{1,2}):(?P<ss>\d{2})｜")
 
 
 def _safe_filename(text: str) -> str:
@@ -44,6 +45,23 @@ def _first_summary_line(description: str) -> str:
     return ""
 
 
+def _format_minutes_seconds(total_seconds: int) -> str:
+    minutes, seconds = divmod(max(0, total_seconds), 60)
+    return f"{minutes}分{seconds}秒"
+
+
+def _dynamic_timestamp_line(last_line: str, subtitle_lines: list[str]) -> str:
+    match = DESCRIPTION_TIMESTAMP_RE.match(last_line.strip())
+    if not match:
+        return HARDCODED_TIMESTAMP_LINE
+    end_total = int(match.group("mm")) * 60 + int(match.group("ss"))
+    start = "00:00"
+    start_total = 0
+    duration = max(0, end_total - start_total)
+    end = f"{int(match.group('mm')):02d}:{int(match.group('ss')):02d}"
+    return f"{start}-{end} ({_format_minutes_seconds(duration)})"
+
+
 def _read_text_with_fallback(path: Path) -> str:
     raw = path.read_bytes()
     if raw.startswith(b"\xef\xbb\xbf"):
@@ -65,6 +83,7 @@ def _render_docx(
     youtube_url: str,
     summary: str,
     subtitle_lines: list[str],
+    timestamp_line: str,
 ) -> None:
     doc = Document(str(template_path))
     if not doc.paragraphs:
@@ -78,7 +97,7 @@ def _render_docx(
     add_hyperlink(p_url, youtube_url, youtube_url)
     apply_font_size_to_runs(p_url, font_size_pt=BODY_TEXT_SIZE_PT)
 
-    p_time = doc.add_paragraph(HARDCODED_TIMESTAMP_LINE)
+    p_time = doc.add_paragraph(timestamp_line)
     for run in p_time.runs:
         run.font.highlight_color = WD_COLOR_INDEX.YELLOW
     apply_font_size_to_runs(p_time, font_size_pt=BODY_TEXT_SIZE_PT)
@@ -106,14 +125,14 @@ def generate_sources(
 ) -> dict[str, int]:
     episodes = json.loads(episodes_json.read_text(encoding="utf-8"))
     generated = 0
-    skipped_missing_subs = 0
+    skipped = 0
     errors = 0
 
     for item in episodes:
         ep_id = str(item.get("epId", "")).strip()
         subtitle_file = _find_subtitle_file(sources_dir, ep_id)
         if subtitle_file is None:
-            skipped_missing_subs += 1
+            skipped += 1
             continue
 
         try:
@@ -122,18 +141,26 @@ def generate_sources(
             ).strip()
             youtube_url = str(item.get("youtubeUrl", "")).strip()
             summary = _first_summary_line(str(item.get("youtubeDescription", "")))
+            last_ts_line = str(item.get("descriptionLastTimestampLine", "")).strip()
             subtitle_lines = [
                 line.rstrip("\n")
                 for line in _read_text_with_fallback(subtitle_file).splitlines()
                 if line.strip()
             ]
+            timestamp_line = _dynamic_timestamp_line(last_ts_line, subtitle_lines)
             if not title or not youtube_url:
                 errors += 1
                 continue
             filename = f"{_safe_filename(title)}.docx"
             output_path = output_dir / filename
             _render_docx(
-                template_path, output_path, title, youtube_url, summary, subtitle_lines
+                template_path,
+                output_path,
+                title,
+                youtube_url,
+                summary,
+                subtitle_lines,
+                timestamp_line,
             )
             generated += 1
         except Exception:
@@ -141,7 +168,7 @@ def generate_sources(
 
     return {
         "generated": generated,
-        "skipped_missing_subs": skipped_missing_subs,
+        "skipped": skipped,
         "errors": errors,
     }
 
@@ -175,7 +202,7 @@ def main() -> None:
         output_dir=Path(args.output_dir),
     )
     print(
-        f"generated={result['generated']} skipped_missing_subs={result['skipped_missing_subs']} errors={result['errors']}"
+        f"generated={result['generated']} skipped={result['skipped']} errors={result['errors']}"
     )
 
 
