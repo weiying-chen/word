@@ -16,6 +16,10 @@ from style_tokens import BODY_TEXT_SIZE_PT
 
 HARDCODED_TIMESTAMP_LINE = "07:27-09:20 (1分53秒)"
 DESCRIPTION_TIMESTAMP_RE = re.compile(r"^\s*(?P<mm>\d{1,2}):(?P<ss>\d{2})｜")
+TIMECODE_ROW_RE = re.compile(
+    r"^(?P<sh>\d{2}):(?P<sm>\d{2}):(?P<ss>\d{2}):\d{2}\t"
+    r"(?P<eh>\d{2}):(?P<em>\d{2}):(?P<es>\d{2}):\d{2}\t(?P<text>.*)$"
+)
 
 
 def _safe_filename(text: str) -> str:
@@ -62,6 +66,79 @@ def _dynamic_timestamp_line(last_line: str, subtitle_lines: list[str]) -> str:
     return f"{start}-{end} ({_format_minutes_seconds(duration)})"
 
 
+def _to_seconds(hh: int, mm: int, ss: int) -> int:
+    return hh * 3600 + mm * 60 + ss
+
+
+def _mmss(total_seconds: int) -> str:
+    minutes, seconds = divmod(max(0, total_seconds), 60)
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def _extract_star_range(subtitle_lines: list[str]) -> tuple[int, int] | None:
+    marker_spans: list[tuple[int, int]] = []
+    for line in subtitle_lines:
+        if "*" not in line:
+            continue
+        match = TIMECODE_ROW_RE.match(line)
+        if not match:
+            continue
+        start = _to_seconds(
+            int(match.group("sh")),
+            int(match.group("sm")),
+            int(match.group("ss")),
+        )
+        end = _to_seconds(
+            int(match.group("eh")),
+            int(match.group("em")),
+            int(match.group("es")),
+        )
+        marker_spans.append((start, end))
+        if len(marker_spans) == 2:
+            break
+    if len(marker_spans) < 2:
+        return None
+    return marker_spans[0][0], marker_spans[1][1]
+
+
+def _build_timestamp_line(last_line: str, subtitle_lines: list[str]) -> str:
+    star_range = _extract_star_range(subtitle_lines)
+    if star_range is not None:
+        start, end = star_range
+        return f"{_mmss(start)}-{_mmss(end)} ({_format_minutes_seconds(end - start)})"
+    return _dynamic_timestamp_line(last_line, subtitle_lines)
+
+
+def _strip_star_marker(line: str) -> str:
+    return re.sub(r"\s*\*\s*$", "", line).rstrip()
+
+
+def _line_span_seconds(line: str) -> tuple[int, int] | None:
+    match = TIMECODE_ROW_RE.match(line)
+    if not match:
+        return None
+    return (
+        _to_seconds(int(match.group("sh")), int(match.group("sm")), int(match.group("ss"))),
+        _to_seconds(int(match.group("eh")), int(match.group("em")), int(match.group("es"))),
+    )
+
+
+def _highlight_flags_for_lines(subtitle_lines: list[str]) -> list[bool]:
+    star_range = _extract_star_range(subtitle_lines)
+    if star_range is None:
+        return [False] * len(subtitle_lines)
+    range_start, range_end = star_range
+    flags: list[bool] = []
+    for line in subtitle_lines:
+        span = _line_span_seconds(line)
+        if span is None:
+            flags.append(False)
+            continue
+        line_start, line_end = span
+        flags.append(line_start <= range_end and line_end >= range_start)
+    return flags
+
+
 def _read_text_with_fallback(path: Path) -> str:
     raw = path.read_bytes()
     if raw.startswith(b"\xef\xbb\xbf"):
@@ -83,6 +160,7 @@ def _render_docx(
     youtube_url: str,
     summary: str,
     subtitle_lines: list[str],
+    subtitle_highlights: list[bool],
     timestamp_line: str,
 ) -> None:
     doc = Document(str(template_path))
@@ -108,8 +186,11 @@ def _render_docx(
 
     if subtitle_lines:
         doc.add_paragraph("")
-        for line in subtitle_lines:
+        for idx, line in enumerate(subtitle_lines):
             p_line = doc.add_paragraph(line)
+            if idx < len(subtitle_highlights) and subtitle_highlights[idx]:
+                for run in p_line.runs:
+                    run.font.highlight_color = WD_COLOR_INDEX.YELLOW
             apply_font_size_to_runs(p_line, font_size_pt=BODY_TEXT_SIZE_PT)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,7 +228,9 @@ def generate_sources(
                 for line in _read_text_with_fallback(subtitle_file).splitlines()
                 if line.strip()
             ]
-            timestamp_line = _dynamic_timestamp_line(last_ts_line, subtitle_lines)
+            timestamp_line = _build_timestamp_line(last_ts_line, subtitle_lines)
+            subtitle_highlights = _highlight_flags_for_lines(subtitle_lines)
+            subtitle_lines = [_strip_star_marker(line) for line in subtitle_lines]
             if not title or not youtube_url:
                 errors += 1
                 continue
@@ -160,6 +243,7 @@ def generate_sources(
                 youtube_url,
                 summary,
                 subtitle_lines,
+                subtitle_highlights,
                 timestamp_line,
             )
             generated += 1

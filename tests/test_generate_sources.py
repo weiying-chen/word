@@ -167,3 +167,64 @@ def test_generate_sources_falls_back_to_hardcoded_timestamp_without_last_line(
     doc = Document(str(next(output_dir.glob("*.docx"))))
     texts = [p.text for p in doc.paragraphs if p.text.strip()]
     assert texts[2] == "07:27-09:20 (1分53秒)"
+
+
+def test_generate_sources_uses_two_star_markers_for_range_and_highlights(
+    tmp_path: Path,
+) -> None:
+    episodes_path = tmp_path / "episodes.json"
+    template_path = tmp_path / "sources_template.docx"
+    sources_dir = tmp_path / "sources"
+    output_dir = tmp_path / "output"
+    sources_dir.mkdir()
+    output_dir.mkdir()
+    _write_template(template_path)
+
+    (sources_dir / "大愛醫生館第6797集_ch_肺腺癌先禮後兵.txt").write_text(
+        "00:00:01:00\t00:00:03:00\tA\n"
+        "00:00:05:00\t00:00:07:00\tB *\n"
+        "00:00:08:00\t00:00:10:00\tC\n"
+        "00:00:12:00\t00:00:14:00\tD *\n"
+        "00:00:15:00\t00:00:17:00\tE\n",
+        encoding="utf-8",
+    )
+
+    episodes = [
+        {
+            "epId": "6797",
+            "titleZh": "肺腺癌先禮後兵",
+            "ytId": "P0uiRM2no18",
+            "youtubeUrl": "https://www.youtube.com/watch?v=P0uiRM2no18",
+            "youtubeTitle": "【大愛醫生館】 肺腺癌先禮後兵 20260520",
+            "youtubeDescription": "摘要。",
+            "descriptionLastTimestampLine": "",
+        }
+    ]
+    episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
+
+    generate_sources(
+        episodes_json=episodes_path,
+        template_path=template_path,
+        sources_dir=sources_dir,
+        output_dir=output_dir,
+    )
+
+    doc = Document(str(next(output_dir.glob("*.docx"))))
+    texts = [p.text for p in doc.paragraphs if p.text.strip()]
+    assert texts[2] == "00:05-00:14 (0分9秒)"
+
+    subtitle_paragraphs = [p for p in doc.paragraphs if "\t" in p.text]
+    assert subtitle_paragraphs[0].text.endswith("\tA")
+    assert subtitle_paragraphs[1].text.endswith("\tB")
+    assert subtitle_paragraphs[2].text.endswith("\tC")
+    assert subtitle_paragraphs[3].text.endswith("\tD")
+    assert subtitle_paragraphs[4].text.endswith("\tE")
+
+    def _is_yellow(p):
+        return any(r.font.highlight_color is not None for r in p.runs)
+
+    assert _is_yellow(subtitle_paragraphs[0]) is False
+    assert _is_yellow(subtitle_paragraphs[1]) is True
+    assert _is_yellow(subtitle_paragraphs[2]) is True
+    assert _is_yellow(subtitle_paragraphs[3]) is True
+    assert _is_yellow(subtitle_paragraphs[4]) is False
