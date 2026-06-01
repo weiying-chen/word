@@ -47,6 +47,7 @@ ALLOWED_KEYS = {
     PEOPLE_KEY,
     "BODY",
 }
+SUPER_START_RE = re.compile(r"^/\*SUPER:?\s*$")
 
 
 def _contains_cjk(text: str) -> bool:
@@ -380,7 +381,7 @@ def parse_input(path: Path, meta_path: Path | None = None) -> dict[str, object]:
         if english_name:
             english_names.append(english_name)
             continue
-        if line == "/*SUPER:":
+        if SUPER_START_RE.match(line):
             in_super = True
             super_lines = []
             continue

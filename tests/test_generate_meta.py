@@ -446,6 +446,39 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_parse_input_accepts_super_block_without_colon(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "news_input.txt"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        '(15" Altaf Husen Khan)',
+                        "/*SUPER",
+                        "悉達多基礎學校校長｜阿達夫//",
+                        "我們非常高興//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(input_path)
+
+        self.assertEqual(
+            data["people"],
+            [
+                {
+                    "name_zh": "阿達夫",
+                    "name_en": "Altaf Husen Khan",
+                    "role_zh": "悉達多基礎學校校長",
+                    "role_en": "",
+                    "org_en": "",
+                }
+            ],
+        )
+
     def test_parse_input_strips_trailing_date_parenthesis_for_role_only_super(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "news_input.txt"
