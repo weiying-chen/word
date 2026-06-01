@@ -53,6 +53,7 @@ PAIRING_LABELS = {"搭配", "搭配:", "搭配："}
 PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
 DASH_SPLIT_RE = re.compile(r"\s*-\s*")
 TAG_RE = re.compile(r"<[^>]+>")
+MULTISPACE_RE = re.compile(r"\s+")
 
 
 def _extract_person_name(line: str) -> str | None:
@@ -380,9 +381,12 @@ def _build_bodhi_entry(
     english_title = explicit_english_title.strip() or fetch_bodhi_english_subtitle(
         url_line, cleaned_title
     )
+    ref_excerpt = fetch_bodhi_reference_excerpt(url_line, cleaned_title)
     display_title = cleaned_title
     if english_title:
         display_title = f"{display_title}\n{english_title}"
+    if ref_excerpt:
+        display_title = f"{display_title}\n\n{ref_excerpt}"
 
     header_title_lines = ["人間菩提", raw_title]
     if english_title:
@@ -548,6 +552,65 @@ def fetch_bodhi_english_subtitle(url: str, chinese_title: str) -> str:
             if _looks_like_english_title(line):
                 return line
     return ""
+
+
+def _normalize_line_for_match(text: str) -> str:
+    return MULTISPACE_RE.sub(" ", text).strip()
+
+
+def fetch_bodhi_reference_excerpt(url: str, chinese_title: str) -> str:
+    if not url or not chinese_title:
+        return ""
+    try:
+        req = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+        )
+        with urlopen(req, timeout=8) as resp:
+            raw = resp.read()
+    except Exception:
+        return ""
+
+    page = raw.decode("utf-8", errors="ignore")
+    if not page:
+        return ""
+
+    text = html.unescape(TAG_RE.sub("\n", page))
+    lines = [_normalize_line_for_match(line) for line in text.splitlines()]
+    lines = [line for line in lines if line]
+
+    title_norm = _normalize_line_for_match(chinese_title)
+    title_idx = -1
+    for idx, line in enumerate(lines):
+        if line == title_norm:
+            title_idx = idx
+            break
+    if title_idx < 0:
+        return ""
+
+    start_idx = -1
+    for idx in range(title_idx + 1, len(lines)):
+        line = lines[idx]
+        if line.startswith("#"):
+            break
+        if len(line) >= 25 and _is_cjk(line) and "。" in line:
+            start_idx = idx
+            break
+    if start_idx < 0:
+        return ""
+
+    collected: list[str] = []
+    for idx in range(start_idx, len(lines)):
+        line = lines[idx]
+        if line.startswith("#"):
+            break
+        collected.append(line)
+    if not collected:
+        return ""
+    return "\n".join(collected).strip()
 
 
 def _detect_schedule_format(lines: list[str]) -> str:
