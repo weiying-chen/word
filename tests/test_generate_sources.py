@@ -55,7 +55,8 @@ def test_generate_sources_writes_docx_for_existing_subtitle_file(tmp_path: Path)
     _write_template(template_path)
 
     (sources_dir / "大愛醫生館第6797集_ch_肺腺癌先禮後兵.txt").write_text(
-        "dummy", encoding="utf-8"
+        "00:00:01:00\t00:00:03:00\t第一句\nSecond line",
+        encoding="utf-8",
     )
 
     episodes = [
@@ -86,3 +87,40 @@ def test_generate_sources_writes_docx_for_existing_subtitle_file(tmp_path: Path)
     assert texts[1] == "https://www.youtube.com/watch?v=P0uiRM2no18"
     assert texts[2] == "07:27-09:20 (1分53秒)"
     assert texts[3] == "五十歲男性長期吸菸、慢性咳嗽。"
+    assert texts[4] == "00:00:01:00\t00:00:03:00\t第一句"
+    assert texts[5] == "Second line"
+
+
+def test_generate_sources_reads_utf16_subtitle_file(tmp_path: Path) -> None:
+    episodes_path = tmp_path / "episodes.json"
+    template_path = tmp_path / "sources_template.docx"
+    sources_dir = tmp_path / "sources"
+    output_dir = tmp_path / "output"
+    sources_dir.mkdir()
+    output_dir.mkdir()
+    _write_template(template_path)
+
+    (sources_dir / "大愛醫生館第6797集_ch_肺腺癌先禮後兵.txt").write_text(
+        "第一行\n第二行",
+        encoding="utf-16",
+    )
+
+    episodes = [
+        {
+            "epId": "6797",
+            "titleZh": "肺腺癌先禮後兵",
+            "ytId": "P0uiRM2no18",
+            "youtubeUrl": "https://www.youtube.com/watch?v=P0uiRM2no18",
+            "youtubeTitle": "【大愛醫生館】 肺腺癌先禮後兵 20260520",
+            "youtubeDescription": "摘要。",
+        }
+    ]
+    episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
+
+    result = generate_sources(
+        episodes_json=episodes_path,
+        template_path=template_path,
+        sources_dir=sources_dir,
+        output_dir=output_dir,
+    )
+    assert result["generated"] == 1

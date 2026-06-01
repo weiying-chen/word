@@ -44,12 +44,27 @@ def _first_summary_line(description: str) -> str:
     return ""
 
 
+def _read_text_with_fallback(path: Path) -> str:
+    raw = path.read_bytes()
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw.decode("utf-8-sig")
+    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+        return raw.decode("utf-16")
+    for encoding in ("utf-8", "big5", "cp950", "gb18030", "cp1252"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="ignore")
+
+
 def _render_docx(
     template_path: Path,
     output_path: Path,
     title: str,
     youtube_url: str,
     summary: str,
+    subtitle_lines: list[str],
 ) -> None:
     doc = Document(str(template_path))
     if not doc.paragraphs:
@@ -71,6 +86,12 @@ def _render_docx(
     doc.add_paragraph("")
     p_summary = doc.add_paragraph(summary)
     apply_font_size_to_runs(p_summary, font_size_pt=BODY_TEXT_SIZE_PT)
+
+    if subtitle_lines:
+        doc.add_paragraph("")
+        for line in subtitle_lines:
+            p_line = doc.add_paragraph(line)
+            apply_font_size_to_runs(p_line, font_size_pt=BODY_TEXT_SIZE_PT)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
@@ -101,12 +122,19 @@ def generate_sources(
             ).strip()
             youtube_url = str(item.get("youtubeUrl", "")).strip()
             summary = _first_summary_line(str(item.get("youtubeDescription", "")))
+            subtitle_lines = [
+                line.rstrip("\n")
+                for line in _read_text_with_fallback(subtitle_file).splitlines()
+                if line.strip()
+            ]
             if not title or not youtube_url:
                 errors += 1
                 continue
             filename = f"{_safe_filename(title)}.docx"
             output_path = output_dir / filename
-            _render_docx(template_path, output_path, title, youtube_url, summary)
+            _render_docx(
+                template_path, output_path, title, youtube_url, summary, subtitle_lines
+            )
             generated += 1
         except Exception:
             errors += 1
