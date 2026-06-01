@@ -17,8 +17,8 @@ from style_tokens import BODY_TEXT_SIZE_PT
 HARDCODED_TIMESTAMP_LINE = "07:27-09:20 (1分53秒)"
 DESCRIPTION_TIMESTAMP_RE = re.compile(r"^\s*(?P<mm>\d{1,2}):(?P<ss>\d{2})｜")
 TIMECODE_ROW_RE = re.compile(
-    r"^(?P<sh>\d{2}):(?P<sm>\d{2}):(?P<ss>\d{2}):\d{2}\t"
-    r"(?P<eh>\d{2}):(?P<em>\d{2}):(?P<es>\d{2}):\d{2}\t(?P<text>.*)$"
+    r"^(?P<sh>\d{2}):(?P<sm>\d{2}):(?P<ss>\d{2}):(?P<sf>\d{2})\t"
+    r"(?P<eh>\d{2}):(?P<em>\d{2}):(?P<es>\d{2}):(?P<ef>\d{2})\t(?P<text>.*)$"
 )
 
 
@@ -70,6 +70,11 @@ def _to_seconds(hh: int, mm: int, ss: int) -> int:
     return hh * 3600 + mm * 60 + ss
 
 
+def _to_ticks(hh: int, mm: int, ss: int, ff: int) -> int:
+    # Keep frame precision for boundary comparisons without assuming exact frame rate.
+    return (((hh * 60) + mm) * 60 + ss) * 100 + ff
+
+
 def _mmss(total_seconds: int) -> str:
     minutes, seconds = divmod(max(0, total_seconds), 60)
     return f"{minutes:02d}:{seconds:02d}"
@@ -101,6 +106,34 @@ def _extract_star_range(subtitle_lines: list[str]) -> tuple[int, int] | None:
     return marker_spans[0][0], marker_spans[1][1]
 
 
+def _extract_star_range_ticks(subtitle_lines: list[str]) -> tuple[int, int] | None:
+    marker_spans: list[tuple[int, int]] = []
+    for line in subtitle_lines:
+        if "*" not in line:
+            continue
+        match = TIMECODE_ROW_RE.match(line)
+        if not match:
+            continue
+        start = _to_ticks(
+            int(match.group("sh")),
+            int(match.group("sm")),
+            int(match.group("ss")),
+            int(match.group("sf")),
+        )
+        end = _to_ticks(
+            int(match.group("eh")),
+            int(match.group("em")),
+            int(match.group("es")),
+            int(match.group("ef")),
+        )
+        marker_spans.append((start, end))
+        if len(marker_spans) == 2:
+            break
+    if len(marker_spans) < 2:
+        return None
+    return marker_spans[0][0], marker_spans[1][1]
+
+
 def _build_timestamp_line(last_line: str, subtitle_lines: list[str]) -> str:
     star_range = _extract_star_range(subtitle_lines)
     if star_range is not None:
@@ -113,29 +146,40 @@ def _strip_star_marker(line: str) -> str:
     return re.sub(r"\s*\*\s*$", "", line).rstrip()
 
 
-def _line_span_seconds(line: str) -> tuple[int, int] | None:
+def _line_span_ticks(line: str) -> tuple[int, int] | None:
     match = TIMECODE_ROW_RE.match(line)
     if not match:
         return None
     return (
-        _to_seconds(int(match.group("sh")), int(match.group("sm")), int(match.group("ss"))),
-        _to_seconds(int(match.group("eh")), int(match.group("em")), int(match.group("es"))),
+        _to_ticks(
+            int(match.group("sh")),
+            int(match.group("sm")),
+            int(match.group("ss")),
+            int(match.group("sf")),
+        ),
+        _to_ticks(
+            int(match.group("eh")),
+            int(match.group("em")),
+            int(match.group("es")),
+            int(match.group("ef")),
+        ),
     )
 
 
 def _highlight_flags_for_lines(subtitle_lines: list[str]) -> list[bool]:
-    star_range = _extract_star_range(subtitle_lines)
+    star_range = _extract_star_range_ticks(subtitle_lines)
     if star_range is None:
         return [False] * len(subtitle_lines)
     range_start, range_end = star_range
     flags: list[bool] = []
     for line in subtitle_lines:
-        span = _line_span_seconds(line)
+        span = _line_span_ticks(line)
         if span is None:
             flags.append(False)
             continue
         line_start, line_end = span
-        flags.append(line_start <= range_end and line_end >= range_start)
+        # Highlight only lines fully inside the marker range, including the two marker lines.
+        flags.append(line_start >= range_start and line_end <= range_end)
     return flags
 
 

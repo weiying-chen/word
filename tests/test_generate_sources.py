@@ -228,3 +228,105 @@ def test_generate_sources_uses_two_star_markers_for_range_and_highlights(
     assert _is_yellow(subtitle_paragraphs[2]) is True
     assert _is_yellow(subtitle_paragraphs[3]) is True
     assert _is_yellow(subtitle_paragraphs[4]) is False
+
+
+def test_generate_sources_does_not_highlight_touching_boundary_lines(
+    tmp_path: Path,
+) -> None:
+    episodes_path = tmp_path / "episodes.json"
+    template_path = tmp_path / "sources_template.docx"
+    sources_dir = tmp_path / "sources"
+    output_dir = tmp_path / "output"
+    sources_dir.mkdir()
+    output_dir.mkdir()
+    _write_template(template_path)
+
+    (sources_dir / "大愛醫生館第6797集_ch_肺腺癌先禮後兵.txt").write_text(
+        "00:09:24:20\t00:09:25:24\tbefore\n"
+        "00:09:25:24\t00:09:26:19\tstart *\n"
+        "00:09:26:19\t00:09:27:17\tmiddle\n"
+        "00:09:28:00\t00:09:29:00\tend *\n"
+        "00:09:29:00\t00:09:30:00\tafter\n",
+        encoding="utf-8",
+    )
+
+    episodes = [
+        {
+            "epId": "6797",
+            "titleZh": "肺腺癌先禮後兵",
+            "ytId": "P0uiRM2no18",
+            "youtubeUrl": "https://www.youtube.com/watch?v=P0uiRM2no18",
+            "youtubeTitle": "【大愛醫生館】 肺腺癌先禮後兵 20260520",
+            "youtubeDescription": "摘要。",
+            "descriptionLastTimestampLine": "",
+        }
+    ]
+    episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
+
+    generate_sources(
+        episodes_json=episodes_path,
+        template_path=template_path,
+        sources_dir=sources_dir,
+        output_dir=output_dir,
+    )
+
+    doc = Document(str(next(output_dir.glob("*.docx"))))
+    subtitle_paragraphs = [p for p in doc.paragraphs if "\t" in p.text]
+
+    def _is_yellow(p):
+        return any(r.font.highlight_color is not None for r in p.runs)
+
+    assert _is_yellow(subtitle_paragraphs[0]) is False
+    assert _is_yellow(subtitle_paragraphs[1]) is True
+    assert _is_yellow(subtitle_paragraphs[2]) is True
+    assert _is_yellow(subtitle_paragraphs[3]) is True
+    assert _is_yellow(subtitle_paragraphs[4]) is False
+
+
+def test_generate_sources_respects_frame_boundary_after_end_marker(
+    tmp_path: Path,
+) -> None:
+    episodes_path = tmp_path / "episodes.json"
+    template_path = tmp_path / "sources_template.docx"
+    sources_dir = tmp_path / "sources"
+    output_dir = tmp_path / "output"
+    sources_dir.mkdir()
+    output_dir.mkdir()
+    _write_template(template_path)
+
+    (sources_dir / "大愛醫生館第6797集_ch_肺腺癌先禮後兵.txt").write_text(
+        "00:06:21:15\t00:06:24:22\tstart *\n"
+        "00:09:16:06\t00:09:18:01\tend *\n"
+        "00:09:18:01\t00:09:18:17\tafter\n",
+        encoding="utf-8",
+    )
+
+    episodes = [
+        {
+            "epId": "6797",
+            "titleZh": "肺腺癌先禮後兵",
+            "ytId": "P0uiRM2no18",
+            "youtubeUrl": "https://www.youtube.com/watch?v=P0uiRM2no18",
+            "youtubeTitle": "【大愛醫生館】 肺腺癌先禮後兵 20260520",
+            "youtubeDescription": "摘要。",
+            "descriptionLastTimestampLine": "",
+        }
+    ]
+    episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
+
+    generate_sources(
+        episodes_json=episodes_path,
+        template_path=template_path,
+        sources_dir=sources_dir,
+        output_dir=output_dir,
+    )
+
+    doc = Document(str(next(output_dir.glob("*.docx"))))
+    subtitle_paragraphs = [p for p in doc.paragraphs if "\t" in p.text]
+
+    def _is_yellow(p):
+        return any(r.font.highlight_color is not None for r in p.runs)
+
+    assert _is_yellow(subtitle_paragraphs[0]) is True
+    assert _is_yellow(subtitle_paragraphs[1]) is True
+    assert _is_yellow(subtitle_paragraphs[2]) is False
