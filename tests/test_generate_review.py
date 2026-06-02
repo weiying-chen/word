@@ -51,7 +51,7 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
             [
                 {
                     "name": "A",
-                    "createdAt": "2022-11-08T00:00:00.000Z",
+                    "startAt": "2022-11-08T00:00:00.000Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "comments": [],
@@ -100,7 +100,7 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
             [
                 {
                     "name": "回眸(中翻英)",
-                    "createdAt": "2026-05-08T00:00:00.000Z",
+                    "startAt": "2026-05-08T00:00:00.000Z",
                     "workMinutes": 240,
                     "contentSeconds": 210,
                     "notes": ["This is a note"],
@@ -136,7 +136,7 @@ def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-08T00:00:00.000Z",
+                    "startAt": "2026-05-08T00:00:00.000Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "comments": ["c1"],
@@ -144,7 +144,7 @@ def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None
                 },
                 {
                     "name": "B",
-                    "createdAt": "2026-05-09T00:00:00.000Z",
+                    "startAt": "2026-05-09T00:00:00.000Z",
                     "workMinutes": 120,
                     "contentSeconds": 180,
                     "comments": ["c2"],
@@ -181,7 +181,7 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
             [
                 {
                     "name": "回眸(中翻英)",
-                    "createdAt": "2026-05-08T00:00:00.000Z",
+                    "startAt": "2026-05-08T00:00:00.000Z",
                     "workMinutes": 240,
                     "contentSeconds": 210,
                     "notes": ["This is a note"],
@@ -221,7 +221,7 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 210,
                     "notes": ["n1"],
@@ -229,7 +229,7 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
                 },
                 {
                     "name": "B",
-                    "createdAt": "2026-05-02T04:05:06Z",
+                    "startAt": "2026-05-02T04:05:06Z",
                     "workMinutes": 120,
                     "notes": ["n2"],
                     "children": [],
@@ -266,7 +266,7 @@ def test_generate_review_uses_notes_for_editor_feedback(tmp_path: Path) -> None:
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "notes": ["note one", "note two"],
@@ -302,21 +302,21 @@ def test_generate_review_populates_temp_work_from_posts_children_only(
             [
                 {
                     "name": "主任務",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "children": [
                         {
                             "name": "POST A",
                             "type": "posts",
-                            "createdAt": "2026-05-18T11:37:41.273370Z",
+                            "startAt": "2026-05-18T11:37:41.273370Z",
                             "workMinutes": 50,
                             "contentSeconds": 120,
                         },
                         {
                             "name": "NEWS B",
                             "type": "news",
-                            "createdAt": "2026-05-18T11:37:41.273370Z",
+                            "startAt": "2026-05-18T11:37:41.273370Z",
                             "workMinutes": 40,
                         },
                     ],
@@ -381,7 +381,7 @@ def test_generate_review_removes_subtitle_review_summary_block(tmp_path: Path) -
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "children": [],
@@ -430,7 +430,7 @@ def test_generate_review_removes_translation_english_to_chinese_line(tmp_path: P
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "children": [],
@@ -492,7 +492,7 @@ def test_generate_review_sets_other_work_news_count_from_children(tmp_path: Path
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "children": [
@@ -549,7 +549,7 @@ def test_generate_review_removes_meeting_lines_from_work_notes(tmp_path: Path) -
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "children": [],
@@ -598,7 +598,7 @@ def test_generate_review_normalizes_translation_summary_spacing(tmp_path: Path) 
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "workMinutes": 60,
                     "contentSeconds": 120,
                     "children": [],
@@ -651,7 +651,7 @@ def test_generate_review_sets_translation_total_length_from_all_tasks_and_childr
             [
                 {
                     "name": "A",
-                    "createdAt": "2026-05-01T01:02:03Z",
+                    "startAt": "2026-05-01T01:02:03Z",
                     "contentSeconds": 3600,
                     "children": [
                         {"name": "C", "type": "posts", "contentSeconds": 60}
@@ -659,7 +659,7 @@ def test_generate_review_sets_translation_total_length_from_all_tasks_and_childr
                 },
                 {
                     "name": "B",
-                    "createdAt": "2026-05-02T01:02:03Z",
+                    "startAt": "2026-05-02T01:02:03Z",
                     "contentSeconds": 300,
                     "children": [],
                 },

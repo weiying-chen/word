@@ -47,20 +47,20 @@ def parse_tasks_payload(path: Path) -> list[dict]:
 
 
 def derive_month_from_tasks(tasks: list[dict]) -> str:
-    created_times: list[datetime] = []
+    start_times: list[datetime] = []
     for task in tasks:
-        created_at = str(task.get("createdAt", "")).strip()
-        if not created_at:
+        start_at = str(task.get("startAt", "")).strip()
+        if not start_at:
             continue
         try:
-            created_times.append(datetime.fromisoformat(created_at.replace("Z", "+00:00")))
+            start_times.append(datetime.fromisoformat(start_at.replace("Z", "+00:00")))
         except ValueError:
             continue
 
-    if not created_times:
+    if not start_times:
         return ""
 
-    latest = max(created_times)
+    latest = max(start_times)
     return f"{latest.year}年{latest.month}月"
 
 
@@ -435,7 +435,7 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
             table.cell(row_idx, 0),
             [
                 _format_month_day(
-                    str(task.get("createdAt", "")).strip()
+                    str(task.get("startAt", "")).strip()
                 )
             ],
         )
@@ -477,7 +477,7 @@ def fill_temp_work_table(doc: Document, tasks: list[dict]) -> None:
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [_format_month_day(str(post.get("createdAt", "")).strip())],
+            [_format_month_day(str(post.get("startAt", "")).strip())],
         )
         item_lines = [f"{slot + 1}.", str(post.get("name", "")).strip()]
         length_text = _format_content_seconds(post.get("contentSeconds"))
