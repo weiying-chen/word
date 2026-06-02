@@ -46,10 +46,30 @@ def parse_tasks_payload(path: Path) -> list[dict]:
     return raw
 
 
+def _first_stage(task: dict) -> dict:
+    stages = task.get("stages")
+    if not isinstance(stages, list):
+        return {}
+    for stage in stages:
+        if isinstance(stage, dict):
+            return stage
+    return {}
+
+
+def _task_stage_value(task: dict, key: str):
+    stage = _first_stage(task)
+    return stage.get(key)
+
+
+def _task_type(task: dict) -> str:
+    stage_type = _task_stage_value(task, "type")
+    return str(stage_type or "").strip().lower()
+
+
 def derive_month_from_tasks(tasks: list[dict]) -> str:
     start_times: list[datetime] = []
     for task in tasks:
-        start_at = str(task.get("startAt", "")).strip()
+        start_at = str(_task_stage_value(task, "startAt") or "").strip()
         if not start_at:
             continue
         try:
@@ -109,7 +129,7 @@ def _sum_content_seconds(tasks: list[dict]) -> int:
         for item in items:
             if not isinstance(item, dict):
                 continue
-            value = item.get("contentSeconds")
+            value = _task_stage_value(item, "contentSeconds")
             if value not in (None, ""):
                 try:
                     total += int(value)
@@ -238,7 +258,7 @@ def _collect_temp_posts(tasks: list[dict]) -> list[dict]:
         for child in children:
             if not isinstance(child, dict):
                 continue
-            if str(child.get("type", "")).strip().lower() != "posts":
+            if _task_type(child) != "posts":
                 continue
             posts.append(child)
     return posts
@@ -253,7 +273,7 @@ def _count_news_children(tasks: list[dict]) -> int:
         for child in children:
             if not isinstance(child, dict):
                 continue
-            if str(child.get("type", "")).strip().lower() == "news":
+            if _task_type(child) == "news":
                 count += 1
     return count
 
@@ -435,7 +455,7 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
             table.cell(row_idx, 0),
             [
                 _format_month_day(
-                    str(task.get("startAt", "")).strip()
+                    str(_task_stage_value(task, "startAt") or "").strip()
                 )
             ],
         )
@@ -443,10 +463,10 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
             f"{slot + 1}.",
             str(task.get("name", "")).strip(),
         ]
-        length_text = _format_content_seconds(task.get("contentSeconds"))
+        length_text = _format_content_seconds(_task_stage_value(task, "contentSeconds"))
         if length_text:
             item_lines.append(f"長度:{length_text}")
-        work_text = _format_work_minutes(task.get("workMinutes"))
+        work_text = _format_work_minutes(_task_stage_value(task, "workMinutes"))
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
         _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])
@@ -477,13 +497,13 @@ def fill_temp_work_table(doc: Document, tasks: list[dict]) -> None:
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [_format_month_day(str(post.get("startAt", "")).strip())],
+            [_format_month_day(str(_task_stage_value(post, "startAt") or "").strip())],
         )
         item_lines = [f"{slot + 1}.", str(post.get("name", "")).strip()]
-        length_text = _format_content_seconds(post.get("contentSeconds"))
+        length_text = _format_content_seconds(_task_stage_value(post, "contentSeconds"))
         if length_text:
             item_lines.append(f"長度:{length_text}")
-        work_text = _format_work_minutes(post.get("workMinutes"))
+        work_text = _format_work_minutes(_task_stage_value(post, "workMinutes"))
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
         _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])

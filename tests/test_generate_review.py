@@ -40,6 +40,42 @@ def _write_review_template(path: Path) -> None:
     doc.save(path)
 
 
+def _doc_snapshot(doc: Document) -> dict:
+    return {
+        "paragraphs": [p.text for p in doc.paragraphs],
+        "tables": [
+            [[cell.text for cell in row.cells] for row in table.rows]
+            for table in doc.tables
+        ],
+    }
+
+
+def _stage_task(
+    name: str,
+    *,
+    start_at: str | None = None,
+    work_minutes: int | None = None,
+    content_seconds: int | None = None,
+    notes: list[str] | None = None,
+    children: list[dict] | None = None,
+    stage_type: str | None = None,
+) -> dict:
+    stage: dict[str, object] = {}
+    if start_at is not None:
+        stage["startAt"] = start_at
+    if work_minutes is not None:
+        stage["workMinutes"] = work_minutes
+    if content_seconds is not None:
+        stage["contentSeconds"] = content_seconds
+    if stage_type is not None:
+        stage["type"] = stage_type
+
+    task = {"name": name, "stages": [stage], "children": children or []}
+    if notes is not None:
+        task["notes"] = notes
+    return task
+
+
 def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     tasks_json = tmp_path / "tasks.json"
@@ -49,14 +85,12 @@ def test_generate_review_renders_header_fields_from_sources(tmp_path: Path) -> N
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2022-11-08T00:00:00.000Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "comments": [],
-                    "children": [],
-                }
+                _stage_task(
+                    "A",
+                    start_at="2022-11-08T00:00:00.000Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                )
             ],
             ensure_ascii=False,
         ),
@@ -98,14 +132,13 @@ def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> N
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "回眸(中翻英)",
-                    "startAt": "2026-05-08T00:00:00.000Z",
-                    "workMinutes": 240,
-                    "contentSeconds": 210,
-                    "notes": ["This is a note"],
-                    "children": [],
-                }
+                _stage_task(
+                    "回眸(中翻英)",
+                    start_at="2026-05-08T00:00:00.000Z",
+                    work_minutes=240,
+                    content_seconds=210,
+                    notes=["This is a note"],
+                )
             ],
             ensure_ascii=False,
         ),
@@ -134,22 +167,18 @@ def test_generate_review_inserts_rows_for_multiple_tasks(tmp_path: Path) -> None
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-08T00:00:00.000Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "comments": ["c1"],
-                    "children": [],
-                },
-                {
-                    "name": "B",
-                    "startAt": "2026-05-09T00:00:00.000Z",
-                    "workMinutes": 120,
-                    "contentSeconds": 180,
-                    "comments": ["c2"],
-                    "children": [],
-                },
+                _stage_task(
+                    "A",
+                    start_at="2026-05-08T00:00:00.000Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                ),
+                _stage_task(
+                    "B",
+                    start_at="2026-05-09T00:00:00.000Z",
+                    work_minutes=120,
+                    content_seconds=180,
+                ),
             ],
             ensure_ascii=False,
         ),
@@ -179,14 +208,13 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "回眸(中翻英)",
-                    "startAt": "2026-05-08T00:00:00.000Z",
-                    "workMinutes": 240,
-                    "contentSeconds": 210,
-                    "notes": ["This is a note"],
-                    "children": [],
-                }
+                _stage_task(
+                    "回眸(中翻英)",
+                    start_at="2026-05-08T00:00:00.000Z",
+                    work_minutes=240,
+                    content_seconds=210,
+                    notes=["This is a note"],
+                )
             ],
             ensure_ascii=False,
         ),
@@ -219,21 +247,19 @@ def test_generate_review_supports_top_level_tasks_list_with_new_field_names(
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 210,
-                    "notes": ["n1"],
-                    "children": [],
-                },
-                {
-                    "name": "B",
-                    "startAt": "2026-05-02T04:05:06Z",
-                    "workMinutes": 120,
-                    "notes": ["n2"],
-                    "children": [],
-                },
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=210,
+                    notes=["n1"],
+                ),
+                _stage_task(
+                    "B",
+                    start_at="2026-05-02T04:05:06Z",
+                    work_minutes=120,
+                    notes=["n2"],
+                ),
             ],
             ensure_ascii=False,
         ),
@@ -264,14 +290,13 @@ def test_generate_review_uses_notes_for_editor_feedback(tmp_path: Path) -> None:
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "notes": ["note one", "note two"],
-                    "children": [],
-                }
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                    notes=["note one", "note two"],
+                )
             ],
             ensure_ascii=False,
         ),
@@ -300,27 +325,27 @@ def test_generate_review_populates_temp_work_from_posts_children_only(
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "主任務",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "children": [
-                        {
-                            "name": "POST A",
-                            "type": "posts",
-                            "startAt": "2026-05-18T11:37:41.273370Z",
-                            "workMinutes": 50,
-                            "contentSeconds": 120,
-                        },
-                        {
-                            "name": "NEWS B",
-                            "type": "news",
-                            "startAt": "2026-05-18T11:37:41.273370Z",
-                            "workMinutes": 40,
-                        },
+                _stage_task(
+                    "主任務",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                    children=[
+                        _stage_task(
+                            "POST A",
+                            start_at="2026-05-18T11:37:41.273370Z",
+                            work_minutes=50,
+                            content_seconds=120,
+                            stage_type="posts",
+                        ),
+                        _stage_task(
+                            "NEWS B",
+                            start_at="2026-05-18T11:37:41.273370Z",
+                            work_minutes=40,
+                            stage_type="news",
+                        ),
                     ],
-                }
+                )
             ],
             ensure_ascii=False,
         ),
@@ -379,13 +404,12 @@ def test_generate_review_removes_subtitle_review_summary_block(tmp_path: Path) -
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "children": [],
-                }
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                )
             ],
             ensure_ascii=False,
         ),
@@ -428,13 +452,12 @@ def test_generate_review_removes_translation_english_to_chinese_line(tmp_path: P
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "children": [],
-                }
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                )
             ],
             ensure_ascii=False,
         ),
@@ -490,17 +513,17 @@ def test_generate_review_sets_other_work_news_count_from_children(tmp_path: Path
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "children": [
-                        {"name": "N1", "type": "news"},
-                        {"name": "N2", "type": "news"},
-                        {"name": "P1", "type": "posts"},
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                    children=[
+                        _stage_task("N1", stage_type="news"),
+                        _stage_task("N2", stage_type="news"),
+                        _stage_task("P1", stage_type="posts"),
                     ],
-                }
+                )
             ],
             ensure_ascii=False,
         ),
@@ -547,13 +570,12 @@ def test_generate_review_removes_meeting_lines_from_work_notes(tmp_path: Path) -
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "children": [],
-                }
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                )
             ],
             ensure_ascii=False,
         ),
@@ -596,13 +618,12 @@ def test_generate_review_normalizes_translation_summary_spacing(tmp_path: Path) 
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "workMinutes": 60,
-                    "contentSeconds": 120,
-                    "children": [],
-                }
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                )
             ],
             ensure_ascii=False,
         ),
@@ -649,20 +670,19 @@ def test_generate_review_sets_translation_total_length_from_all_tasks_and_childr
     tasks_json.write_text(
         json.dumps(
             [
-                {
-                    "name": "A",
-                    "startAt": "2026-05-01T01:02:03Z",
-                    "contentSeconds": 3600,
-                    "children": [
-                        {"name": "C", "type": "posts", "contentSeconds": 60}
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    content_seconds=3600,
+                    children=[
+                        _stage_task("C", content_seconds=60, stage_type="posts")
                     ],
-                },
-                {
-                    "name": "B",
-                    "startAt": "2026-05-02T01:02:03Z",
-                    "contentSeconds": 300,
-                    "children": [],
-                },
+                ),
+                _stage_task(
+                    "B",
+                    start_at="2026-05-02T01:02:03Z",
+                    content_seconds=300,
+                ),
             ],
             ensure_ascii=False,
         ),
@@ -680,3 +700,104 @@ def test_generate_review_sets_translation_total_length_from_all_tasks_and_childr
             break
     assert "長度:1時6分" in text
     assert "中翻英:" not in text
+
+
+def test_generate_review_reads_dates_metrics_and_types_from_stages(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("外文編譯中心QCD")
+    doc.add_paragraph("姓名: {{NAME}}")
+    doc.add_paragraph("{{MONTH}}")
+    doc.add_paragraph("本月精進目標:")
+    table = doc.add_table(rows=6, cols=4)
+    table.cell(0, 0).text = "日期"
+    table.cell(0, 1).text = "(例行)字幕翻譯"
+    table.cell(0, 2).text = "編輯回饋"
+    table.cell(0, 3).text = "主管回饋"
+    table.cell(1, 0).text = ""
+    table.cell(1, 1).text = ""
+    table.cell(1, 2).text = ""
+    table.cell(1, 3).text = ""
+    table.cell(2, 0).text = "日期"
+    table.cell(2, 1).text = "臨時工作"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    table.cell(3, 2).text = ""
+    table.cell(3, 3).text = ""
+    table.cell(4, 0).text = "本月工作心得:"
+    summary_cell = table.cell(5, 0)
+    summary_cell.text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    summary_cell.add_paragraph("中翻英:")
+    summary_cell.add_paragraph("")
+    summary_cell.add_paragraph("其他工作:")
+    summary_cell.add_paragraph("英文新聞: ?篇")
+    doc.save(template_path)
+
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Main task",
+                    "stages": [
+                        {
+                            "assignedTo": "Alex",
+                            "startAt": "2026-05-20T08:40:00Z",
+                            "workMinutes": 432,
+                            "contentSeconds": 540,
+                        }
+                    ],
+                    "notes": ["note one"],
+                    "children": [
+                        {
+                            "name": "Post child",
+                            "stages": [
+                                {
+                                    "type": "posts",
+                                    "startAt": "2026-05-25T01:00:00Z",
+                                    "workMinutes": 50,
+                                    "contentSeconds": 120,
+                                }
+                            ],
+                            "notes": ["post note"],
+                            "children": [],
+                        },
+                        {
+                            "name": "News child",
+                            "stages": [
+                                {
+                                    "type": "news",
+                                    "startAt": "2026-05-27T12:59:38.842799Z",
+                                    "workMinutes": 130,
+                                    "contentSeconds": 8460,
+                                }
+                            ],
+                            "children": [],
+                        },
+                    ],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    assert out_doc.paragraphs[2].text == "2026年5月"
+    table = out_doc.tables[0]
+    assert table.cell(1, 0).text.strip() == "5/20"
+    assert table.cell(1, 1).text.strip() == "1.\nMain task\n長度:9分\n實際作業時間:7時12分"
+    assert table.cell(1, 2).text.strip() == "• note one"
+    assert table.cell(3, 0).text.strip() == "5/25"
+    assert table.cell(3, 1).text.strip() == "1.\nPost child\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 2).text.strip() == "• post note"
+    summary_text = "\n".join(p.text for p in table.cell(5, 0).paragraphs)
+    assert "長度:2時32分" in summary_text
+    assert "英文新聞: 1篇" in summary_text
+
