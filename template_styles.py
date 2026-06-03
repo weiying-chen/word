@@ -9,6 +9,7 @@ from docx.shared import Pt, RGBColor
 
 from docx_utils import clear_paragraph
 from style_tokens import (
+    BODY_TEXT_SIZE_PT,
     REFERENCE_LINK_RGB,
     REFERENCE_TEXT_SIZE_PT,
     SECTION_LABEL_BLUE_RGB,
@@ -42,7 +43,7 @@ def ensure_character_style(doc: Document, name: str, size_pt: int, color: RGBCol
 
 def ensure_base_styles(doc: Document) -> None:
     normal = doc.styles["Normal"]
-    normal.font.size = Pt(REFERENCE_TEXT_SIZE_PT)
+    normal.font.size = Pt(BODY_TEXT_SIZE_PT)
 
     ensure_character_style(
         doc, "SectionLabelSmall", REFERENCE_TEXT_SIZE_PT, SECTION_LABEL_BLUE_RGB
@@ -62,6 +63,8 @@ def sync_review_template_styles(doc: Document) -> None:
     if not doc.tables:
         return
     table = doc.tables[0]
+    if len(table.rows) <= 13 or len(table.columns) < 4:
+        return
     for row_idx in (12, 13):
         for col_idx in range(4):
             cell = table.cell(row_idx, col_idx)

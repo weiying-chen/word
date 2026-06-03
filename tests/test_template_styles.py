@@ -16,7 +16,7 @@ def test_ensure_base_styles_sets_normal_and_shared_character_styles(tmp_path: Pa
     doc.save(path)
 
     out = Document(path)
-    assert out.styles["Normal"].font.size.pt == 10
+    assert out.styles["Normal"].font.size.pt == 12
     assert out.styles["SectionLabelSmall"].font.size.pt == 10
     assert str(out.styles["SectionLabelSmall"].font.color.rgb) == "0070C0"
     assert out.styles["SectionLabelLarge"].font.size.pt == 12
@@ -43,3 +43,14 @@ def test_sync_review_template_styles_applies_blue_style_to_section_labels(tmp_pa
     run_b = out.tables[0].cell(13, 0).paragraphs[0].runs[0]
     assert run_a.style.name == "SectionLabelSmall"
     assert run_b.style.name == "SectionLabelSmall"
+
+
+def test_sync_review_template_styles_skips_tables_without_expected_grid(tmp_path: Path) -> None:
+    path = tmp_path / "review_template.docx"
+    doc = Document()
+    doc.add_table(rows=1, cols=1)
+    doc.save(path)
+
+    doc = Document(path)
+    template_styles.ensure_base_styles(doc)
+    template_styles.sync_review_template_styles(doc)
