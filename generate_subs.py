@@ -62,6 +62,8 @@ SOURCE_HIGHLIGHT_MARKED = REFERENCE_HIGHLIGHT_MARKED
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
 BOX_DRAWING_HORIZONTAL = "\u2500"
 SPACED_HYPHEN_MINUS = " - "
+DASH_LIKE_CHARS = "\u2500\u2013\u2014"
+DASH_LIKE_RE = re.compile(rf"\s*[{re.escape(DASH_LIKE_CHARS)}]\s*")
 SUBS_OUTPUT_SUFFIX = "_al"
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
 SECTION_LABELS = {
@@ -104,6 +106,7 @@ def normalize_title_text(text: str) -> str:
     if not text:
         return text
     normalized = normalize_input_text(text)
+    normalized = DASH_LIKE_RE.sub(SPACED_HYPHEN_MINUS, normalized)
     return re.sub(r"[ \t]+", " ", normalized).strip()
 
 

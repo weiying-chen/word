@@ -658,6 +658,50 @@ def test_generate_subs_preserves_commas_in_title(tmp_path: Path) -> None:
     ]
 
 
+def test_generate_subs_normalizes_long_dashes_in_title(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TITLE_SUGGESTED}}"])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "TITLE_SUGGESTED: Chinese Medicine Clinic - How TCM Can Help with Lung Cancer (大愛學漢醫 - 吃出肺活力 — 肺癌照護)\n",
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+    assert (
+        "Chinese Medicine Clinic - How TCM Can Help with Lung Cancer (大愛學漢醫 - 吃出肺活力 - 肺癌照護)"
+        in [p.text for p in doc.paragraphs]
+    )
+
+
+def test_generate_subs_normalizes_unspaced_dash_like_characters_in_title(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["{{TITLE_SUGGESTED}}"])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "TITLE_SUGGESTED: Chinese Medicine Clinic—How TCM Can Help with Lung Cancer (大愛學漢醫—吃出肺活力─肺癌照護)\n",
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+    assert (
+        "Chinese Medicine Clinic - How TCM Can Help with Lung Cancer (大愛學漢醫 - 吃出肺活力 - 肺癌照護)"
+        in [p.text for p in doc.paragraphs]
+    )
+
+
 def test_generate_subs_preserves_source_hyperlink_and_highlight_formatting(
     tmp_path: Path,
 ) -> None:
