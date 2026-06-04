@@ -1466,6 +1466,50 @@ def test_build_people_lines_appends_tail_lines_after_people() -> None:
         assert "Patient" in texts
         assert "{{患者}}" not in texts
 
+    def test_generate_meta_omits_role_placeholder_for_role_only_meta_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "BODY:",
+                        "(Venerable Master Cheng Yen)",
+                        "/*SUPER:",
+                        "證嚴上人開示(2026.1.21)｜//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
+                        "",
+                        "PEOPLE:",
+                        "證嚴上人開示",
+                        "Venerable Master Cheng Yen",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            generate_meta(template_path, body_path, output_path, meta_path=meta_path)
+            texts = [p.text for p in Document(str(output_path)).paragraphs]
+
+        assert "證嚴上人開示" in texts
+        assert "Venerable Master Cheng Yen" in texts
+        assert "{{ROLE_EN}}" not in texts
+
     def test_generate_meta_enforces_body_font_size_from_shared_token(self) -> None:
         source_text = "\n".join(
             [

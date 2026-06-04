@@ -230,6 +230,20 @@ def _merge_meta_people_overrides(
                 None,
             )
         if match is None and role_zh and not name_zh:
+            # Support role-only overrides written as a plain label line in meta.txt.
+            # Example:
+            #   證嚴上人開示
+            #   Venerable Master Cheng Yen
+            match = next(
+                (
+                    entry
+                    for entry in overrides
+                    if entry.get("label_zh", "").strip() == role_zh
+                    and entry.get("name_en", "").strip()
+                ),
+                None,
+            )
+        if match is None and role_zh and not name_zh:
             # Support nameless role overrides written as "角色｜" in meta.txt.
             # Example:
             #   恩佳大愛村民｜
