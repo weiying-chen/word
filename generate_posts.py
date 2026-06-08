@@ -54,6 +54,7 @@ PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
 DASH_SPLIT_RE = re.compile(r"\s*-\s*")
 TAG_RE = re.compile(r"<[^>]+>")
 MULTISPACE_RE = re.compile(r"\s+")
+BODHI_TIMELINE_RE = re.compile(r"^\d{2}:\d{2}\s*[│|｜]")
 
 
 def _extract_person_name(line: str) -> str | None:
@@ -524,6 +525,17 @@ def _looks_like_english_title(text: str) -> bool:
     return True
 
 
+def _collect_english_title_lines(lines: list[str], start_idx: int) -> str:
+    collected: list[str] = []
+    for line in lines[start_idx:]:
+        if not _looks_like_english_title(line):
+            break
+        if line.startswith("#") or _is_bodhi_copyright_line(line):
+            break
+        collected.append(_normalize_line_for_match(line))
+    return " ".join(collected).strip()
+
+
 def fetch_bodhi_english_subtitle(url: str, chinese_title: str) -> str:
     if not url or not chinese_title:
         return ""
@@ -548,14 +560,32 @@ def fetch_bodhi_english_subtitle(url: str, chinese_title: str) -> str:
         snippet = page[match.end() : match.end() + 1500]
         text = TAG_RE.sub("\n", snippet)
         text = html.unescape(text)
-        for line in (segment.strip() for segment in text.splitlines()):
+        lines = [_normalize_line_for_match(segment) for segment in text.splitlines()]
+        lines = [line for line in lines if line]
+        for idx, line in enumerate(lines):
             if _looks_like_english_title(line):
-                return line
+                return _collect_english_title_lines(lines, idx)
     return ""
 
 
 def _normalize_line_for_match(text: str) -> str:
     return MULTISPACE_RE.sub(" ", text).strip()
+
+
+def _is_bodhi_copyright_line(line: str) -> bool:
+    return "All rights reserved" in line or "版權註記" in line or "版權所有" in line
+
+
+def _is_bodhi_excerpt_boundary(line: str) -> bool:
+    stripped = line.strip()
+    return (
+        not stripped
+        or stripped.startswith("#")
+        or stripped.startswith("http")
+        or stripped.startswith("---")
+        or BODHI_TIMELINE_RE.match(stripped) is not None
+        or _is_bodhi_copyright_line(stripped)
+    )
 
 
 def fetch_bodhi_reference_excerpt(url: str, chinese_title: str) -> str:
@@ -596,6 +626,8 @@ def fetch_bodhi_reference_excerpt(url: str, chinese_title: str) -> str:
         line = lines[idx]
         if line.startswith("#"):
             break
+        if _is_bodhi_copyright_line(line):
+            continue
         if len(line) >= 25 and _is_cjk(line) and "。" in line:
             start_idx = idx
             break
@@ -605,7 +637,7 @@ def fetch_bodhi_reference_excerpt(url: str, chinese_title: str) -> str:
     collected: list[str] = []
     for idx in range(start_idx, len(lines)):
         line = lines[idx]
-        if line.startswith("#"):
+        if _is_bodhi_excerpt_boundary(line):
             break
         collected.append(line)
     if not collected:

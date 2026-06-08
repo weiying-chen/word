@@ -11,6 +11,8 @@ from datetime import date
 from generate_posts import (
     extract_post_entries,
     extract_post_titles,
+    fetch_bodhi_english_subtitle,
+    fetch_bodhi_reference_excerpt,
     normalize_title,
     _build_hashtags,
     build_hashtags_from_title_line,
@@ -61,9 +63,72 @@ def _add_hyperlink_paragraph_with_following_text(
     paragraph.add_run(following_text)
 
 
+class _FakeResponse:
+    def __init__(self, body: str) -> None:
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self) -> bytes:
+        return self.body.encode("utf-8")
+
+
 def test_normalize_title_strips_translator_tag() -> None:
     title = "健康節目 - 怎麼坐才算有“坐相”？st/rc"
     assert normalize_title(title) == "健康節目 怎麼坐才算有“坐相”？"
+
+
+def test_bodhi_reference_excerpt_skips_copyright_and_stops_before_timeline() -> None:
+    html = """
+    <html><body>
+      <h1>運轉法輪入人群</h1>
+      <p>Passing Goodness Forward</p>
+      <p>All rights reserved. 版權註記：以上任何文字影音著作皆屬慈濟版權所有。</p>
+      <p>三十多年來，宜蘭慈濟志工持續走入南山部落關懷，翻山越嶺陪伴居民走過生活困境。</p>
+      <p>人生有了方向，付出就有了價值。</p>
+      <p>佛法在人間，需要走入人群、落實於行動。</p>
+      <p>---------------------------------</p>
+      <p>00:00 │運轉法輪入人群</p>
+      <p>https://youtu.be/example</p>
+    </body></html>
+    """
+
+    with patch("generate_posts.urlopen", return_value=_FakeResponse(html)):
+        excerpt = fetch_bodhi_reference_excerpt(
+            "https://www.daai.tv/master/life-wisdom/P90230275?more=true",
+            "運轉法輪入人群",
+        )
+
+    assert excerpt == "\n".join(
+        [
+            "三十多年來，宜蘭慈濟志工持續走入南山部落關懷，翻山越嶺陪伴居民走過生活困境。",
+            "人生有了方向，付出就有了價值。",
+            "佛法在人間，需要走入人群、落實於行動。",
+        ]
+    )
+
+
+def test_bodhi_english_subtitle_joins_multiline_title() -> None:
+    html = """
+    <html><body>
+      <h1>轉貧為富轉心輪</h1>
+      <p>The Transformation of Hearts:</p>
+      <p>From Poverty to Riches</p>
+      <p>三十多年來，慈濟志工持續關懷。</p>
+    </body></html>
+    """
+
+    with patch("generate_posts.urlopen", return_value=_FakeResponse(html)):
+        title = fetch_bodhi_english_subtitle(
+            "https://www.daai.tv/master/life-wisdom/P90230275?more=true",
+            "轉貧為富轉心輪",
+        )
+
+    assert title == "The Transformation of Hearts: From Poverty to Riches"
 
 
 def test_extract_post_titles_from_schedule(tmp_path: Path) -> None:
