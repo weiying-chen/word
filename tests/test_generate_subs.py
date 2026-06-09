@@ -1119,6 +1119,43 @@ def test_generate_subs_keeps_non_source_text_12pt_and_source_text_10pt(
     assert all(run.font.size == Pt(10) for run in source_para.runs if run.text)
 
 
+def test_generate_subs_ends_source_block_after_blank_line(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    doc = Document()
+    doc.styles["Normal"].font.size = Pt(10)
+    doc.add_paragraph("{{INTRO}}")
+    doc.save(template_path)
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "INTRO:",
+                "https://music.youtube.com/playlist?list=abc",
+                "Source snippet line.",
+                "",
+                "Regular summary line after the source block.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    rendered = Document(output_path)
+
+    source_para = next(p for p in rendered.paragraphs if p.text == "Source snippet line.")
+    regular_para = next(
+        p for p in rendered.paragraphs if p.text == "Regular summary line after the source block."
+    )
+
+    assert all(run.font.size == Pt(10) for run in source_para.runs if run.text)
+    assert all(run.font.size == Pt(12) for run in regular_para.runs if run.text)
+
+
 def test_generate_subs_enforces_12pt_for_labels_even_if_template_is_10pt(
     tmp_path: Path,
 ) -> None:

@@ -447,6 +447,12 @@ def replace_body_paragraph(
             current = insert_paragraph_after(current, "")
 
         normalized_line = _normalized_paragraph_text(line)
+        if not normalized_line.strip():
+            in_source_block = False
+            previous_was_subtitle_line = False
+            in_parenthesized_super_block = False
+            continue
+
         is_subtitle_line = bool(SUBTITLE_LINE_RE.match(normalized_line))
         if is_subtitle_line:
             in_source_block = False
