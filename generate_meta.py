@@ -562,6 +562,17 @@ def _label_without_repeated_english_name(
     return role_zh.strip()
 
 
+def _normalize_display_name_en(name_en: str) -> str:
+    text = name_en.strip()
+    if not text:
+        return ""
+    if not any(char.isalpha() for char in text):
+        return text
+    if text.upper() != text:
+        return text
+    return text.title()
+
+
 def _person_label(person: dict) -> str:
     role_zh = str(person.get("role_zh", "")).strip()
     name_zh = str(person.get("name_zh", "")).strip()
@@ -576,7 +587,7 @@ def _person_label(person: dict) -> str:
 def _person_lines(person: dict) -> list[str]:
     role_zh = str(person.get("role_zh", "")).strip()
     name_zh = str(person.get("name_zh", "")).strip()
-    name_en = str(person.get("name_en", "")).strip()
+    name_en = _normalize_display_name_en(str(person.get("name_en", "")))
     label_zh = _person_label(person)
     label_zh = _label_without_repeated_english_name(
         label_zh,

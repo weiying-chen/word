@@ -817,10 +817,42 @@ class RenderMetaTests(unittest.TestCase):
 
         lines = build_people_lines(people, ordered_blocks=ordered_blocks)
         texts = [line for line in lines if line]
-        michael_positions = [idx for idx, text in enumerate(texts) if text == "MICHAEL"]
-        other_position = texts.index("THE OTHER")
+        michael_positions = [idx for idx, text in enumerate(texts) if text == "Michael"]
+        other_position = texts.index("The Other")
         assert len(michael_positions) == 1
         assert michael_positions[0] < other_position
+
+    def test_generate_meta_title_cases_all_caps_english_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            body_path = tmpdir_path / "source.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            self._build_template(template_path)
+            body_path.write_text(
+                "\n".join(
+                    [
+                        "TITLE: English Title",
+                        "OVERVIEW: English overview.",
+                        "",
+                        "BODY:",
+                        "(6． HWANG LAY BOON)",
+                        "/*SUPER:",
+                        "慈濟志工│黃麗雯//",
+                        "引言一//",
+                        "*/",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            generate_meta(template_path, body_path, output_path)
+            texts = [p.text for p in Document(str(output_path)).paragraphs]
+
+        self.assertIn("Hwang Lay Boon", texts)
+        self.assertNotIn("HWANG LAY BOON", texts)
 
     def test_build_people_lines_prefers_super_sequence_when_requested(self) -> None:
         people = [
