@@ -112,6 +112,65 @@ def test_bodhi_reference_excerpt_skips_copyright_and_stops_before_timeline() -> 
     )
 
 
+def test_bodhi_reference_excerpt_uses_episode_json_description() -> None:
+    description = (
+        "#人間菩提 #證嚴上人\\r\\n"
+        "----------------------------------------------------------------------\\r\\n"
+        "愛善傳承締祥和\\r\\n"
+        "Carrying Forward the Spirit of Living Bodhisattvas\\r\\n"
+        "\\r\\n"
+        "柔和忍辱衣護身 慈悲法水潤心田\\r\\n"
+        "\\r\\n"
+        "回首慈濟因緣，許多法親分享一路走來的生命故事。\\r\\n"
+        "\\r\\n"
+        "上人勉勵大家珍惜慈濟六十年來累積的法脈精神。\\r\\n"
+        "\\r\\n"
+        "-----------------------------------\\r\\n"
+        "\\r\\n"
+        "00:00 │愛善傳承締祥和\\r\\n"
+        "\\r\\n"
+        "03:25 │大中區環保輔具運作中心\\r\\n"
+        "https://youtu.be/example\\r\\n"
+        "\\r\\n"
+        "#慈濟 #大愛"
+    )
+    payload = (
+        r"{\"EpTitle\":\"愛善傳承締祥和\","
+        + rf"\"Description\":\"{description}\","
+        + r"\"YTID\":\"abc123\"}"
+    )
+    html = f"""
+    <html><body>
+      <script>
+        document.getElementById('episode-1').addEventListener('click', function(){{
+          var episodeJson = '{payload}'
+        }});
+      </script>
+    </body></html>
+    """
+
+    with patch("generate_posts.urlopen", return_value=_FakeResponse(html)):
+        excerpt = fetch_bodhi_reference_excerpt(
+            "https://www.daai.tv/master/life-wisdom/P90230281?more=true",
+            "愛善傳承締祥和",
+        )
+
+    assert excerpt == "\n".join(
+        [
+            "回首慈濟因緣，許多法親分享一路走來的生命故事。",
+            "",
+            "上人勉勵大家珍惜慈濟六十年來累積的法脈精神。",
+            "",
+            "-----------------------------------",
+            "",
+            "00:00 │愛善傳承締祥和",
+            "",
+            "03:25 │大中區環保輔具運作中心",
+            "https://youtu.be/example",
+        ]
+    )
+
+
 def test_bodhi_english_subtitle_joins_multiline_title() -> None:
     html = """
     <html><body>

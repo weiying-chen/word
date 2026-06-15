@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import re
 from datetime import date
 from pathlib import Path
@@ -55,6 +56,10 @@ DASH_SPLIT_RE = re.compile(r"\s*-\s*")
 TAG_RE = re.compile(r"<[^>]+>")
 MULTISPACE_RE = re.compile(r"\s+")
 BODHI_TIMELINE_RE = re.compile(r"^\d{2}:\d{2}\s*[│|｜]")
+EPISODE_JSON_RE = re.compile(
+    r"""\b(?:episodeJson|episdoeJson)\s*=\s*(?:"(?P<double>(?:\\.|[^"\\])*)"|'(?P<single>(?:\\.|[^'\\])*)')""",
+    re.DOTALL,
+)
 
 
 def _extract_person_name(line: str) -> str | None:
@@ -588,6 +593,69 @@ def _is_bodhi_excerpt_boundary(line: str) -> bool:
     )
 
 
+def _parse_episode_json_payload(payload: str) -> dict | None:
+    normalized = html.unescape(payload).strip()
+    for _ in range(4):
+        try:
+            parsed = json.loads(normalized)
+            if isinstance(parsed, dict):
+                return parsed
+            if isinstance(parsed, str):
+                normalized = parsed
+                continue
+        except json.JSONDecodeError:
+            pass
+
+        unescaped = normalized.replace('\\"', '"').replace("\\/", "/")
+        if unescaped == normalized:
+            break
+        normalized = unescaped
+    return None
+
+
+def _iter_episode_json_objects(page: str):
+    for match in EPISODE_JSON_RE.finditer(page):
+        parsed = _parse_episode_json_payload(
+            match.group("single") or match.group("double") or ""
+        )
+        if isinstance(parsed, dict):
+            yield parsed
+
+
+def _excerpt_from_bodhi_description(description: str, chinese_title: str = "") -> str:
+    raw_lines = description.splitlines()
+    lines = [_normalize_line_for_match(html.unescape(line)) for line in raw_lines]
+
+    start_search_idx = 0
+    title_norm = _normalize_line_for_match(chinese_title)
+    if title_norm:
+        for idx, line in enumerate(lines):
+            if line == title_norm:
+                start_search_idx = idx + 1
+                break
+
+    start_idx = -1
+    for idx in range(start_search_idx, len(lines)):
+        line = lines[idx]
+        if not line or line.startswith("#") or _is_bodhi_copyright_line(line):
+            continue
+        if len(line) >= 12 and _is_cjk(line) and "。" in line:
+            start_idx = idx
+            break
+    if start_idx < 0:
+        return ""
+
+    collected: list[str] = []
+    for line in lines[start_idx:]:
+        if line.startswith("#") or _is_bodhi_copyright_line(line):
+            break
+        collected.append(line)
+
+    while collected and not collected[-1]:
+        collected.pop()
+    return "\n".join(collected).strip()
+
+
 def fetch_bodhi_reference_excerpt(url: str, chinese_title: str) -> str:
     if not url or not chinese_title:
         return ""
@@ -608,11 +676,22 @@ def fetch_bodhi_reference_excerpt(url: str, chinese_title: str) -> str:
     if not page:
         return ""
 
+    title_norm = _normalize_line_for_match(chinese_title)
+    for episode in _iter_episode_json_objects(page):
+        ep_title = _normalize_line_for_match(str(episode.get("EpTitle", "")))
+        if ep_title != title_norm:
+            continue
+        excerpt = _excerpt_from_bodhi_description(
+            str(episode.get("Description", "")),
+            chinese_title,
+        )
+        if excerpt:
+            return excerpt
+
     text = html.unescape(TAG_RE.sub("\n", page))
     lines = [_normalize_line_for_match(line) for line in text.splitlines()]
     lines = [line for line in lines if line]
 
-    title_norm = _normalize_line_for_match(chinese_title)
     title_idx = -1
     for idx, line in enumerate(lines):
         if line == title_norm:
@@ -628,7 +707,7 @@ def fetch_bodhi_reference_excerpt(url: str, chinese_title: str) -> str:
             break
         if _is_bodhi_copyright_line(line):
             continue
-        if len(line) >= 25 and _is_cjk(line) and "。" in line:
+        if len(line) >= 12 and _is_cjk(line) and "。" in line:
             start_idx = idx
             break
     if start_idx < 0:
