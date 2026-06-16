@@ -57,6 +57,7 @@ SYMBOL_FONT_NAME = "Segoe UI Symbol"
 CJK_FONT_NAME = "新細明體"
 CJK_MIDDLE_DOT = "\u2027"
 HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
+CPS_IGNORE_MARKER_RE = re.compile(r"\s+#\s*$")
 SOURCE_HIGHLIGHT_DEFAULT = REFERENCE_HIGHLIGHT_DEFAULT
 SOURCE_HIGHLIGHT_MARKED = REFERENCE_HIGHLIGHT_MARKED
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
@@ -108,6 +109,10 @@ def normalize_title_text(text: str) -> str:
     normalized = normalize_input_text(text)
     normalized = DASH_LIKE_RE.sub(SPACED_HYPHEN_MINUS, normalized)
     return re.sub(r"[ \t]+", " ", normalized).strip()
+
+
+def strip_cps_ignore_marker(text: str) -> str:
+    return CPS_IGNORE_MARKER_RE.sub("", text).rstrip()
 
 
 def _decode_input_text(path: Path) -> tuple[str, str, bool]:
@@ -469,14 +474,15 @@ def replace_body_paragraph(
         elif not is_parenthesized_line:
             in_parenthesized_super_block = False
 
-        cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line)
+        line_without_cps_marker = strip_cps_ignore_marker(line)
+        cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line_without_cps_marker)
         is_link = SOURCE_LINK_RE.match(cleaned_line)
         if is_link:
             in_source_block = True
 
         write_line(
             current,
-            cleaned_line if is_link else line,
+            cleaned_line if is_link else line_without_cps_marker,
             in_source_block and not is_subtitle_line,
             bool(is_link),
         )
