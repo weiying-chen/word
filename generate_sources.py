@@ -197,6 +197,17 @@ def _read_text_with_fallback(path: Path) -> str:
     return raw.decode("utf-8", errors="ignore")
 
 
+def resolve_default_episodes_json(base_dir: Path = Path(".")) -> Path:
+    return base_dir / "episodes.json"
+
+
+def resolve_default_sources_dir(base_dir: Path = Path(".")) -> Path:
+    subtitles_dir = base_dir / "subtitles"
+    if subtitles_dir.is_dir():
+        return subtitles_dir
+    return base_dir / "sources"
+
+
 def _render_docx(
     template_path: Path,
     output_path: Path,
@@ -305,7 +316,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate source DOCX files from episodes JSON and subtitle source files."
     )
-    parser.add_argument("--episodes-json", required=True, help="Path to episodes.json")
+    parser.add_argument(
+        "--episodes-json",
+        default="",
+        help="Path to episodes.json. Defaults to ./episodes.json.",
+    )
     parser.add_argument(
         "--template",
         default="templates/sources_template.docx",
@@ -313,8 +328,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--sources-dir",
-        default="sources",
-        help="Directory containing subtitle txt files.",
+        default="",
+        help="Directory containing subtitle txt files. Defaults to ./subtitles, falling back to ./sources.",
     )
     parser.add_argument(
         "--output-dir",
@@ -323,10 +338,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    episodes_json = (
+        Path(args.episodes_json)
+        if args.episodes_json
+        else resolve_default_episodes_json()
+    )
+    sources_dir = (
+        Path(args.sources_dir) if args.sources_dir else resolve_default_sources_dir()
+    )
+
     result = generate_sources(
-        episodes_json=Path(args.episodes_json),
+        episodes_json=episodes_json,
         template_path=Path(args.template),
-        sources_dir=Path(args.sources_dir),
+        sources_dir=sources_dir,
         output_dir=Path(args.output_dir),
     )
     print(

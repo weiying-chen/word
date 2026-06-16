@@ -3,13 +3,40 @@ from pathlib import Path
 
 from docx import Document
 
-from generate_sources import generate_sources
+from generate_sources import (
+    generate_sources,
+    resolve_default_episodes_json,
+    resolve_default_sources_dir,
+)
 
 
 def _write_template(path: Path) -> None:
     doc = Document()
     doc.add_paragraph("")
     doc.save(str(path))
+
+
+def test_resolve_default_episodes_json_uses_current_folder_file(tmp_path: Path) -> None:
+    episodes_path = tmp_path / "episodes.json"
+    episodes_path.write_text("[]", encoding="utf-8")
+
+    assert resolve_default_episodes_json(tmp_path) == episodes_path
+
+
+def test_resolve_default_sources_dir_prefers_subtitles(tmp_path: Path) -> None:
+    sources_dir = tmp_path / "sources"
+    subtitles_dir = tmp_path / "subtitles"
+    sources_dir.mkdir()
+    subtitles_dir.mkdir()
+
+    assert resolve_default_sources_dir(tmp_path) == subtitles_dir
+
+
+def test_resolve_default_sources_dir_falls_back_to_sources(tmp_path: Path) -> None:
+    sources_dir = tmp_path / "sources"
+    sources_dir.mkdir()
+
+    assert resolve_default_sources_dir(tmp_path) == sources_dir
 
 
 def test_generate_sources_skips_when_subtitle_file_missing(tmp_path: Path) -> None:
