@@ -49,6 +49,7 @@ PLACEHOLDER_KEY_SET = set(PLACEHOLDER_KEYS)
 INPUT_KEY_SET = PLACEHOLDER_KEY_SET | {"BODY"}
 GENERIC_PLACEHOLDER_RE = re.compile(r"^\{\{([A-Z_]+)\}\}$")
 SOURCE_LINK_RE = re.compile(r"^https?://\S+")
+SOURCE_DOC_RE = re.compile(r"^.+\.docx?$", re.IGNORECASE)
 SUBTITLE_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
@@ -114,6 +115,10 @@ def normalize_title_text(text: str) -> str:
 
 def strip_cps_ignore_marker(text: str) -> str:
     return CPS_IGNORE_MARKER_RE.sub("", text).rstrip()
+
+
+def is_source_doc_reference(text: str) -> bool:
+    return bool(SOURCE_DOC_RE.match(text.strip()))
 
 
 def is_full_line_comment(text: str) -> bool:
@@ -486,8 +491,9 @@ def replace_body_paragraph(
 
         line_without_cps_marker = strip_cps_ignore_marker(line)
         cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line_without_cps_marker)
-        is_link = SOURCE_LINK_RE.match(cleaned_line)
-        if is_link:
+        is_link = bool(SOURCE_LINK_RE.match(cleaned_line))
+        is_doc_reference = is_source_doc_reference(cleaned_line)
+        if is_link or is_doc_reference:
             in_source_block = True
 
         write_line(

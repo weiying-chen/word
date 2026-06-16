@@ -1373,6 +1373,49 @@ def test_generate_subs_treats_xxx_prefixed_timecode_as_subtitle_line(
     assert timing_paragraph.find("w:r/w:rPr/w:highlight", ns) is None
 
 
+def test_generate_subs_treats_doc_file_line_as_source_block(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "161111final_sy.doc",
+                "*Reference term*",
+                "",
+                "00:01:00:00\t00:01:02:00\tInput body line.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    doc_paragraph = None
+    term_paragraph = None
+    for paragraph in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in paragraph.findall(".//w:t", ns))
+        if text == "161111final_sy.doc":
+            doc_paragraph = paragraph
+        if text == "Reference term":
+            term_paragraph = paragraph
+
+    assert doc_paragraph is not None
+    assert term_paragraph is not None
+    assert doc_paragraph.findall("w:hyperlink", ns) == []
+    assert doc_paragraph.find("w:r/w:rPr/w:highlight", ns) is not None
+    assert term_paragraph.find("w:r/w:rPr/w:highlight", ns) is not None
+
+
 def test_generate_subs_highlights_parenthesized_super_block_after_subtitle_line(
     tmp_path: Path,
 ) -> None:
