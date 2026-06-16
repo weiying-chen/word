@@ -1267,6 +1267,34 @@ def test_generate_subs_strips_trailing_cps_ignore_marker_from_body(
     assert "Looking out over Taipei, I was struck by #" not in texts
 
 
+def test_generate_subs_skips_full_line_comments_in_body(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "// check this line later",
+                "00:01:08:15\t00:01:19:13\t看到臺北市的人口是那麼多",
+                "Looking out over Taipei.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    texts = [p.text for p in Document(output_path).paragraphs]
+
+    assert "// check this line later" not in texts
+    assert "00:01:08:15\t00:01:19:13\t看到臺北市的人口是那麼多" in texts
+    assert "Looking out over Taipei." in texts
+
+
 def test_generate_subs_keeps_blank_line_after_subtitle_label_with_input_body(
     tmp_path: Path,
 ) -> None:

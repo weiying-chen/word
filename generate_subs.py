@@ -58,6 +58,7 @@ CJK_FONT_NAME = "新細明體"
 CJK_MIDDLE_DOT = "\u2027"
 HIGHLIGHT_MARKER_RE = re.compile(r"\*([^*]+)\*")
 CPS_IGNORE_MARKER_RE = re.compile(r"\s+#\s*$")
+FULL_LINE_COMMENT_RE = re.compile(r"^\s*//")
 SOURCE_HIGHLIGHT_DEFAULT = REFERENCE_HIGHLIGHT_DEFAULT
 SOURCE_HIGHLIGHT_MARKED = REFERENCE_HIGHLIGHT_MARKED
 SOURCE_HYPERLINK_HIGHLIGHT_MARKED = "brightGreen"
@@ -113,6 +114,10 @@ def normalize_title_text(text: str) -> str:
 
 def strip_cps_ignore_marker(text: str) -> str:
     return CPS_IGNORE_MARKER_RE.sub("", text).rstrip()
+
+
+def is_full_line_comment(text: str) -> bool:
+    return bool(FULL_LINE_COMMENT_RE.match(text))
 
 
 def _decode_input_text(path: Path) -> tuple[str, str, bool]:
@@ -447,8 +452,12 @@ def replace_body_paragraph(
             else:
                 _add_text_runs(target, text)
 
+    emitted_any_line = False
     for idx, line in enumerate(lines):
-        if idx > 0:
+        if is_full_line_comment(line):
+            continue
+
+        if emitted_any_line:
             current = insert_paragraph_after(current, "")
 
         normalized_line = _normalized_paragraph_text(line)
@@ -456,6 +465,7 @@ def replace_body_paragraph(
             in_source_block = False
             previous_was_subtitle_line = False
             in_parenthesized_super_block = False
+            emitted_any_line = True
             continue
 
         is_subtitle_line = bool(SUBTITLE_LINE_RE.match(normalized_line))
@@ -491,6 +501,7 @@ def replace_body_paragraph(
             apply_highlight_to_runs(current, highlight_color=WD_COLOR_INDEX.YELLOW)
 
         previous_was_subtitle_line = is_subtitle_line
+        emitted_any_line = True
 
 
 def remove_paragraph(paragraph) -> None:
