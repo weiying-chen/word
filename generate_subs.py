@@ -53,6 +53,7 @@ SOURCE_DOC_RE = re.compile(r"^.+\.docx?$", re.IGNORECASE)
 SUBTITLE_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
+TIME_MARKER_LINE_RE = re.compile(r"^\d{1,2}:\d{2}$")
 PARENTHESIZED_LINE_RE = re.compile(r"^[（(].*[）)]$")
 SYMBOL_FONT_NAME = "Segoe UI Symbol"
 CJK_FONT_NAME = "新細明體"
@@ -123,6 +124,10 @@ def is_source_doc_reference(text: str) -> bool:
 
 def is_full_line_comment(text: str) -> bool:
     return bool(FULL_LINE_COMMENT_RE.match(text))
+
+
+def is_time_marker_line(text: str) -> bool:
+    return bool(TIME_MARKER_LINE_RE.match(_normalized_paragraph_text(text).strip()))
 
 
 def _decode_input_text(path: Path) -> tuple[str, str, bool]:
@@ -422,6 +427,7 @@ def replace_body_paragraph(
     previous_was_subtitle_line = False
     in_parenthesized_super_block = False
     in_xxx_highlight_block = False
+    pending_xxx_time_marker = None
 
     def _add_source_runs(target, text: str) -> None:
         _add_marked_runs(
@@ -472,10 +478,18 @@ def replace_body_paragraph(
             previous_was_subtitle_line = False
             in_parenthesized_super_block = False
             in_xxx_highlight_block = False
+            pending_xxx_time_marker = None
             emitted_any_line = True
             continue
+        is_time_marker = is_time_marker_line(normalized_line)
         if normalized_line.startswith("XXX"):
             in_xxx_highlight_block = True
+            if pending_xxx_time_marker is not None:
+                apply_highlight_to_runs(
+                    pending_xxx_time_marker, highlight_color=WD_COLOR_INDEX.YELLOW
+                )
+        elif not is_time_marker:
+            pending_xxx_time_marker = None
 
         is_subtitle_line = bool(SUBTITLE_LINE_RE.match(normalized_line))
         if is_subtitle_line:
@@ -513,6 +527,9 @@ def replace_body_paragraph(
             or in_parenthesized_super_block
         ):
             apply_highlight_to_runs(current, highlight_color=WD_COLOR_INDEX.YELLOW)
+
+        if is_time_marker and not in_xxx_highlight_block:
+            pending_xxx_time_marker = current
 
         previous_was_subtitle_line = is_subtitle_line
         emitted_any_line = True
