@@ -53,6 +53,7 @@ SOURCE_DOC_RE = re.compile(r"^.+\.docx?$", re.IGNORECASE)
 SUBTITLE_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
+TIMESTAMP_ONLY_LINE_RE = re.compile(r"^\d{1,2}:\d{2}(?::\d{2})?$")
 PARENTHESIZED_LINE_RE = re.compile(r"^[（(].*[）)]$")
 SYMBOL_FONT_NAME = "Segoe UI Symbol"
 CJK_FONT_NAME = "新細明體"
@@ -123,6 +124,45 @@ def is_source_doc_reference(text: str) -> bool:
 
 def is_full_line_comment(text: str) -> bool:
     return bool(FULL_LINE_COMMENT_RE.match(text))
+
+
+def _is_timestamp_only_line(text: str) -> bool:
+    return bool(TIMESTAMP_ONLY_LINE_RE.match(_normalized_paragraph_text(text).strip()))
+
+
+def _subtitle_text(text: str) -> str:
+    parts = _normalized_paragraph_text(text).split("\t")
+    return parts[-1] if len(parts) >= 3 else ""
+
+
+def _line_starts_with_xxx(text: str) -> bool:
+    normalized = _normalized_paragraph_text(strip_cps_ignore_marker(text))
+    if not normalized:
+        return False
+    if normalized.startswith("XXX"):
+        return True
+    if SUBTITLE_LINE_RE.match(normalized):
+        return _subtitle_text(normalized).lstrip().startswith("XXX")
+    return False
+
+
+def _block_starts_with_xxx(lines: list[str], start_idx: int) -> bool:
+    idx = start_idx
+    while idx < len(lines):
+        line = lines[idx]
+        if is_full_line_comment(line):
+            idx += 1
+            continue
+
+        normalized = _normalized_paragraph_text(line)
+        if not normalized.strip():
+            return False
+        if _is_timestamp_only_line(normalized):
+            idx += 1
+            continue
+        return _line_starts_with_xxx(normalized)
+
+    return False
 
 
 def _decode_input_text(path: Path) -> tuple[str, str, bool]:
@@ -478,7 +518,7 @@ def replace_body_paragraph(
             continue
 
         if previous_line_was_blank:
-            in_xxx_highlight_block = normalized_line.startswith("XXX")
+            in_xxx_highlight_block = _block_starts_with_xxx(lines, idx)
 
         is_subtitle_line = bool(SUBTITLE_LINE_RE.match(normalized_line))
         if is_subtitle_line:

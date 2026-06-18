@@ -1422,6 +1422,86 @@ def test_generate_subs_highlights_standalone_xxx_block_until_blank_line(
     assert all(r.font.highlight_color is None for r in plain.runs if r.text)
 
 
+def test_generate_subs_highlights_block_with_timestamp_only_line_before_xxx(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "02:40",
+                "XXX",
+                "1. Good sleep is essential",
+                "for better academic performance.",
+                "",
+                "Plain line.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+
+    timestamp = next(p for p in doc.paragraphs if p.text.strip() == "02:40")
+    marker = next(p for p in doc.paragraphs if p.text.strip() == "XXX")
+    first = next(p for p in doc.paragraphs if p.text.strip() == "1. Good sleep is essential")
+    second = next(p for p in doc.paragraphs if p.text.strip() == "for better academic performance.")
+    plain = next(p for p in doc.paragraphs if p.text.strip() == "Plain line.")
+
+    assert timestamp.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in timestamp.runs if r.text
+    )
+    assert marker.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in marker.runs if r.text
+    )
+    assert first.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in first.runs if r.text
+    )
+    assert second.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in second.runs if r.text
+    )
+    assert all(r.font.highlight_color is None for r in plain.runs if r.text)
+
+
+def test_generate_subs_does_not_highlight_block_when_xxx_is_not_at_start(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "This line mentions XXX later.",
+                "Second line stays plain.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+
+    first = next(p for p in doc.paragraphs if p.text.strip() == "This line mentions XXX later.")
+    second = next(p for p in doc.paragraphs if p.text.strip() == "Second line stays plain.")
+
+    assert all(r.font.highlight_color is None for r in first.runs if r.text)
+    assert all(r.font.highlight_color is None for r in second.runs if r.text)
+
+
 def test_generate_subs_treats_doc_file_line_as_source_block(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     source_docx = tmp_path / "source.docx"
