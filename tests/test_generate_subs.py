@@ -1324,7 +1324,7 @@ def test_generate_subs_keeps_blank_line_after_subtitle_label_with_input_body(
     assert texts[label_idx + 2] == "00:01:00:00\t00:01:02:00\tInput body line."
 
 
-def test_generate_subs_treats_xxx_prefixed_timecode_as_subtitle_line(
+def test_generate_subs_highlights_xxx_prefixed_timecode_block(
     tmp_path: Path,
 ) -> None:
     template_path = tmp_path / "template.docx"
@@ -1359,18 +1359,67 @@ def test_generate_subs_treats_xxx_prefixed_timecode_as_subtitle_line(
 
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
     timing_paragraph = None
+    english_line_paragraph = None
     url_paragraph = None
     for paragraph in doc.findall(".//w:p", ns):
         text = "".join(t.text or "" for t in paragraph.findall(".//w:t", ns))
         if text.startswith("XXX00:08:29:0000:08:43:11"):
             timing_paragraph = paragraph
+        if text == "Juices made from pear and water chestnut.":
+            english_line_paragraph = paragraph
         if text == "https://en.wikibooks.org/wiki/Traditional_Chinese_Medicine/Prescriptions":
             url_paragraph = paragraph
 
     assert timing_paragraph is not None
+    assert english_line_paragraph is not None
     assert url_paragraph is not None
     assert url_paragraph.findall("w:hyperlink", ns)
-    assert timing_paragraph.find("w:r/w:rPr/w:highlight", ns) is None
+    assert timing_paragraph.find("w:r/w:rPr/w:highlight", ns) is not None
+    assert english_line_paragraph.find("w:r/w:rPr/w:highlight", ns) is not None
+
+
+def test_generate_subs_highlights_standalone_xxx_block_until_blank_line(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "XXX",
+                "First highlighted line.",
+                "Second highlighted line.",
+                "",
+                "Plain line.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+
+    marker = next(p for p in doc.paragraphs if p.text.strip() == "XXX")
+    first = next(p for p in doc.paragraphs if p.text.strip() == "First highlighted line.")
+    second = next(p for p in doc.paragraphs if p.text.strip() == "Second highlighted line.")
+    plain = next(p for p in doc.paragraphs if p.text.strip() == "Plain line.")
+
+    assert marker.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in marker.runs if r.text
+    )
+    assert first.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in first.runs if r.text
+    )
+    assert second.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in second.runs if r.text
+    )
+    assert all(r.font.highlight_color is None for r in plain.runs if r.text)
 
 
 def test_generate_subs_treats_doc_file_line_as_source_block(tmp_path: Path) -> None:

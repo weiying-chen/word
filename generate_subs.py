@@ -421,6 +421,8 @@ def replace_body_paragraph(
     in_source_block = False
     previous_was_subtitle_line = False
     in_parenthesized_super_block = False
+    in_xxx_highlight_block = False
+    previous_line_was_blank = True
 
     def _add_source_runs(target, text: str) -> None:
         _add_marked_runs(
@@ -470,8 +472,13 @@ def replace_body_paragraph(
             in_source_block = False
             previous_was_subtitle_line = False
             in_parenthesized_super_block = False
+            in_xxx_highlight_block = False
+            previous_line_was_blank = True
             emitted_any_line = True
             continue
+
+        if previous_line_was_blank:
+            in_xxx_highlight_block = normalized_line.startswith("XXX")
 
         is_subtitle_line = bool(SUBTITLE_LINE_RE.match(normalized_line))
         if is_subtitle_line:
@@ -503,10 +510,15 @@ def replace_body_paragraph(
             bool(is_link),
         )
 
-        if subtitle_has_super_block or in_parenthesized_super_block:
+        if (
+            in_xxx_highlight_block
+            or subtitle_has_super_block
+            or in_parenthesized_super_block
+        ):
             apply_highlight_to_runs(current, highlight_color=WD_COLOR_INDEX.YELLOW)
 
         previous_was_subtitle_line = is_subtitle_line
+        previous_line_was_blank = False
         emitted_any_line = True
 
 
