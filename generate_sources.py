@@ -30,10 +30,10 @@ def _safe_filename(text: str) -> str:
     return safe
 
 
-def _find_subtitle_file(sources_dir: Path, ep_id: str) -> Path | None:
+def _find_subtitle_file(subtitles_dir: Path, ep_id: str) -> Path | None:
     if not ep_id:
         return None
-    for candidate in sorted(sources_dir.glob("*.txt")):
+    for candidate in sorted(subtitles_dir.glob("*.txt")):
         if ":Zone.Identifier" in candidate.name:
             continue
         if f"第{ep_id}集_ch_" in candidate.name or candidate.name.startswith(f"{ep_id}_"):
@@ -197,15 +197,12 @@ def _read_text_with_fallback(path: Path) -> str:
     return raw.decode("utf-8", errors="ignore")
 
 
-def resolve_default_episodes_json(base_dir: Path = Path(".")) -> Path:
+def resolve_default_episodes_file(base_dir: Path = Path(".")) -> Path:
     return base_dir / "episodes.json"
 
 
-def resolve_default_sources_dir(base_dir: Path = Path(".")) -> Path:
-    subtitles_dir = base_dir / "subtitles"
-    if subtitles_dir.is_dir():
-        return subtitles_dir
-    return base_dir / "sources"
+def resolve_default_subtitles_dir(base_dir: Path = Path(".")) -> Path:
+    return base_dir / "subtitles"
 
 
 def _render_docx(
@@ -254,19 +251,19 @@ def _render_docx(
 
 def generate_sources(
     *,
-    episodes_json: Path,
+    episodes_file: Path,
     template_path: Path,
-    sources_dir: Path,
+    subtitles_dir: Path,
     output_dir: Path,
 ) -> dict[str, int]:
-    episodes = json.loads(episodes_json.read_text(encoding="utf-8"))
+    episodes = json.loads(episodes_file.read_text(encoding="utf-8"))
     generated = 0
     skipped = 0
     errors = 0
 
     for item in episodes:
         ep_id = str(item.get("epId", "")).strip()
-        subtitle_file = _find_subtitle_file(sources_dir, ep_id)
+        subtitle_file = _find_subtitle_file(subtitles_dir, ep_id)
         if subtitle_file is None:
             skipped += 1
             continue
@@ -317,7 +314,7 @@ def main() -> None:
         description="Generate source DOCX files from episodes JSON and subtitle source files."
     )
     parser.add_argument(
-        "--episodes-json",
+        "--episodes-file",
         default="",
         help="Path to episodes.json. Defaults to ./episodes.json.",
     )
@@ -327,9 +324,9 @@ def main() -> None:
         help="Path to sources template docx.",
     )
     parser.add_argument(
-        "--sources-dir",
+        "--subtitles-dir",
         default="",
-        help="Directory containing subtitle txt files. Defaults to ./subtitles, falling back to ./sources.",
+        help="Directory containing subtitle txt files. Defaults to ./subtitles.",
     )
     parser.add_argument(
         "--output-dir",
@@ -338,19 +335,21 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    episodes_json = (
-        Path(args.episodes_json)
-        if args.episodes_json
-        else resolve_default_episodes_json()
+    episodes_file = (
+        Path(args.episodes_file)
+        if args.episodes_file
+        else resolve_default_episodes_file()
     )
-    sources_dir = (
-        Path(args.sources_dir) if args.sources_dir else resolve_default_sources_dir()
+    subtitles_dir = (
+        Path(args.subtitles_dir)
+        if args.subtitles_dir
+        else resolve_default_subtitles_dir()
     )
 
     result = generate_sources(
-        episodes_json=episodes_json,
+        episodes_file=episodes_file,
         template_path=Path(args.template),
-        sources_dir=sources_dir,
+        subtitles_dir=subtitles_dir,
         output_dir=Path(args.output_dir),
     )
     print(
