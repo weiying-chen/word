@@ -50,7 +50,7 @@ def _first_stage(task: dict) -> dict:
     stages = task.get("stages")
     if not isinstance(stages, list):
         return {}
-    for stage in stages:
+    for stage in reversed(stages):
         if isinstance(stage, dict):
             return stage
     return {}
@@ -61,27 +61,60 @@ def _task_stage_value(task: dict, key: str):
     return stage.get(key)
 
 
+def _task_value(task: dict, key: str):
+    value = task.get(key)
+    if value not in (None, ""):
+        return value
+    return _task_stage_value(task, key)
+
+
 def _task_type(task: dict) -> str:
-    stage_type = _task_stage_value(task, "type")
-    return str(stage_type or "").strip().lower()
+    return str(_task_value(task, "type") or "").strip().lower()
+
+
+def _task_extensions(task: dict) -> list[dict]:
+    extensions = _task_stage_value(task, "extensions")
+    if not isinstance(extensions, list):
+        return []
+    return [item for item in extensions if isinstance(item, dict)]
+
+
+def _task_descendants(task: dict) -> list[dict]:
+    descendants: list[dict] = []
+
+    children = task.get("children")
+    if isinstance(children, list):
+        descendants.extend(item for item in children if isinstance(item, dict))
+
+    descendants.extend(_task_extensions(task))
+    return descendants
+
+
+def _parse_iso_datetime(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _task_start_datetime(task: dict) -> datetime | None:
+    return _parse_iso_datetime(_task_value(task, "startAt"))
 
 
 def derive_month_from_tasks(tasks: list[dict]) -> str:
-    start_times: list[datetime] = []
-    for task in tasks:
-        start_at = str(_task_stage_value(task, "startAt") or "").strip()
-        if not start_at:
+    # tasks.json is append-only in this workflow, so the last task determines
+    # the review month shown in the header.
+    for task in reversed(tasks):
+        if not isinstance(task, dict):
             continue
-        try:
-            start_times.append(datetime.fromisoformat(start_at.replace("Z", "+00:00")))
-        except ValueError:
+        start_at = _task_start_datetime(task)
+        if start_at is None:
             continue
-
-    if not start_times:
-        return ""
-
-    latest = max(start_times)
-    return f"{latest.year}年{latest.month}月"
+        return f"{start_at.year}年{start_at.month}月"
+    return ""
 
 
 def _format_month_day(iso_text: str) -> str:
@@ -129,15 +162,15 @@ def _sum_content_seconds(tasks: list[dict]) -> int:
         for item in items:
             if not isinstance(item, dict):
                 continue
-            value = _task_stage_value(item, "contentSeconds")
+            value = _task_value(item, "contentSeconds")
             if value not in (None, ""):
                 try:
                     total += int(value)
                 except (TypeError, ValueError):
                     pass
-            children = item.get("children", [])
-            if isinstance(children, list) and children:
-                walk(children)
+            descendants = _task_descendants(item)
+            if descendants:
+                walk(descendants)
 
     walk(tasks)
     return total
@@ -252,12 +285,7 @@ def _ensure_temp_work_row_count(table, desired_count: int) -> list[int]:
 def _collect_temp_posts(tasks: list[dict]) -> list[dict]:
     posts: list[dict] = []
     for task in tasks:
-        children = task.get("children", [])
-        if not isinstance(children, list):
-            continue
-        for child in children:
-            if not isinstance(child, dict):
-                continue
+        for child in _task_descendants(task):
             if _task_type(child) != "posts":
                 continue
             posts.append(child)
@@ -267,12 +295,7 @@ def _collect_temp_posts(tasks: list[dict]) -> list[dict]:
 def _count_news_children(tasks: list[dict]) -> int:
     count = 0
     for task in tasks:
-        children = task.get("children", [])
-        if not isinstance(children, list):
-            continue
-        for child in children:
-            if not isinstance(child, dict):
-                continue
+        for child in _task_descendants(task):
             if _task_type(child) == "news":
                 count += 1
     return count
@@ -455,7 +478,7 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
             table.cell(row_idx, 0),
             [
                 _format_month_day(
-                    str(_task_stage_value(task, "startAt") or "").strip()
+                    str(_task_value(task, "startAt") or "").strip()
                 )
             ],
         )
@@ -463,10 +486,10 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
             f"{slot + 1}.",
             str(task.get("name", "")).strip(),
         ]
-        length_text = _format_content_seconds(_task_stage_value(task, "contentSeconds"))
+        length_text = _format_content_seconds(_task_value(task, "contentSeconds"))
         if length_text:
             item_lines.append(f"長度:{length_text}")
-        work_text = _format_work_minutes(_task_stage_value(task, "workMinutes"))
+        work_text = _format_work_minutes(_task_value(task, "workMinutes"))
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
         _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])
@@ -497,13 +520,13 @@ def fill_temp_work_table(doc: Document, tasks: list[dict]) -> None:
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [_format_month_day(str(_task_stage_value(post, "startAt") or "").strip())],
+            [_format_month_day(str(_task_value(post, "startAt") or "").strip())],
         )
         item_lines = [f"{slot + 1}.", str(post.get("name", "")).strip()]
-        length_text = _format_content_seconds(_task_stage_value(post, "contentSeconds"))
+        length_text = _format_content_seconds(_task_value(post, "contentSeconds"))
         if length_text:
             item_lines.append(f"長度:{length_text}")
-        work_text = _format_work_minutes(_task_stage_value(post, "workMinutes"))
+        work_text = _format_work_minutes(_task_value(post, "workMinutes"))
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
         _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])

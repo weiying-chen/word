@@ -801,3 +801,125 @@ def test_generate_review_reads_dates_metrics_and_types_from_stages(
     assert "長度:2時32分" in summary_text
     assert "英文新聞: 1篇" in summary_text
 
+
+def test_generate_review_supports_top_level_content_seconds_and_stage_extensions(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("外文編譯中心QCD")
+    doc.add_paragraph("姓名: {{NAME}}")
+    doc.add_paragraph("{{MONTH}}")
+    doc.add_paragraph("本月精進目標:")
+    table = doc.add_table(rows=6, cols=4)
+    table.cell(0, 0).text = "日期"
+    table.cell(0, 1).text = "(例行)字幕翻譯"
+    table.cell(0, 2).text = "編輯回饋"
+    table.cell(0, 3).text = "主管回饋"
+    table.cell(1, 0).text = ""
+    table.cell(1, 1).text = ""
+    table.cell(1, 2).text = ""
+    table.cell(1, 3).text = ""
+    table.cell(2, 0).text = "日期"
+    table.cell(2, 1).text = "臨時工作"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    table.cell(3, 2).text = ""
+    table.cell(3, 3).text = ""
+    table.cell(4, 0).text = "本月工作心得:"
+    summary_cell = table.cell(5, 0)
+    summary_cell.text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    summary_cell.add_paragraph("中翻英:")
+    summary_cell.add_paragraph("")
+    summary_cell.add_paragraph("其他工作:")
+    summary_cell.add_paragraph("英文新聞: ?篇")
+    doc.save(template_path)
+
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Main task",
+                    "contentSeconds": 540,
+                    "stages": [
+                        {
+                            "name": "translate",
+                            "startAt": "2026-05-20T08:40:00Z",
+                            "workMinutes": 432,
+                            "extensions": [
+                                {
+                                    "name": "Post child",
+                                    "type": "posts",
+                                    "startAt": "2026-05-25T01:00:00Z",
+                                    "workMinutes": 50,
+                                    "contentSeconds": 120,
+                                    "notes": ["post note"],
+                                },
+                                {
+                                    "name": "News child",
+                                    "type": "news",
+                                    "startAt": "2026-05-27T12:59:38.842799Z",
+                                    "workMinutes": 130,
+                                    "contentSeconds": 8460,
+                                },
+                            ],
+                        }
+                    ],
+                    "notes": ["note one"],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    assert out_doc.paragraphs[2].text == "2026年5月"
+    table = out_doc.tables[0]
+    assert table.cell(1, 0).text.strip() == "5/20"
+    assert table.cell(1, 1).text.strip() == "1.\nMain task\n長度:9分\n實際作業時間:7時12分"
+    assert table.cell(1, 2).text.strip() == "• note one"
+    assert table.cell(3, 0).text.strip() == "5/25"
+    assert table.cell(3, 1).text.strip() == "1.\nPost child\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 2).text.strip() == "• post note"
+    summary_text = "\n".join(p.text for p in table.cell(5, 0).paragraphs)
+    assert "長度:2時32分" in summary_text
+    assert "英文新聞: 1篇" in summary_text
+
+
+def test_generate_review_uses_last_task_month_for_header(tmp_path: Path) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    tasks_json.write_text(
+        json.dumps(
+            [
+                _stage_task(
+                    "Later by date",
+                    start_at="2026-06-30T23:00:00Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                ),
+                _stage_task(
+                    "Last in file",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                ),
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    assert out_doc.paragraphs[2].text == "2026年5月"
