@@ -358,14 +358,23 @@ def _ensure_previous_work_row_count(table, desired_count: int) -> list[int]:
     return list(range(start_idx, start_idx + target))
 
 
-def _collect_temp_posts(tasks: list[dict]) -> list[dict]:
-    posts: list[dict] = []
+def _temp_work_type_label(task: dict) -> str:
+    task_type = _task_type(task)
+    if task_type == "news":
+        return "英文新聞"
+    if task_type == "posts":
+        return "小編文"
+    return ""
+
+
+def _collect_temp_work_items(tasks: list[dict]) -> list[dict]:
+    items: list[dict] = []
     for task in tasks:
         for child in _task_descendants(task):
-            if _task_type(child) != "posts":
+            if _task_type(child) not in ("posts", "news"):
                 continue
-            posts.append(child)
-    return posts
+            items.append(child)
+    return items
 
 
 def _count_news_children(tasks: list[dict]) -> int:
@@ -619,12 +628,12 @@ def fill_temp_work_table(doc: Document, tasks: list[dict]) -> None:
     if not doc.tables:
         return
     table = doc.tables[0]
-    posts = _collect_temp_posts(tasks)
-    row_indexes = _ensure_temp_work_row_count(table, len(posts))
+    items = _collect_temp_work_items(tasks)
+    row_indexes = _ensure_temp_work_row_count(table, len(items))
 
     for slot, row_idx in enumerate(row_indexes):
-        post = posts[slot] if slot < len(posts) else None
-        if not post:
+        item = items[slot] if slot < len(items) else None
+        if not item:
             _set_cell_lines(table.cell(row_idx, 0), [])
             _set_cell_lines(table.cell(row_idx, 1), [])
             _set_cell_lines(table.cell(row_idx, 2), [])
@@ -633,19 +642,22 @@ def fill_temp_work_table(doc: Document, tasks: list[dict]) -> None:
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [_format_month_day(str(_task_value(post, "startAt") or "").strip())],
+            [_format_month_day(str(_task_value(item, "startAt") or "").strip())],
         )
-        item_lines = [f"{slot + 1}.", str(post.get("name", "")).strip()]
-        length_text = _format_content_seconds(_task_value(post, "contentSeconds"))
+        item_lines = [f"{slot + 1}.", str(item.get("name", "")).strip()]
+        type_label = _temp_work_type_label(item)
+        if type_label:
+            item_lines.append(type_label)
+        length_text = _format_content_seconds(_task_value(item, "contentSeconds"))
         if length_text:
             item_lines.append(f"長度:{length_text}")
-        work_text = _format_work_minutes(_task_value(post, "workMinutes"))
+        work_text = _format_work_minutes(_task_value(item, "workMinutes"))
         if work_text:
             item_lines.append(f"實際作業時間:{work_text}")
         _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])
         _set_cell_lines(
             table.cell(row_idx, 2),
-            _extract_feedback_lines(post),
+            _extract_feedback_lines(item),
             font_size_pt=REVIEW_NOTES_TEXT_SIZE_PT,
         )
         _set_cell_lines(table.cell(row_idx, 3), [])

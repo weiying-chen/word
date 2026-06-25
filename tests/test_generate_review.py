@@ -59,6 +59,14 @@ def _doc_snapshot(doc: Document) -> dict:
     }
 
 
+def _find_summary_text(table) -> str:
+    for row in table.rows:
+        cell_text = "\n".join(p.text for p in row.cells[0].paragraphs)
+        if "本月總翻譯時數(字幕)" in cell_text:
+            return cell_text
+    return ""
+
+
 def _stage_task(
     name: str,
     *,
@@ -323,7 +331,7 @@ def test_generate_review_uses_notes_for_editor_feedback(tmp_path: Path) -> None:
     assert table.cell(1, 2).text.strip() == "• note one\n• note two"
 
 
-def test_generate_review_populates_temp_work_from_posts_children_only(
+def test_generate_review_populates_temp_work_from_posts_and_news_children(
     tmp_path: Path,
 ) -> None:
     template_path = tmp_path / "review_template.docx"
@@ -371,7 +379,9 @@ def test_generate_review_populates_temp_work_from_posts_children_only(
     table = out_doc.tables[0]
     # After removing 字幕審稿 section: row 2 is 臨時工作 header, row 3 is first temp work row
     assert table.cell(3, 0).text.strip() == "5/18"
-    assert table.cell(3, 1).text.strip() == "1.\nPOST A\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 1).text.strip() == "1.\nPOST A\n小編文\n長度:2分\n實際作業時間:50分"
+    assert table.cell(4, 0).text.strip() == "5/18"
+    assert table.cell(4, 1).text.strip() == "2.\nNEWS B\n英文新聞\n實際作業時間:40分"
 
 
 def test_generate_review_removes_subtitle_review_summary_block(tmp_path: Path) -> None:
@@ -542,7 +552,7 @@ def test_generate_review_sets_other_work_news_count_from_children(tmp_path: Path
     generate_review.generate_review(template_path, output_path, tasks_json)
 
     out_doc = Document(output_path)
-    text = "\n".join(p.text for p in out_doc.tables[0].cell(5, 0).paragraphs)
+    text = _find_summary_text(out_doc.tables[0])
     assert "其他工作:" in text
     assert "英文新聞: 2篇" in text
     assert "行政工作:" in text
@@ -804,9 +814,9 @@ def test_generate_review_reads_dates_metrics_and_types_from_stages(
     assert table.cell(1, 1).text.strip() == "1.\nMain task\n長度:9分\n實際作業時間:7時12分"
     assert table.cell(1, 2).text.strip() == "• note one"
     assert table.cell(3, 0).text.strip() == "5/25"
-    assert table.cell(3, 1).text.strip() == "1.\nPost child\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 1).text.strip() == "1.\nPost child\n小編文\n長度:2分\n實際作業時間:50分"
     assert table.cell(3, 2).text.strip() == "• post note"
-    summary_text = "\n".join(p.text for p in table.cell(5, 0).paragraphs)
+    summary_text = _find_summary_text(table)
     assert "長度:9分" in summary_text
     assert "英文新聞: 1篇" in summary_text
 
@@ -894,9 +904,9 @@ def test_generate_review_supports_top_level_content_seconds_and_stage_extensions
     assert table.cell(1, 1).text.strip() == "1.\nMain task\n長度:9分\n實際作業時間:7時12分"
     assert table.cell(1, 2).text.strip() == "• note one"
     assert table.cell(3, 0).text.strip() == "5/25"
-    assert table.cell(3, 1).text.strip() == "1.\nPost child\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 1).text.strip() == "1.\nPost child\n小編文\n長度:2分\n實際作業時間:50分"
     assert table.cell(3, 2).text.strip() == "• post note"
-    summary_text = "\n".join(p.text for p in table.cell(5, 0).paragraphs)
+    summary_text = _find_summary_text(table)
     assert "長度:9分" in summary_text
     assert "英文新聞: 1篇" in summary_text
 
@@ -1110,6 +1120,13 @@ def test_generate_review_ignores_previous_month_extensions_for_temp_work_and_new
 
     out_doc = Document(output_path)
     table = out_doc.tables[0]
-    assert table.cell(3, 1).text.strip() == "1.\nCurrent post\n長度:2分\n實際作業時間:50分"
-    summary_text = "\n".join(p.text for p in table.cell(5, 0).paragraphs)
+    assert table.cell(3, 1).text.strip() == "1.\nCurrent post\n小編文\n長度:2分\n實際作業時間:50分"
+    assert table.cell(4, 1).text.strip() == "2.\nCurrent news\n英文新聞\n長度:3分\n實際作業時間:30分"
+    previous_row_idx = None
+    for idx, row in enumerate(table.rows):
+        if row.cells[0].text.strip() == "之前工作紀錄":
+            previous_row_idx = idx
+            break
+    assert previous_row_idx is not None
+    summary_text = _find_summary_text(table)
     assert "英文新聞: 1篇" in summary_text
