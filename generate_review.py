@@ -363,7 +363,7 @@ def _temp_work_type_label(task: dict) -> str:
     if task_type == "news":
         return "英文新聞"
     if task_type == "posts":
-        return "小編文"
+        return "FB小編文"
     return ""
 
 

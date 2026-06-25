@@ -379,7 +379,7 @@ def test_generate_review_populates_temp_work_from_posts_and_news_children(
     table = out_doc.tables[0]
     # After removing 字幕審稿 section: row 2 is 臨時工作 header, row 3 is first temp work row
     assert table.cell(3, 0).text.strip() == "5/18"
-    assert table.cell(3, 1).text.strip() == "1.\nPOST A\n小編文\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 1).text.strip() == "1.\nPOST A\nFB小編文\n長度:2分\n實際作業時間:50分"
     assert table.cell(4, 0).text.strip() == "5/18"
     assert table.cell(4, 1).text.strip() == "2.\nNEWS B\n英文新聞\n實際作業時間:40分"
 
@@ -814,7 +814,7 @@ def test_generate_review_reads_dates_metrics_and_types_from_stages(
     assert table.cell(1, 1).text.strip() == "1.\nMain task\n長度:9分\n實際作業時間:7時12分"
     assert table.cell(1, 2).text.strip() == "• note one"
     assert table.cell(3, 0).text.strip() == "5/25"
-    assert table.cell(3, 1).text.strip() == "1.\nPost child\n小編文\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 1).text.strip() == "1.\nPost child\nFB小編文\n長度:2分\n實際作業時間:50分"
     assert table.cell(3, 2).text.strip() == "• post note"
     summary_text = _find_summary_text(table)
     assert "長度:9分" in summary_text
@@ -904,7 +904,7 @@ def test_generate_review_supports_top_level_content_seconds_and_stage_extensions
     assert table.cell(1, 1).text.strip() == "1.\nMain task\n長度:9分\n實際作業時間:7時12分"
     assert table.cell(1, 2).text.strip() == "• note one"
     assert table.cell(3, 0).text.strip() == "5/25"
-    assert table.cell(3, 1).text.strip() == "1.\nPost child\n小編文\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 1).text.strip() == "1.\nPost child\nFB小編文\n長度:2分\n實際作業時間:50分"
     assert table.cell(3, 2).text.strip() == "• post note"
     summary_text = _find_summary_text(table)
     assert "長度:9分" in summary_text
@@ -1120,7 +1120,7 @@ def test_generate_review_ignores_previous_month_extensions_for_temp_work_and_new
 
     out_doc = Document(output_path)
     table = out_doc.tables[0]
-    assert table.cell(3, 1).text.strip() == "1.\nCurrent post\n小編文\n長度:2分\n實際作業時間:50分"
+    assert table.cell(3, 1).text.strip() == "1.\nCurrent post\nFB小編文\n長度:2分\n實際作業時間:50分"
     assert table.cell(4, 1).text.strip() == "2.\nCurrent news\n英文新聞\n長度:3分\n實際作業時間:30分"
     previous_row_idx = None
     for idx, row in enumerate(table.rows):
