@@ -20,12 +20,27 @@ GOAL_LABEL_TEXT = "本月精進目標:"
 MONTH_KEY = "MONTH"
 HEADER_FONT_SIZE_PT = REVIEW_TEXT_SIZE_PT
 REVIEWER_NAME = "陳威穎"
+OUTPUT_REVIEWER_NAME = "Alex"
 
 
 def resolve_template_path(template_path: Path) -> Path:
     if template_path.is_absolute() or template_path.exists():
         return template_path
     return Path(__file__).resolve().parent / template_path
+
+
+def resolve_output_path(output_path: Path | None, tasks: list[dict]) -> Path:
+    if output_path is not None:
+        return output_path
+
+    target_month = _derive_target_month(tasks)
+    if target_month is None:
+        month_suffix = "unknown"
+    else:
+        year, month = target_month
+        month_suffix = f"{year % 100:02d}{month:02d}"
+
+    return Path(f"output/QCD_{OUTPUT_REVIEWER_NAME}_{month_suffix}.docx")
 
 
 def _format_year_month_text(value: str) -> str:
@@ -753,7 +768,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default="output/review_output.docx",
+        default=None,
         help="Path to write the rendered review DOCX.",
     )
     parser.add_argument(
@@ -763,10 +778,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    tasks_path = Path(args.tasks_json)
+    tasks = parse_tasks_payload(tasks_path)
     generate_review(
         Path(args.template),
-        Path(args.output),
-        Path(args.tasks_json),
+        resolve_output_path(Path(args.output) if args.output else None, tasks),
+        tasks_path,
     )
 
 

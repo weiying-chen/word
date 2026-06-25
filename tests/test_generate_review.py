@@ -140,6 +140,37 @@ def test_resolve_template_path_accepts_relative_repo_template() -> None:
     assert resolved.exists()
 
 
+def test_resolve_default_output_path_uses_review_month_suffix() -> None:
+    tasks = [
+        _stage_task(
+            "A",
+            start_at="2026-05-08T00:00:00.000Z",
+            work_minutes=60,
+            content_seconds=120,
+        )
+    ]
+
+    resolved = generate_review.resolve_output_path(None, tasks)
+
+    assert resolved == Path("output/QCD_Alex_2605.docx")
+
+
+def test_resolve_output_path_preserves_explicit_path() -> None:
+    explicit = Path("custom/review.docx")
+    tasks = [
+        _stage_task(
+            "A",
+            start_at="2026-05-08T00:00:00.000Z",
+            work_minutes=60,
+            content_seconds=120,
+        )
+    ]
+
+    resolved = generate_review.resolve_output_path(explicit, tasks)
+
+    assert resolved == explicit
+
+
 def test_generate_review_populates_regular_translation_rows(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     tasks_json = tmp_path / "tasks.json"
