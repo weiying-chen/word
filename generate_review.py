@@ -104,7 +104,7 @@ def _task_start_datetime(task: dict) -> datetime | None:
     return _parse_iso_datetime(_task_value(task, "startAt"))
 
 
-def derive_month_from_tasks(tasks: list[dict]) -> str:
+def _derive_target_month(tasks: list[dict]) -> tuple[int, int] | None:
     # tasks.json is append-only in this workflow, so the last task determines
     # the review month shown in the header.
     for task in reversed(tasks):
@@ -113,8 +113,53 @@ def derive_month_from_tasks(tasks: list[dict]) -> str:
         start_at = _task_start_datetime(task)
         if start_at is None:
             continue
-        return f"{start_at.year}年{start_at.month}月"
+        return (start_at.year, start_at.month)
+    return None
+
+
+def derive_month_from_tasks(tasks: list[dict]) -> str:
+    target_month = _derive_target_month(tasks)
+    if target_month is not None:
+        year, month = target_month
+        return f"{year}年{month}月"
     return ""
+
+
+def _is_parent_subs_task(task: dict) -> bool:
+    task_type = _task_type(task)
+    return task_type in ("", "subs")
+
+
+def _task_month_relation(task: dict, target_month: tuple[int, int]) -> str | None:
+    start_at = _task_start_datetime(task)
+    if start_at is None:
+        return None
+    task_month = (start_at.year, start_at.month)
+    if task_month == target_month:
+        return "current"
+    if task_month < target_month:
+        return "previous"
+    return "future"
+
+
+def _partition_parent_subs_tasks(
+    tasks: list[dict],
+    target_month: tuple[int, int] | None,
+) -> tuple[list[dict], list[dict]]:
+    if target_month is None:
+        return ([], [])
+
+    current_tasks: list[dict] = []
+    previous_tasks: list[dict] = []
+    for task in tasks:
+        if not isinstance(task, dict) or not _is_parent_subs_task(task):
+            continue
+        relation = _task_month_relation(task, target_month)
+        if relation == "current":
+            current_tasks.append(task)
+        elif relation == "previous":
+            previous_tasks.append(task)
+    return current_tasks, previous_tasks
 
 
 def _format_month_day(iso_text: str) -> str:
@@ -154,25 +199,17 @@ def _format_content_seconds(content_seconds: int | str | None) -> str:
     return "".join(parts) if parts else "0秒"
 
 
-def _sum_content_seconds(tasks: list[dict]) -> int:
+def _sum_parent_content_seconds(tasks: list[dict]) -> int:
     total = 0
-
-    def walk(items: list[dict]) -> None:
-        nonlocal total
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            value = _task_value(item, "contentSeconds")
-            if value not in (None, ""):
-                try:
-                    total += int(value)
-                except (TypeError, ValueError):
-                    pass
-            descendants = _task_descendants(item)
-            if descendants:
-                walk(descendants)
-
-    walk(tasks)
+    for item in tasks:
+        if not isinstance(item, dict):
+            continue
+        value = _task_value(item, "contentSeconds")
+        if value not in (None, ""):
+            try:
+                total += int(value)
+            except (TypeError, ValueError):
+                pass
     return total
 
 
@@ -235,6 +272,9 @@ def _remove_paragraph(paragraph) -> None:
 
 def _insert_cloned_row_before(table, source_row_idx: int, before_row_idx: int) -> None:
     cloned = deepcopy(table.rows[source_row_idx]._tr)
+    if before_row_idx >= len(table.rows):
+        table.rows[-1]._tr.addnext(cloned)
+        return
     table.rows[before_row_idx]._tr.addprevious(cloned)
 
 
@@ -282,6 +322,42 @@ def _ensure_temp_work_row_count(table, desired_count: int) -> list[int]:
     return list(range(start_idx, start_idx + target))
 
 
+def _find_previous_work_block(table) -> tuple[int, int] | None:
+    start_idx = None
+    for idx in range(len(table.rows)):
+        first = table.cell(idx, 0).text.strip()
+        second = table.cell(idx, 1).text.strip()
+        if first == "日期" and second == "工作項目" and idx > 0:
+            previous_header = table.cell(idx - 1, 0).text.strip()
+            if previous_header == "之前工作紀錄":
+                start_idx = idx + 1
+                break
+    if start_idx is None:
+        return None
+    return start_idx, len(table.rows)
+
+
+def _ensure_previous_work_row_count(table, desired_count: int) -> list[int]:
+    block = _find_previous_work_block(table)
+    if block is None:
+        return []
+    start_idx, next_section_idx = block
+    current_count = next_section_idx - start_idx
+    target = max(1, desired_count)
+
+    while current_count < target:
+        _insert_cloned_row_before(table, start_idx, next_section_idx)
+        next_section_idx += 1
+        current_count += 1
+
+    while current_count > target:
+        _remove_row(table, next_section_idx - 1)
+        next_section_idx -= 1
+        current_count -= 1
+
+    return list(range(start_idx, start_idx + target))
+
+
 def _collect_temp_posts(tasks: list[dict]) -> list[dict]:
     posts: list[dict] = []
     for task in tasks:
@@ -299,6 +375,43 @@ def _count_news_children(tasks: list[dict]) -> int:
             if _task_type(child) == "news":
                 count += 1
     return count
+
+
+def fill_previous_work_table(doc: Document, tasks: list[dict]) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    row_indexes = _ensure_previous_work_row_count(table, len(tasks))
+    if not row_indexes:
+        return
+
+    for slot, row_idx in enumerate(row_indexes):
+        task = tasks[slot] if slot < len(tasks) else None
+        if not task:
+            _set_cell_lines(table.cell(row_idx, 0), [])
+            _set_cell_lines(table.cell(row_idx, 1), [])
+            _set_cell_lines(table.cell(row_idx, 2), [])
+            _set_cell_lines(table.cell(row_idx, 3), [])
+            continue
+
+        _set_cell_lines(
+            table.cell(row_idx, 0),
+            [_format_month_day(str(_task_value(task, "startAt") or "").strip())],
+        )
+        item_lines = [f"{slot + 1}.", str(task.get("name", "")).strip()]
+        length_text = _format_content_seconds(_task_value(task, "contentSeconds"))
+        if length_text:
+            item_lines.append(f"長度:{length_text}")
+        work_text = _format_work_minutes(_task_value(task, "workMinutes"))
+        if work_text:
+            item_lines.append(f"實際作業時間:{work_text}")
+        _set_cell_lines(table.cell(row_idx, 1), [line for line in item_lines if line])
+        _set_cell_lines(
+            table.cell(row_idx, 2),
+            _extract_feedback_lines(task),
+            font_size_pt=REVIEW_NOTES_TEXT_SIZE_PT,
+        )
+        _set_cell_lines(table.cell(row_idx, 3), [])
 
 
 def remove_subtitle_review_section(doc: Document) -> None:
@@ -444,7 +557,7 @@ def set_translation_total_length_line(doc: Document, tasks: list[dict]) -> None:
         return
     table = doc.tables[0]
     heading_prefix = "本月總翻譯時數(字幕):"
-    total_text = f"長度:{_format_content_seconds(_sum_content_seconds(tasks))}"
+    total_text = f"長度:{_format_content_seconds(_sum_parent_content_seconds(tasks))}"
 
     for row in table.rows:
         for cell in row.cells:
@@ -573,20 +686,25 @@ def generate_review(
     tasks_path: Path,
 ) -> None:
     tasks = parse_tasks_payload(tasks_path)
+    target_month = _derive_target_month(tasks)
+    current_subs_tasks, previous_subs_tasks = _partition_parent_subs_tasks(
+        tasks, target_month
+    )
     data = {"NAME": REVIEWER_NAME, MONTH_KEY: derive_month_from_tasks(tasks)}
     doc = Document(str(resolve_template_path(template_path)))
     replace_placeholders(doc, data)
     apply_header_font_size(doc)
     apply_review_highlights(doc)
-    fill_regular_translation_table(doc, tasks)
+    fill_regular_translation_table(doc, current_subs_tasks)
     remove_subtitle_review_section(doc)
     remove_subtitle_review_summary_block(doc)
     remove_translation_english_to_chinese_summary_line(doc)
     remove_work_notes_meeting_lines(doc)
     normalize_translation_summary_heading_spacing(doc)
-    set_translation_total_length_line(doc, tasks)
-    set_other_work_news_count_line(doc, tasks)
-    fill_temp_work_table(doc, tasks)
+    set_translation_total_length_line(doc, current_subs_tasks)
+    set_other_work_news_count_line(doc, current_subs_tasks)
+    fill_temp_work_table(doc, current_subs_tasks)
+    fill_previous_work_table(doc, previous_subs_tasks)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
 

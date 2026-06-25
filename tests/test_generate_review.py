@@ -15,7 +15,7 @@ def _write_review_template(path: Path) -> None:
     doc.add_paragraph("姓名: {{NAME}}")
     doc.add_paragraph("{{MONTH}}")
     doc.add_paragraph("本月精進目標:")
-    table = doc.add_table(rows=8, cols=4)
+    table = doc.add_table(rows=11, cols=4)
     table.cell(0, 0).text = "日期"
     table.cell(0, 1).text = "(例行)字幕翻譯"
     table.cell(0, 2).text = "編輯回饋"
@@ -37,6 +37,15 @@ def _write_review_template(path: Path) -> None:
     table.cell(5, 2).text = ""
     table.cell(5, 3).text = ""
     table.cell(6, 0).text = "本月工作心得:"
+    summary_cell = table.cell(7, 0)
+    summary_cell.text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    summary_cell.add_paragraph("長度:")
+    summary_cell.add_paragraph("")
+    summary_cell.add_paragraph("其他工作:")
+    summary_cell.add_paragraph("英文新聞: ?篇")
+    table.cell(8, 0).text = "之前工作紀錄"
+    table.cell(9, 0).text = "日期"
+    table.cell(9, 1).text = "工作項目"
     doc.save(path)
 
 
@@ -666,7 +675,7 @@ def test_generate_review_sets_translation_total_length_from_all_tasks_and_childr
     summary_cell.add_paragraph("英翻中:")
     doc.save(template_path)
 
-    # total = 3600 + 300 + 60 = 3960 seconds => 1時6分
+    # total = 3600 + 300 = 3900 seconds => 1時5分
     tasks_json.write_text(
         json.dumps(
             [
@@ -698,7 +707,7 @@ def test_generate_review_sets_translation_total_length_from_all_tasks_and_childr
         if "本月總翻譯時數(字幕)" in cell_text:
             text = cell_text
             break
-    assert "長度:1時6分" in text
+    assert "長度:1時5分" in text
     assert "中翻英:" not in text
 
 
@@ -798,7 +807,7 @@ def test_generate_review_reads_dates_metrics_and_types_from_stages(
     assert table.cell(3, 1).text.strip() == "1.\nPost child\n長度:2分\n實際作業時間:50分"
     assert table.cell(3, 2).text.strip() == "• post note"
     summary_text = "\n".join(p.text for p in table.cell(5, 0).paragraphs)
-    assert "長度:2時32分" in summary_text
+    assert "長度:9分" in summary_text
     assert "英文新聞: 1篇" in summary_text
 
 
@@ -888,7 +897,7 @@ def test_generate_review_supports_top_level_content_seconds_and_stage_extensions
     assert table.cell(3, 1).text.strip() == "1.\nPost child\n長度:2分\n實際作業時間:50分"
     assert table.cell(3, 2).text.strip() == "• post note"
     summary_text = "\n".join(p.text for p in table.cell(5, 0).paragraphs)
-    assert "長度:2時32分" in summary_text
+    assert "長度:9分" in summary_text
     assert "英文新聞: 1篇" in summary_text
 
 
@@ -923,3 +932,184 @@ def test_generate_review_uses_last_task_month_for_header(tmp_path: Path) -> None
 
     out_doc = Document(output_path)
     assert out_doc.paragraphs[2].text == "2026年5月"
+
+
+def test_generate_review_splits_current_and_previous_month_subs_and_total(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Previous month task",
+                    "type": "subs",
+                    "contentSeconds": 600,
+                    "notes": ["old note"],
+                    "stages": [
+                        {
+                            "startAt": "2026-05-28T08:00:00Z",
+                            "workMinutes": 120,
+                            "extensions": [
+                                {
+                                    "name": "Old news",
+                                    "type": "news",
+                                    "startAt": "2026-05-29T09:00:00Z",
+                                    "workMinutes": 30,
+                                    "contentSeconds": 180,
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "name": "Current month task",
+                    "type": "subs",
+                    "contentSeconds": 1200,
+                    "notes": ["current note"],
+                    "stages": [
+                        {
+                            "startAt": "2026-06-03T08:00:00Z",
+                            "workMinutes": 240,
+                        }
+                    ],
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    table = out_doc.tables[0]
+    assert out_doc.paragraphs[2].text == "2026年6月"
+    assert table.cell(1, 0).text.strip() == "6/3"
+    assert table.cell(1, 1).text.strip() == "1.\nCurrent month task\n長度:20分\n實際作業時間:4時"
+    summary_text = ""
+    previous_row_idx = None
+    for idx, row in enumerate(table.rows):
+        cell_text = "\n".join(p.text for p in row.cells[0].paragraphs)
+        if "本月總翻譯時數(字幕)" in cell_text:
+            summary_text = cell_text
+        if row.cells[0].text.strip() == "之前工作紀錄":
+            previous_row_idx = idx
+    assert "長度:20分" in summary_text
+    assert "長度:13分" not in summary_text
+    assert previous_row_idx is not None
+    assert table.cell(previous_row_idx + 2, 0).text.strip() == "5/28"
+    assert (
+        table.cell(previous_row_idx + 2, 1).text.strip()
+        == "1.\nPrevious month task\n長度:10分\n實際作業時間:2時"
+    )
+    assert table.cell(previous_row_idx + 2, 2).text.strip() == "• old note"
+
+
+def test_generate_review_ignores_previous_month_extensions_for_temp_work_and_news_count(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("外文編譯中心QCD")
+    doc.add_paragraph("姓名: {{NAME}}")
+    doc.add_paragraph("{{MONTH}}")
+    doc.add_paragraph("本月精進目標:")
+    table = doc.add_table(rows=11, cols=4)
+    table.cell(0, 0).text = "日期"
+    table.cell(0, 1).text = "(例行)字幕翻譯"
+    table.cell(1, 0).text = ""
+    table.cell(1, 1).text = ""
+    table.cell(2, 0).text = "日期"
+    table.cell(2, 1).text = "臨時工作"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    table.cell(4, 0).text = "本月工作心得:"
+    summary_cell = table.cell(5, 0)
+    summary_cell.text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    summary_cell.add_paragraph("中翻英:")
+    summary_cell.add_paragraph("")
+    summary_cell.add_paragraph("其他工作:")
+    summary_cell.add_paragraph("英文新聞: ?篇")
+    table.cell(6, 0).text = "之前工作紀錄"
+    table.cell(7, 0).text = "日期"
+    table.cell(7, 1).text = "工作項目"
+    doc.save(template_path)
+
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Previous month task",
+                    "type": "subs",
+                    "contentSeconds": 600,
+                    "stages": [
+                        {
+                            "startAt": "2026-05-28T08:00:00Z",
+                            "workMinutes": 120,
+                            "extensions": [
+                                {
+                                    "name": "Old post",
+                                    "type": "posts",
+                                    "startAt": "2026-05-29T09:00:00Z",
+                                    "workMinutes": 50,
+                                    "contentSeconds": 120,
+                                },
+                                {
+                                    "name": "Old news",
+                                    "type": "news",
+                                    "startAt": "2026-05-29T10:00:00Z",
+                                    "workMinutes": 30,
+                                    "contentSeconds": 180,
+                                },
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "name": "Current month task",
+                    "type": "subs",
+                    "contentSeconds": 1200,
+                    "stages": [
+                        {
+                            "startAt": "2026-06-03T08:00:00Z",
+                            "workMinutes": 240,
+                            "extensions": [
+                                {
+                                    "name": "Current post",
+                                    "type": "posts",
+                                    "startAt": "2026-06-04T09:00:00Z",
+                                    "workMinutes": 50,
+                                    "contentSeconds": 120,
+                                },
+                                {
+                                    "name": "Current news",
+                                    "type": "news",
+                                    "startAt": "2026-06-04T10:00:00Z",
+                                    "workMinutes": 30,
+                                    "contentSeconds": 180,
+                                },
+                            ],
+                        }
+                    ],
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    table = out_doc.tables[0]
+    assert table.cell(3, 1).text.strip() == "1.\nCurrent post\n長度:2分\n實際作業時間:50分"
+    summary_text = "\n".join(p.text for p in table.cell(5, 0).paragraphs)
+    assert "英文新聞: 1篇" in summary_text
