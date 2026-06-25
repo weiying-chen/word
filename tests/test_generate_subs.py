@@ -1378,6 +1378,65 @@ def test_generate_subs_highlights_xxx_prefixed_timecode_block(
     assert english_line_paragraph.find("w:r/w:rPr/w:highlight", ns) is not None
 
 
+def test_generate_subs_stops_xxx_highlight_before_next_timestamp_block(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "00:08:10:12\t00:08:11:21\t很有壓力",
+                "Even multinationals like Intel and Microsoft",
+                "XXX 00:08:13:02\t00:08:14:02\tIntel Microsoft",
+                "Even multinationals like Intel and Microsoft",
+                "00:08:14:02\t00:08:17:27\t有一次約外商跟本地的供應鏈",
+                "would get together with local suppliers over dinner.",
+                "00:08:17:27\t00:08:22:07\t就是大家吃吃喝喝聊什麼的",
+                "would get together with local suppliers over dinner.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+
+    xxx_marker = next(
+        p for p in doc.paragraphs if p.text.strip().startswith("XXX\t00:08:13:02")
+    )
+    xxx_translation = next(
+        p
+        for p in doc.paragraphs
+        if p.text.strip() == "Even multinationals like Intel and Microsoft"
+    )
+    next_timestamp = next(
+        p for p in doc.paragraphs if p.text.strip().startswith("00:08:14:02\t00:08:17:27")
+    )
+    next_translation = next(
+        p
+        for p in doc.paragraphs
+        if p.text.strip() == "would get together with local suppliers over dinner."
+    )
+
+    assert xxx_marker.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in xxx_marker.runs if r.text
+    )
+    assert xxx_translation.runs and all(
+        r.font.highlight_color == WD_COLOR_INDEX.YELLOW
+        for r in xxx_translation.runs
+        if r.text
+    )
+    assert all(r.font.highlight_color is None for r in next_timestamp.runs if r.text)
+    assert all(r.font.highlight_color is None for r in next_translation.runs if r.text)
+
+
 def test_generate_subs_highlights_standalone_xxx_block_until_blank_line(
     tmp_path: Path,
 ) -> None:

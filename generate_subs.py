@@ -482,6 +482,9 @@ def replace_body_paragraph(
             emitted_any_line = True
             continue
         is_time_marker = is_time_marker_line(normalized_line)
+        if in_xxx_highlight_block and is_time_marker and not normalized_line.startswith("XXX"):
+            in_xxx_highlight_block = False
+            pending_xxx_time_marker = None
         if normalized_line.startswith("XXX"):
             in_xxx_highlight_block = True
             if pending_xxx_time_marker is not None:
