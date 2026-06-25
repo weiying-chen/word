@@ -556,6 +556,8 @@ def test_generate_review_sets_other_work_news_count_from_children(tmp_path: Path
     assert "其他工作:" in text
     assert "英文新聞: 2篇" in text
     assert "行政工作:" in text
+    assert "PM work" in text
+    assert "PM選稿子:" not in text
 
 
 def test_generate_review_removes_meeting_lines_from_work_notes(tmp_path: Path) -> None:

@@ -561,6 +561,26 @@ def normalize_translation_summary_heading_spacing(doc: Document) -> None:
                     paragraph.text = paragraph.text.replace(old, new)
 
 
+def normalize_pm_work_label(doc: Document) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    old = "PM選稿子:"
+    new = "PM work"
+
+    for row in table.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                if old not in paragraph.text:
+                    continue
+                if paragraph.runs:
+                    for run in paragraph.runs:
+                        if old in run.text:
+                            run.text = run.text.replace(old, new)
+                else:
+                    paragraph.text = paragraph.text.replace(old, new)
+
+
 def set_translation_total_length_line(doc: Document, tasks: list[dict]) -> None:
     if not doc.tables:
         return
@@ -713,6 +733,7 @@ def generate_review(
     remove_translation_english_to_chinese_summary_line(doc)
     remove_work_notes_meeting_lines(doc)
     normalize_translation_summary_heading_spacing(doc)
+    normalize_pm_work_label(doc)
     set_translation_total_length_line(doc, current_subs_tasks)
     set_other_work_news_count_line(doc, current_subs_tasks)
     fill_temp_work_table(doc, current_subs_tasks)
