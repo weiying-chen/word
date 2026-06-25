@@ -415,6 +415,68 @@ def test_generate_review_populates_temp_work_from_posts_and_news_children(
     assert table.cell(4, 1).text.strip() == "2.\nNEWS B\n英文新聞\n實際作業時間:40分"
 
 
+def test_generate_review_groups_posts_before_news_in_temp_work(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    tasks_json.write_text(
+        json.dumps(
+            [
+                _stage_task(
+                    "主任務",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                    children=[
+                        _stage_task(
+                            "NEWS A",
+                            start_at="2026-05-18T11:37:41.273370Z",
+                            work_minutes=40,
+                            stage_type="news",
+                        ),
+                        _stage_task(
+                            "POST A",
+                            start_at="2026-05-18T12:00:00Z",
+                            work_minutes=50,
+                            content_seconds=120,
+                            stage_type="posts",
+                        ),
+                        _stage_task(
+                            "NEWS B",
+                            start_at="2026-05-18T12:30:00Z",
+                            work_minutes=30,
+                            content_seconds=180,
+                            stage_type="news",
+                        ),
+                        _stage_task(
+                            "POST B",
+                            start_at="2026-05-18T13:00:00Z",
+                            work_minutes=45,
+                            content_seconds=90,
+                            stage_type="posts",
+                        ),
+                    ],
+                )
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    table = out_doc.tables[0]
+    assert table.cell(3, 1).text.strip() == "1.\nPOST A\nFB小編文\n長度:2分\n實際作業時間:50分"
+    assert table.cell(4, 1).text.strip() == "2.\nPOST B\nFB小編文\n長度:1分30秒\n實際作業時間:45分"
+    assert table.cell(5, 1).text.strip() == "3.\nNEWS A\n英文新聞\n實際作業時間:40分"
+    assert table.cell(6, 1).text.strip() == "4.\nNEWS B\n英文新聞\n長度:3分\n實際作業時間:30分"
+
+
 def test_generate_review_removes_subtitle_review_summary_block(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     tasks_json = tmp_path / "tasks.json"

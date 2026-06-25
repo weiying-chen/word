@@ -383,13 +383,16 @@ def _temp_work_type_label(task: dict) -> str:
 
 
 def _collect_temp_work_items(tasks: list[dict]) -> list[dict]:
-    items: list[dict] = []
+    posts: list[dict] = []
+    news: list[dict] = []
     for task in tasks:
         for child in _task_descendants(task):
-            if _task_type(child) not in ("posts", "news"):
-                continue
-            items.append(child)
-    return items
+            task_type = _task_type(child)
+            if task_type == "posts":
+                posts.append(child)
+            elif task_type == "news":
+                news.append(child)
+    return posts + news
 
 
 def _count_news_children(tasks: list[dict]) -> int:
