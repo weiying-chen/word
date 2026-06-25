@@ -277,10 +277,13 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
 
     out_doc = Document(output_path)
     row_cell_runs = out_doc.tables[0].cell(1, 1).paragraphs[0].runs
+    date_cell_runs = out_doc.tables[0].cell(1, 0).paragraphs[0].runs
     comment_runs = out_doc.tables[0].cell(1, 2).paragraphs[0].runs
     assert row_cell_runs
+    assert date_cell_runs
     assert comment_runs
-    assert all(run.font.size is None for run in row_cell_runs)
+    assert all(run.font.size == Pt(REVIEW_TEXT_SIZE_PT) for run in row_cell_runs)
+    assert all(run.font.size == Pt(REVIEW_TEXT_SIZE_PT) for run in date_cell_runs)
     assert all(run.font.size == Pt(REVIEW_NOTES_TEXT_SIZE_PT) for run in comment_runs)
 
 

@@ -231,11 +231,13 @@ def _sum_parent_content_seconds(tasks: list[dict]) -> int:
 def _set_cell_lines(cell, lines: list[str], *, font_size_pt: int | None = None) -> None:
     paragraph = cell.paragraphs[0]
     clear_paragraph(paragraph)
+    resolved_font_size_pt = (
+        font_size_pt if font_size_pt is not None else REVIEW_TEXT_SIZE_PT
+    )
     if lines:
         for idx, line in enumerate(lines):
             run = paragraph.add_run(line)
-            if font_size_pt is not None:
-                run.font.size = Pt(font_size_pt)
+            run.font.size = Pt(resolved_font_size_pt)
             if idx < len(lines) - 1:
                 run.add_break()
     for extra in list(cell.paragraphs[1:]):
@@ -591,12 +593,7 @@ def normalize_pm_work_label(doc: Document) -> None:
             for paragraph in cell.paragraphs:
                 if old not in paragraph.text:
                     continue
-                if paragraph.runs:
-                    for run in paragraph.runs:
-                        if old in run.text:
-                            run.text = run.text.replace(old, new)
-                else:
-                    paragraph.text = paragraph.text.replace(old, new)
+                paragraph.text = paragraph.text.replace(old, new)
 
 
 def set_translation_total_length_line(doc: Document, tasks: list[dict]) -> None:
