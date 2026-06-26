@@ -1393,13 +1393,13 @@ def test_generate_subs_stops_xxx_highlight_before_next_timestamp_block(
             [
                 "BODY:",
                 "00:08:10:12\t00:08:11:21\t很有壓力",
-                "Even multinationals like Intel and Microsoft",
+                "Pre-XXX translation.",
                 "XXX 00:08:13:02\t00:08:14:02\tIntel Microsoft",
-                "Even multinationals like Intel and Microsoft",
+                "XXX translation.",
                 "00:08:14:02\t00:08:17:27\t有一次約外商跟本地的供應鏈",
-                "would get together with local suppliers over dinner.",
+                "Post-XXX translation.",
                 "00:08:17:27\t00:08:22:07\t就是大家吃吃喝喝聊什麼的",
-                "would get together with local suppliers over dinner.",
+                "Final translation.",
             ]
         ),
         encoding="utf-8",
@@ -1409,12 +1409,12 @@ def test_generate_subs_stops_xxx_highlight_before_next_timestamp_block(
     doc = Document(output_path)
 
     xxx_marker = next(
-        p for p in doc.paragraphs if p.text.strip().startswith("XXX\t00:08:13:02")
+        p for p in doc.paragraphs if p.text.strip().startswith("XXX 00:08:13:02")
     )
     xxx_translation = next(
         p
         for p in doc.paragraphs
-        if p.text.strip() == "Even multinationals like Intel and Microsoft"
+        if p.text.strip() == "XXX translation."
     )
     next_timestamp = next(
         p for p in doc.paragraphs if p.text.strip().startswith("00:08:14:02\t00:08:17:27")
@@ -1422,7 +1422,7 @@ def test_generate_subs_stops_xxx_highlight_before_next_timestamp_block(
     next_translation = next(
         p
         for p in doc.paragraphs
-        if p.text.strip() == "would get together with local suppliers over dinner."
+        if p.text.strip() == "Post-XXX translation."
     )
 
     assert xxx_marker.runs and all(
