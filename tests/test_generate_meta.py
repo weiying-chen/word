@@ -21,7 +21,7 @@ class RenderMetaTests(unittest.TestCase):
     def _build_template(self, path: Path) -> None:
         doc = Document()
         doc.add_paragraph("重點標")
-        doc.add_paragraph("{{TITLE_EN}}")
+        doc.add_paragraph("{{TITLE_LINE_1}}")
         doc.add_paragraph("名字職銜")
         doc.add_paragraph("")
         doc.add_paragraph("{{PEOPLE}}")

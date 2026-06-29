@@ -131,6 +131,87 @@ def test_generated_docx_from_alex_blocks_uses_date_prefix(tmp_path: Path) -> Non
     assert texts[7] == "中文提示"
 
 
+def test_generated_docx_from_schedule_includes_reference_bilingual_summary_in_source_section(
+    tmp_path: Path,
+) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "節目1則",
+            "1. alex",
+            "人文講堂 - 養腦 防失智 - 曾文毅 [2]",
+            "https://www.youtube.com/watch?v=LA76bSzLVgE&t=280s",
+            "搭配",
+            "https://example.com/news",
+            "Reducing Brain Age to Prevent Dementia (人文講堂 - 養腦 防失智 - 曾文毅 [2])",
+            'From his own example of following the "Three Sevens Rule," Prof. Tseng Wen-yih of the National Taiwan University College of Medicine shares how we can effectively reduce brain age to maintain its health and minimize the risk of dementia.',
+            "研究發現六十歲以上，若腦年齡退化十歲以上，未來三年內可能會發生認知功能衰退。臺大醫學院兼任教授曾文毅分享逆轉腦齡的七七七法則，告訴大家如何維持腦健康，遠離失智。",
+            "--------------------------------",
+        ],
+    )
+    doc = Document()
+    doc.styles["Normal"].font.size = Pt(10)
+    for text in [
+        "標題",
+        "{{HEADER_TITLE}}",
+        "參考資料：",
+        "{{REF_URL}}",
+        "{{REF_TITLE}}",
+        "{{REF_SUMMARY_ZH}}",
+        "英文翻譯：",
+        "{{REF_TITLE_EN}}",
+        "{{REF_SUMMARY_EN}}",
+        "要用的影片：",
+        "{{VIDEO_URL}}",
+        "{{VIDEO_TITLE}}",
+        "{{VIDEO_DESC_EN}}",
+        "{{VIDEO_DESC_ZH}}",
+    ]:
+        doc.add_paragraph(text)
+    doc.save(template_path)
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+    rendered = Document(str(output_paths[0]))
+    texts = [p.text.strip() for p in rendered.paragraphs if p.text.strip()]
+    raw_texts = [p.text for p in rendered.paragraphs]
+
+    assert "https://www.youtube.com/watch?v=LA76bSzLVgE&t=280s" in texts
+    assert "Reducing Brain Age to Prevent Dementia (人文講堂 - 養腦 防失智 - 曾文毅 [2])" in texts
+    assert "研究發現六十歲以上，若腦年齡退化十歲以上，未來三年內可能會發生認知功能衰退。臺大醫學院兼任教授曾文毅分享逆轉腦齡的七七七法則，告訴大家如何維持腦健康，遠離失智。" in texts
+    assert 'From his own example of following the "Three Sevens Rule," Prof. Tseng Wen-yih of the National Taiwan University College of Medicine shares how we can effectively reduce brain age to maintain its health and minimize the risk of dementia.' in texts
+    video_label_idx = raw_texts.index("要用的影片：")
+    assert raw_texts[video_label_idx + 1] == ""
+    assert raw_texts[video_label_idx + 2] == "https://www.youtube.com/watch?v=LA76bSzLVgE&t=280s"
+    assert raw_texts[video_label_idx + 3] == "Reducing Brain Age to Prevent Dementia (人文講堂 - 養腦 防失智 - 曾文毅 [2])"
+    assert raw_texts[video_label_idx + 4] == ""
+    assert raw_texts[video_label_idx + 5] == 'From his own example of following the "Three Sevens Rule," Prof. Tseng Wen-yih of the National Taiwan University College of Medicine shares how we can effectively reduce brain age to maintain its health and minimize the risk of dementia.'
+    assert raw_texts[video_label_idx + 6] == ""
+    assert raw_texts[video_label_idx + 7] == "研究發現六十歲以上，若腦年齡退化十歲以上，未來三年內可能會發生認知功能衰退。臺大醫學院兼任教授曾文毅分享逆轉腦齡的七七七法則，告訴大家如何維持腦健康，遠離失智。"
+
+    p_by_text = {p.text.strip(): p for p in rendered.paragraphs if p.text.strip()}
+    for text in [
+        "Reducing Brain Age to Prevent Dementia (人文講堂 - 養腦 防失智 - 曾文毅 [2])",
+        "研究發現六十歲以上，若腦年齡退化十歲以上，未來三年內可能會發生認知功能衰退。臺大醫學院兼任教授曾文毅分享逆轉腦齡的七七七法則，告訴大家如何維持腦健康，遠離失智。",
+        'From his own example of following the "Three Sevens Rule," Prof. Tseng Wen-yih of the National Taiwan University College of Medicine shares how we can effectively reduce brain age to maintain its health and minimize the risk of dementia.',
+    ]:
+        assert all(
+            run.font.size == Pt(REFERENCE_TEXT_SIZE_PT)
+            for run in p_by_text[text].runs
+            if run.text
+        ), text
+
+
 def test_generated_docx_has_highlighted_ref_hyperlink(tmp_path: Path) -> None:
     schedule_path = tmp_path / "schedule.docx"
     template_path = tmp_path / "template.docx"

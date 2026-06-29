@@ -11,7 +11,9 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from docx import Document
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 
 from docx_utils import (
     add_highlighted_run,
@@ -325,7 +327,7 @@ def _extract_ref_from_label(
 
 def _extract_schedule_reference(
     lines: list[str], url_targets: list[str | None], start_idx: int
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str, str, str, str]:
     for idx in range(start_idx, len(lines)):
         line = lines[idx]
         if _extract_person_name(line) or STOP_SECTION_RE.match(line):
@@ -340,8 +342,24 @@ def _extract_schedule_reference(
                 parse_first_line_date=False,
                 default_year=date.today().year,
             )
-            return ref_url, ref_title, ref_url_target
-    return "", "", ""
+            ref_lines = [part.strip() for part in ref_title.splitlines() if part.strip()]
+            ref_title = ref_lines[0] if ref_lines else ""
+            ref_summary_zh = ""
+            ref_title_en = ""
+            ref_summary_en = ""
+            if len(ref_lines) >= 2:
+                ref_summary_en = ref_lines[1]
+            if len(ref_lines) >= 3:
+                ref_summary_zh = ref_lines[2]
+            return (
+                ref_url,
+                ref_title,
+                ref_url_target,
+                ref_summary_zh,
+                ref_title_en,
+                ref_summary_en,
+            )
+    return "", "", "", "", "", ""
 
 
 def _build_standard_entry(
@@ -364,6 +382,7 @@ def _build_standard_entry(
         "video_url": video_url,
         "video_url_target": video_url_target,
         "video_title": _clean_title_for_display(video_title),
+        "source_video_title": _clean_title_for_display(video_title),
         "video_desc_en": video_desc_en,
         "video_desc_zh": video_desc_zh,
         "ref_url": ref_url,
@@ -432,7 +451,14 @@ def _build_standard_schedule_entry(
     start_idx: int,
     default_year: int,
 ) -> dict[str, str]:
-    ref_url, ref_title, ref_url_target = _extract_schedule_reference(
+    (
+        ref_url,
+        ref_title,
+        ref_url_target,
+        ref_summary_zh,
+        ref_title_en,
+        ref_summary_en,
+    ) = _extract_schedule_reference(
         lines, url_targets, start_idx
     )
     entry = _build_standard_entry(
@@ -442,7 +468,11 @@ def _build_standard_schedule_entry(
         ref_url=ref_url,
         ref_url_target=ref_url_target,
         ref_title=ref_title,
+        video_desc_en=ref_summary_en,
+        video_desc_zh=ref_summary_zh,
     )
+    if ref_title:
+        entry["source_video_title"] = ref_title
     task_prefix = _extract_task_date_prefix(line, default_year=default_year)
     task_display = _extract_task_date_display(line)
     if task_prefix:
@@ -919,6 +949,61 @@ def remove_paragraph(paragraph) -> None:
     element.getparent().remove(element)
 
 
+def insert_paragraph_after(paragraph, text: str = "") -> Paragraph:
+    new_p = OxmlElement("w:p")
+    paragraph._p.addnext(new_p)
+    new_para = Paragraph(new_p, paragraph._parent)
+    if text:
+        new_para.add_run(text)
+    return new_para
+
+
+def insert_video_section_spacing(
+    doc: Document,
+    *,
+    video_title: str,
+    video_desc_en: str,
+    video_desc_zh: str,
+    indent_inches: float,
+) -> None:
+    if not video_title:
+        return
+
+    in_video_section = False
+    non_empty_in_section: list[Paragraph] = []
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        if text == "要用的影片：":
+            in_video_section = True
+            non_empty_in_section = []
+            continue
+        if not in_video_section:
+            continue
+        if text in {"參考資料：", "英文翻譯："}:
+            break
+        if not text:
+            continue
+        non_empty_in_section.append(paragraph)
+
+    if len(non_empty_in_section) < 2:
+        return
+
+    title_paragraph = non_empty_in_section[1]
+    if title_paragraph.text.strip() != video_title.strip():
+        return
+
+    current = title_paragraph
+    if video_desc_en.strip():
+        blank = insert_paragraph_after(current, "")
+        set_source_indent(blank, indent_inches)
+        current = blank._p.getnext()
+        if current is not None and current.tag == qn("w:p"):
+            current_para = Paragraph(current, blank._parent)
+            if current_para.text.strip() == video_desc_en.strip() and video_desc_zh.strip():
+                blank_after_en = insert_paragraph_after(current_para, "")
+                set_source_indent(blank_after_en, indent_inches)
+
+
 def strip_reference_block(doc: Document, ref_url: str, *, keep_ref_title: bool = False) -> None:
     ref_label = "參考資料："
     video_label = "要用的影片："
@@ -975,7 +1060,7 @@ def strip_bodhi_title_block(doc: Document) -> None:
         text = paragraph.text.strip()
         if text == "標題":
             remove_indices.append(idx)
-        if text in {"{{TITLE_EN}}", "{{TITLE_ZH}}"}:
+        if text in {"{{TITLE_LINE_1}}", "{{TITLE_LINE_2}}"}:
             remove_indices.append(idx)
     for idx in reversed(remove_indices):
         remove_paragraph(doc.paragraphs[idx])
@@ -1116,8 +1201,11 @@ def generate_docs(
             "{{HEADER_URL}}": entry["header_url"],
             "{{REF_URL}}": entry["ref_url"],
             "{{REF_TITLE}}": entry["ref_title"],
+            "{{REF_SUMMARY_ZH}}": "",
+            "{{REF_TITLE_EN}}": "",
+            "{{REF_SUMMARY_EN}}": "",
             "{{VIDEO_URL}}": entry["video_url"],
-            "{{VIDEO_TITLE}}": entry["video_title"],
+            "{{VIDEO_TITLE}}": entry.get("source_video_title", entry["video_title"]),
             "{{HASHTAGS_EN}}": entry["hashtags_en"],
             "{{HASHTAGS_ZH}}": entry["hashtags_zh"],
         }
@@ -1165,6 +1253,13 @@ def generate_docs(
             ensure_blank_after_labels(doc, {"參考資料："})
             normalize_empty_paragraphs(doc)
         else:
+            insert_video_section_spacing(
+                doc,
+                video_title=entry.get("source_video_title", entry["video_title"]),
+                video_desc_en=entry.get("video_desc_en", ""),
+                video_desc_zh=entry.get("video_desc_zh", ""),
+                indent_inches=default_tab_stop,
+            )
             ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
             normalize_empty_paragraphs(doc)
             sync_empty_paragraph_indents(doc)
