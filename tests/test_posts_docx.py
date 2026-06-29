@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from docx import Document
+from docx.oxml.ns import qn
 from docx.shared import Inches
 from docx.shared import Pt
 
@@ -784,3 +785,47 @@ def test_generated_posts_title_is_12pt_and_source_block_is_10pt(tmp_path: Path) 
             for run in p_by_text[text].runs
             if run.text
         ), text
+
+
+def test_generated_posts_set_shared_font_metadata_on_generated_content(
+    tmp_path: Path,
+) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "節目1則",
+            "1. alex",
+            "Program - Test Title st/rc",
+            "https://example.com/video",
+            "搭配",
+            "https://example.com/news",
+            "News title",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(template_path, ["{{HEADER_TITLE}}", "{{REF_TITLE}}"])
+    output_dir.mkdir()
+
+    output_paths = generate_docs(
+        schedule_path=schedule_path,
+        template_path=template_path,
+        output_dir=output_dir,
+        filename_prefix="",
+        filename_suffix="",
+    )
+
+    rendered = Document(str(output_paths[0]))
+    header_para = next(
+        p for p in rendered.paragraphs if p.text.strip() == "Program - Test Title"
+    )
+    run = next(run for run in header_para.runs if run.text)
+    fonts = run._element.find("w:rPr/w:rFonts", run._element.nsmap)
+    assert fonts is not None
+    assert fonts.get(qn("w:ascii")) == "細明體"
+    assert fonts.get(qn("w:hAnsi")) == "細明體"
+    assert fonts.get(qn("w:cs")) == "細明體"
+    assert fonts.get(qn("w:eastAsia")) == "新細明體"

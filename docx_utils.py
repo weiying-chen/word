@@ -110,6 +110,7 @@ def add_highlighted_run(
 def apply_font_size_to_runs(paragraph, *, font_size_pt: int) -> None:
     for run in paragraph.runs:
         run.font.size = Pt(font_size_pt)
+        set_run_font_family(run)
     size_val = str(int(font_size_pt * 2))
     paragraph_properties = paragraph._p.find(qn("w:pPr"))
     if paragraph_properties is None:
@@ -129,11 +130,27 @@ def apply_font_size_to_runs(paragraph, *, font_size_pt: int) -> None:
         paragraph_size_cs = OxmlElement("w:szCs")
         paragraph_run_properties.append(paragraph_size_cs)
     paragraph_size_cs.set(qn("w:val"), size_val)
+    paragraph_fonts = paragraph_run_properties.find(qn("w:rFonts"))
+    if paragraph_fonts is None:
+        paragraph_fonts = OxmlElement("w:rFonts")
+        paragraph_run_properties.insert(0, paragraph_fonts)
+    paragraph_fonts.set(qn("w:ascii"), DEFAULT_DOCX_ASCII_FONT_NAME)
+    paragraph_fonts.set(qn("w:hAnsi"), DEFAULT_DOCX_ASCII_FONT_NAME)
+    paragraph_fonts.set(qn("w:cs"), DEFAULT_DOCX_ASCII_FONT_NAME)
+    paragraph_fonts.set(qn("w:eastAsia"), DEFAULT_DOCX_EAST_ASIA_FONT_NAME)
     for run_element in paragraph._p.iter(qn("w:r")):
         run_properties = run_element.find(qn("w:rPr"))
         if run_properties is None:
             run_properties = OxmlElement("w:rPr")
             run_element.insert(0, run_properties)
+        run_fonts = run_properties.find(qn("w:rFonts"))
+        if run_fonts is None:
+            run_fonts = OxmlElement("w:rFonts")
+            run_properties.insert(0, run_fonts)
+        run_fonts.set(qn("w:ascii"), DEFAULT_DOCX_ASCII_FONT_NAME)
+        run_fonts.set(qn("w:hAnsi"), DEFAULT_DOCX_ASCII_FONT_NAME)
+        run_fonts.set(qn("w:cs"), DEFAULT_DOCX_ASCII_FONT_NAME)
+        run_fonts.set(qn("w:eastAsia"), DEFAULT_DOCX_EAST_ASIA_FONT_NAME)
         run_size = run_properties.find(qn("w:sz"))
         if run_size is None:
             run_size = OxmlElement("w:sz")

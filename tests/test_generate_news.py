@@ -5,6 +5,7 @@ import warnings
 import zipfile
 
 from docx import Document
+from docx.oxml.ns import qn
 from docx.shared import Pt
 from lxml import etree
 
@@ -199,6 +200,33 @@ def test_generate_news_from_sources_uses_body_text_file(tmp_path: Path) -> None:
 
     texts = [p.text for p in Document(output_path).paragraphs]
     assert texts[-5:] == ["<", "", "1_0001", "中文內文。", "English body line."]
+
+
+def test_generate_news_sets_shared_font_metadata_on_generated_content(
+    tmp_path: Path,
+) -> None:
+    source_docx = tmp_path / "source.docx"
+    template_docx = tmp_path / "template.docx"
+    source_txt = tmp_path / "source.txt"
+    output_path = tmp_path / "news_output.docx"
+
+    _write_source_docx(source_docx)
+    _write_template_docx(template_docx, marker="<")
+    source_txt.write_text("1_0001\n中文內文。\nEnglish body line.\n", encoding="utf-8")
+
+    generate_news.generate_news_from_sources(
+        template_docx, source_docx, source_txt, output_path
+    )
+
+    doc = Document(output_path)
+    body_para = next(p for p in doc.paragraphs if p.text == "English body line.")
+    run = next(run for run in body_para.runs if run.text)
+    fonts = run._element.find("w:rPr/w:rFonts", run._element.nsmap)
+    assert fonts is not None
+    assert fonts.get(qn("w:ascii")) == "細明體"
+    assert fonts.get(qn("w:hAnsi")) == "細明體"
+    assert fonts.get(qn("w:cs")) == "細明體"
+    assert fonts.get(qn("w:eastAsia")) == "新細明體"
 
 
 def test_generate_news_omits_standalone_tilde_placeholder_lines(tmp_path: Path) -> None:

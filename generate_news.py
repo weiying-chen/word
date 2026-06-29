@@ -114,6 +114,7 @@ def _set_line_in_paragraph(paragraph, text: str, hyperlink: str = "") -> None:
         if SHOT_ID_RE.match(text.strip())
         else WD_COLOR_INDEX.WHITE
     )
+    apply_font_size_to_runs(paragraph, font_size_pt=NEWS_FONT_SIZE_PT)
 
 
 def _insert_paragraph_after(paragraph, text: str, hyperlink: str = "") -> Paragraph:
