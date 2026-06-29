@@ -12,7 +12,12 @@ from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 
-from docx_utils import apply_highlight_to_runs, clear_paragraph, set_run_font_family
+from docx_utils import (
+    apply_font_size_to_runs,
+    apply_highlight_to_runs,
+    clear_paragraph,
+    set_run_font_family,
+)
 from style_tokens import REVIEW_NOTES_TEXT_SIZE_PT, REVIEW_TEXT_SIZE_PT
 
 
@@ -243,6 +248,13 @@ def _set_cell_lines(cell, lines: list[str], *, font_size_pt: int | None = None) 
                 run.add_break()
     for extra in list(cell.paragraphs[1:]):
         extra._element.getparent().remove(extra._element)
+
+
+def _set_paragraph_text(paragraph, text: str, *, font_size_pt: int = REVIEW_TEXT_SIZE_PT) -> None:
+    paragraph.text = text
+    if paragraph.runs:
+        for run in paragraph.runs:
+            run.font.size = Pt(font_size_pt)
 
 
 def _extract_feedback_lines(task: dict) -> list[str]:
@@ -530,7 +542,7 @@ def set_other_work_news_count_line(doc: Document, tasks: list[dict]) -> None:
             for idx, paragraph in enumerate(cell.paragraphs):
                 stripped = paragraph.text.strip()
                 if stripped.startswith(prefix):
-                    paragraph.text = replacement
+                    _set_paragraph_text(paragraph, replacement)
                     return
                 if stripped.startswith("其他工作:"):
                     found_other_work_idx = idx
@@ -541,7 +553,7 @@ def set_other_work_news_count_line(doc: Document, tasks: list[dict]) -> None:
                 for idx in range(found_other_work_idx + 1, len(cell.paragraphs)):
                     if not cell.paragraphs[idx].text.strip():
                         continue
-                    cell.paragraphs[idx].text = replacement
+                    _set_paragraph_text(cell.paragraphs[idx], replacement)
                     return
 
 
@@ -594,7 +606,28 @@ def normalize_pm_work_label(doc: Document) -> None:
             for paragraph in cell.paragraphs:
                 if old not in paragraph.text:
                     continue
-                paragraph.text = paragraph.text.replace(old, new)
+                _set_paragraph_text(paragraph, paragraph.text.replace(old, new))
+
+
+def normalize_summary_block_font_sizes(doc: Document) -> None:
+    if not doc.tables:
+        return
+    table = doc.tables[0]
+    prefixes = (
+        "本月總翻譯時數(字幕):",
+        "長度:",
+        "其他工作:",
+        "英文新聞:",
+        "行政工作:",
+        "PM work",
+    )
+
+    for row in table.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                stripped = paragraph.text.strip()
+                if any(stripped.startswith(prefix) for prefix in prefixes):
+                    apply_font_size_to_runs(paragraph, font_size_pt=REVIEW_TEXT_SIZE_PT)
 
 
 def set_translation_total_length_line(doc: Document, tasks: list[dict]) -> None:
@@ -613,7 +646,7 @@ def set_translation_total_length_line(doc: Document, tasks: list[dict]) -> None:
                 for j in range(idx + 1, len(cell.paragraphs)):
                     line = cell.paragraphs[j].text.strip()
                     if line.startswith("長度:") or line.startswith("中翻英:"):
-                        cell.paragraphs[j].text = total_text
+                        _set_paragraph_text(cell.paragraphs[j], total_text)
                         return
                 return
 
@@ -752,6 +785,7 @@ def generate_review(
     normalize_pm_work_label(doc)
     set_translation_total_length_line(doc, current_subs_tasks)
     set_other_work_news_count_line(doc, current_subs_tasks)
+    normalize_summary_block_font_sizes(doc)
     fill_temp_work_table(doc, current_subs_tasks)
     fill_previous_work_table(doc, previous_subs_tasks)
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -697,6 +697,80 @@ def test_generate_review_sets_other_work_news_count_from_children(tmp_path: Path
     assert "PM選稿子:" not in text
 
 
+def test_generate_review_uses_10pt_for_summary_block_lines(tmp_path: Path) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    doc = Document()
+    doc.add_paragraph("外文編譯中心QCD")
+    doc.add_paragraph("姓名: {{NAME}}")
+    doc.add_paragraph("{{MONTH}}")
+    doc.add_paragraph("本月精進目標:")
+    table = doc.add_table(rows=6, cols=4)
+    table.cell(0, 0).text = "日期"
+    table.cell(0, 1).text = "(例行)字幕翻譯"
+    table.cell(1, 0).text = ""
+    table.cell(1, 1).text = ""
+    table.cell(2, 0).text = "日期"
+    table.cell(2, 1).text = "臨時工作"
+    table.cell(3, 0).text = ""
+    table.cell(3, 1).text = ""
+    table.cell(4, 0).text = "本月工作心得:"
+    summary_cell = table.cell(5, 0)
+    summary_cell.text = "本月總翻譯時數(字幕): (影片長度總和 非工作時數)"
+    summary_cell.add_paragraph("中翻英:")
+    summary_cell.add_paragraph("")
+    summary_cell.add_paragraph("其他工作:")
+    summary_cell.add_paragraph("英文新聞: ?篇")
+    summary_cell.add_paragraph("")
+    summary_cell.add_paragraph("行政工作:")
+    summary_cell.add_paragraph("PM選稿子:")
+    doc.save(template_path)
+
+    tasks_json.write_text(
+        json.dumps(
+            [
+                _stage_task(
+                    "A",
+                    start_at="2026-05-01T01:02:03Z",
+                    work_minutes=60,
+                    content_seconds=120,
+                    children=[
+                        _stage_task("N1", stage_type="news"),
+                    ],
+                )
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    out_doc = Document(output_path)
+    summary_texts = {
+        "長度:2分",
+        "其他工作:",
+        "英文新聞: 1篇",
+        "行政工作:",
+        "PM work",
+    }
+    found = {}
+    for row in out_doc.tables[0].rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                text = paragraph.text.strip()
+                if text in summary_texts:
+                    found[text] = [
+                        run.font.size for run in paragraph.runs if run.text.strip()
+                    ]
+    assert found.keys() == summary_texts
+    for sizes in found.values():
+        assert sizes
+        assert all(size == Pt(REVIEW_TEXT_SIZE_PT) for size in sizes)
+
+
 def test_generate_review_removes_meeting_lines_from_work_notes(tmp_path: Path) -> None:
     template_path = tmp_path / "review_template.docx"
     tasks_json = tmp_path / "tasks.json"
