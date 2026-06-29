@@ -12,7 +12,7 @@ from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 
-from docx_utils import apply_highlight_to_runs, clear_paragraph
+from docx_utils import apply_highlight_to_runs, clear_paragraph, set_run_font_family
 from style_tokens import REVIEW_NOTES_TEXT_SIZE_PT, REVIEW_TEXT_SIZE_PT
 
 
@@ -238,6 +238,7 @@ def _set_cell_lines(cell, lines: list[str], *, font_size_pt: int | None = None) 
         for idx, line in enumerate(lines):
             run = paragraph.add_run(line)
             run.font.size = Pt(resolved_font_size_pt)
+            set_run_font_family(run)
             if idx < len(lines) - 1:
                 run.add_break()
     for extra in list(cell.paragraphs[1:]):

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from docx import Document
+from docx.oxml.ns import qn
 
 import template_styles
 
@@ -23,6 +24,12 @@ def test_ensure_base_styles_sets_normal_and_shared_character_styles(tmp_path: Pa
     assert str(out.styles["SectionLabelLarge"].font.color.rgb) == "0070C0"
     assert out.styles["ReferenceLink"].font.size.pt == 10
     assert str(out.styles["ReferenceLink"].font.color.rgb) == "0563C1"
+    normal_fonts = out.styles["Normal"].element.find(qn("w:rPr")).find(qn("w:rFonts"))
+    assert normal_fonts is not None
+    assert normal_fonts.get(qn("w:ascii")) == "細明體"
+    assert normal_fonts.get(qn("w:hAnsi")) == "細明體"
+    assert normal_fonts.get(qn("w:cs")) == "細明體"
+    assert normal_fonts.get(qn("w:eastAsia")) == "新細明體"
 
 
 def test_sync_review_template_styles_applies_blue_style_to_section_labels(tmp_path: Path) -> None:

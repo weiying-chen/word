@@ -3,6 +3,7 @@ import json
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
+from docx.oxml.ns import qn
 from docx.shared import Pt
 
 import generate_review
@@ -285,6 +286,46 @@ def test_generate_review_uses_template_font_for_generated_table_content(tmp_path
     assert all(run.font.size == Pt(REVIEW_TEXT_SIZE_PT) for run in row_cell_runs)
     assert all(run.font.size == Pt(REVIEW_TEXT_SIZE_PT) for run in date_cell_runs)
     assert all(run.font.size == Pt(REVIEW_NOTES_TEXT_SIZE_PT) for run in comment_runs)
+
+
+def test_generate_review_sets_cjk_font_metadata_on_generated_table_content(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    tasks_json.write_text(
+        json.dumps(
+            [
+                _stage_task(
+                    "回眸(中翻英)",
+                    start_at="2026-05-08T00:00:00.000Z",
+                    work_minutes=240,
+                    content_seconds=210,
+                    notes=["這是一則回饋"],
+                )
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(
+        template_path,
+        output_path,
+        tasks_json,
+    )
+
+    out_doc = Document(output_path)
+    generated_run = out_doc.tables[0].cell(1, 1).paragraphs[0].runs[1]
+    fonts = generated_run._element.find("w:rPr/w:rFonts", generated_run._element.nsmap)
+    assert fonts is not None
+    assert fonts.get(qn("w:ascii")) == "細明體"
+    assert fonts.get(qn("w:hAnsi")) == "細明體"
+    assert fonts.get(qn("w:cs")) == "細明體"
+    assert fonts.get(qn("w:eastAsia")) == "新細明體"
 
 
 def test_generate_review_supports_top_level_tasks_list_with_new_field_names(

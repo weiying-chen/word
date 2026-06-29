@@ -7,7 +7,7 @@ from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.shared import Pt, RGBColor
 
-from docx_utils import clear_paragraph
+from docx_utils import clear_paragraph, set_style_font_family
 from style_tokens import (
     BODY_TEXT_SIZE_PT,
     REFERENCE_LINK_RGB,
@@ -39,11 +39,13 @@ def ensure_character_style(doc: Document, name: str, size_pt: int, color: RGBCol
         style = styles.add_style(name, WD_STYLE_TYPE.CHARACTER)
     style.font.size = Pt(size_pt)
     style.font.color.rgb = color
+    set_style_font_family(style)
 
 
 def ensure_base_styles(doc: Document) -> None:
     normal = doc.styles["Normal"]
     normal.font.size = Pt(BODY_TEXT_SIZE_PT)
+    set_style_font_family(normal)
 
     ensure_character_style(
         doc, "SectionLabelSmall", REFERENCE_TEXT_SIZE_PT, SECTION_LABEL_BLUE_RGB

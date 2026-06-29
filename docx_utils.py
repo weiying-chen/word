@@ -7,7 +7,12 @@ from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.shared import Inches, Pt
 from docx.text.paragraph import Paragraph
 
-from style_tokens import REFERENCE_LINK_RGB, REFERENCE_TEXT_SIZE_PT
+from style_tokens import (
+    DEFAULT_DOCX_ASCII_FONT_NAME,
+    DEFAULT_DOCX_EAST_ASIA_FONT_NAME,
+    REFERENCE_LINK_RGB,
+    REFERENCE_TEXT_SIZE_PT,
+)
 
 
 def get_default_tab_stop_inches(doc) -> float:
@@ -24,6 +29,37 @@ def get_default_tab_stop_inches(doc) -> float:
 def clear_paragraph(paragraph) -> None:
     for run in paragraph.runs:
         run._element.getparent().remove(run._element)
+
+
+def _set_rfonts(
+    element,
+    ascii_font_name: str,
+    east_asia_font_name: str,
+) -> None:
+    r_pr = element.get_or_add_rPr()
+    r_fonts = r_pr.get_or_add_rFonts()
+    r_fonts.set(qn("w:ascii"), ascii_font_name)
+    r_fonts.set(qn("w:hAnsi"), ascii_font_name)
+    r_fonts.set(qn("w:cs"), ascii_font_name)
+    r_fonts.set(qn("w:eastAsia"), east_asia_font_name)
+
+
+def set_run_font_family(
+    run,
+    ascii_font_name: str = DEFAULT_DOCX_ASCII_FONT_NAME,
+    east_asia_font_name: str = DEFAULT_DOCX_EAST_ASIA_FONT_NAME,
+) -> None:
+    run.font.name = ascii_font_name
+    _set_rfonts(run._element, ascii_font_name, east_asia_font_name)
+
+
+def set_style_font_family(
+    style,
+    ascii_font_name: str = DEFAULT_DOCX_ASCII_FONT_NAME,
+    east_asia_font_name: str = DEFAULT_DOCX_EAST_ASIA_FONT_NAME,
+) -> None:
+    style.font.name = ascii_font_name
+    _set_rfonts(style.element, ascii_font_name, east_asia_font_name)
 
 
 def set_source_indent(paragraph, indent_inches: float) -> None:
