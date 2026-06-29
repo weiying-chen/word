@@ -825,7 +825,7 @@ def test_generated_posts_set_shared_font_metadata_on_generated_content(
     run = next(run for run in header_para.runs if run.text)
     fonts = run._element.find("w:rPr/w:rFonts", run._element.nsmap)
     assert fonts is not None
-    assert fonts.get(qn("w:ascii")) == "細明體"
-    assert fonts.get(qn("w:hAnsi")) == "細明體"
-    assert fonts.get(qn("w:cs")) == "細明體"
+    assert fonts.get(qn("w:ascii")) == "Calibri"
+    assert fonts.get(qn("w:hAnsi")) == "Calibri"
+    assert fonts.get(qn("w:cs")) == "Calibri"
     assert fonts.get(qn("w:eastAsia")) == "新細明體"

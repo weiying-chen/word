@@ -15,5 +15,5 @@ REFERENCE_LINK_RGB = RGBColor(0x05, 0x63, 0xC1)
 
 # Shared semantic tokens for section labels.
 SECTION_LABEL_BLUE_RGB = RGBColor(0x00, 0x70, 0xC0)
-DEFAULT_DOCX_ASCII_FONT_NAME = "細明體"
+DEFAULT_DOCX_ASCII_FONT_NAME = "Calibri"
 DEFAULT_DOCX_EAST_ASIA_FONT_NAME = "新細明體"

@@ -26,9 +26,9 @@ def test_ensure_base_styles_sets_normal_and_shared_character_styles(tmp_path: Pa
     assert str(out.styles["ReferenceLink"].font.color.rgb) == "0563C1"
     normal_fonts = out.styles["Normal"].element.find(qn("w:rPr")).find(qn("w:rFonts"))
     assert normal_fonts is not None
-    assert normal_fonts.get(qn("w:ascii")) == "細明體"
-    assert normal_fonts.get(qn("w:hAnsi")) == "細明體"
-    assert normal_fonts.get(qn("w:cs")) == "細明體"
+    assert normal_fonts.get(qn("w:ascii")) == "Calibri"
+    assert normal_fonts.get(qn("w:hAnsi")) == "Calibri"
+    assert normal_fonts.get(qn("w:cs")) == "Calibri"
     assert normal_fonts.get(qn("w:eastAsia")) == "新細明體"
 
 

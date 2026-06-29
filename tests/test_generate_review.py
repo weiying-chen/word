@@ -322,9 +322,9 @@ def test_generate_review_sets_cjk_font_metadata_on_generated_table_content(
     generated_run = out_doc.tables[0].cell(1, 1).paragraphs[0].runs[1]
     fonts = generated_run._element.find("w:rPr/w:rFonts", generated_run._element.nsmap)
     assert fonts is not None
-    assert fonts.get(qn("w:ascii")) == "細明體"
-    assert fonts.get(qn("w:hAnsi")) == "細明體"
-    assert fonts.get(qn("w:cs")) == "細明體"
+    assert fonts.get(qn("w:ascii")) == "Calibri"
+    assert fonts.get(qn("w:hAnsi")) == "Calibri"
+    assert fonts.get(qn("w:cs")) == "Calibri"
     assert fonts.get(qn("w:eastAsia")) == "新細明體"
 
 
