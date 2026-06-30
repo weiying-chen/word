@@ -1046,7 +1046,7 @@ def test_generate_review_reads_dates_metrics_and_types_from_stages(
     assert table.cell(3, 1).text.strip() == "1.\nPost child\nFB小編文\n長度:2分\n實際作業時間:50分"
     assert table.cell(3, 2).text.strip() == "• post note"
     summary_text = _find_summary_text(table)
-    assert "長度:9分" in summary_text
+    assert "長度:2時30分" in summary_text
     assert "英文新聞: 1篇" in summary_text
 
 
@@ -1136,7 +1136,7 @@ def test_generate_review_supports_top_level_content_seconds_and_stage_extensions
     assert table.cell(3, 1).text.strip() == "1.\nPost child\nFB小編文\n長度:2分\n實際作業時間:50分"
     assert table.cell(3, 2).text.strip() == "• post note"
     summary_text = _find_summary_text(table)
-    assert "長度:9分" in summary_text
+    assert "長度:2時30分" in summary_text
     assert "英文新聞: 1篇" in summary_text
 
 
@@ -1413,4 +1413,5 @@ def test_generate_review_ignores_previous_month_extensions_for_temp_work_and_new
             break
     assert previous_row_idx is not None
     summary_text = _find_summary_text(table)
+    assert "長度:23分" in summary_text
     assert "英文新聞: 1篇" in summary_text

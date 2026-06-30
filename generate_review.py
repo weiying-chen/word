@@ -239,6 +239,27 @@ def _sum_parent_content_seconds(tasks: list[dict]) -> int:
     return total
 
 
+def _content_seconds(item: dict) -> int:
+    value = _task_value(item, "contentSeconds")
+    if value in (None, ""):
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _sum_translation_content_seconds(tasks: list[dict]) -> int:
+    total = _sum_parent_content_seconds(tasks)
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        for child in _task_descendants(task):
+            if _task_type(child) == "news":
+                total += _content_seconds(child)
+    return total
+
+
 def _set_cell_lines(cell, lines: list[str], *, font_size_pt: int | None = None) -> None:
     paragraph = cell.paragraphs[0]
     clear_paragraph(paragraph)
@@ -641,7 +662,7 @@ def set_translation_total_length_line(doc: Document, tasks: list[dict]) -> None:
         return
     table = doc.tables[0]
     heading_prefix = "本月總翻譯時數(字幕):"
-    total_text = f"長度:{_format_content_seconds(_sum_parent_content_seconds(tasks))}"
+    total_text = f"長度:{_format_content_seconds(_sum_translation_content_seconds(tasks))}"
 
     for row in table.rows:
         for cell in row.cells:
