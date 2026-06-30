@@ -121,7 +121,13 @@ def _parse_iso_datetime(value: object) -> datetime | None:
 
 
 def _task_start_datetime(task: dict) -> datetime | None:
-    return _parse_iso_datetime(_task_value(task, "startAt"))
+    return _parse_iso_datetime(_task_value(task, "startAt")) or _parse_iso_datetime(
+        _task_value(task, "createdAt")
+    )
+
+
+def _task_start_text(task: dict) -> str:
+    return str(_task_value(task, "startAt") or _task_value(task, "createdAt") or "").strip()
 
 
 def _derive_target_month(tasks: list[dict]) -> tuple[int, int] | None:
@@ -438,7 +444,7 @@ def fill_previous_work_table(doc: Document, tasks: list[dict]) -> None:
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [_format_month_day(str(_task_value(task, "startAt") or "").strip())],
+            [_format_month_day(_task_start_text(task))],
         )
         item_lines = [f"{slot + 1}.", str(task.get("name", "")).strip()]
         length_text = _format_content_seconds(_task_value(task, "contentSeconds"))
@@ -667,11 +673,7 @@ def fill_regular_translation_table(doc: Document, tasks: list[dict]) -> None:
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [
-                _format_month_day(
-                    str(_task_value(task, "startAt") or "").strip()
-                )
-            ],
+            [_format_month_day(_task_start_text(task))],
         )
         item_lines = [
             f"{slot + 1}.",
@@ -711,7 +713,7 @@ def fill_temp_work_table(doc: Document, tasks: list[dict]) -> None:
 
         _set_cell_lines(
             table.cell(row_idx, 0),
-            [_format_month_day(str(_task_value(item, "startAt") or "").strip())],
+            [_format_month_day(_task_start_text(item))],
         )
         item_lines = [f"{slot + 1}.", str(item.get("name", "")).strip()]
         type_label = _temp_work_type_label(item)

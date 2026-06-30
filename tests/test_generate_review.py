@@ -156,6 +156,22 @@ def test_resolve_default_output_path_uses_review_month_suffix() -> None:
     assert resolved == Path("output/QCD_Alex_2605.docx")
 
 
+def test_resolve_default_output_path_uses_created_at_when_start_at_missing() -> None:
+    tasks = [
+        {
+            "name": "A",
+            "createdAt": "2026-06-08T00:00:00.000Z",
+            "workMinutes": 60,
+            "contentSeconds": 120,
+            "children": [],
+        }
+    ]
+
+    resolved = generate_review.resolve_output_path(None, tasks)
+
+    assert resolved == Path("output/QCD_Alex_2606.docx")
+
+
 def test_resolve_output_path_preserves_explicit_path() -> None:
     explicit = Path("custom/review.docx")
     tasks = [
@@ -1231,6 +1247,61 @@ def test_generate_review_splits_current_and_previous_month_subs_and_total(
         == "1.\nPrevious month task\n長度:10分\n實際作業時間:2時"
     )
     assert table.cell(previous_row_idx + 2, 2).text.strip() == "• old note"
+
+
+def test_generate_review_splits_months_using_created_at_when_start_at_missing(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    tasks_json.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Previous month task",
+                    "createdAt": "2026-05-28T08:00:00Z",
+                    "workMinutes": 120,
+                    "contentSeconds": 600,
+                    "notes": ["old note"],
+                    "children": [],
+                },
+                {
+                    "name": "Current month task",
+                    "createdAt": "2026-06-03T08:00:00Z",
+                    "workMinutes": 240,
+                    "contentSeconds": 1200,
+                    "notes": ["current note"],
+                    "children": [],
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+    out_doc = Document(output_path)
+    table = out_doc.tables[0]
+
+    assert "2026年6月" in [p.text for p in out_doc.paragraphs]
+    assert table.cell(1, 0).text.strip() == "6/3"
+    assert table.cell(1, 1).text.strip() == "1.\nCurrent month task\n長度:20分\n實際作業時間:4時"
+
+    previous_row_idx = None
+    for idx, row in enumerate(table.rows):
+        if row.cells[0].text.strip() == "之前工作紀錄":
+            previous_row_idx = idx
+            break
+
+    assert previous_row_idx is not None
+    assert table.cell(previous_row_idx + 2, 0).text.strip() == "5/28"
+    assert (
+        table.cell(previous_row_idx + 2, 1).text.strip()
+        == "1.\nPrevious month task\n長度:10分\n實際作業時間:2時"
+    )
 
 
 def test_generate_review_ignores_previous_month_extensions_for_temp_work_and_news_count(
