@@ -21,7 +21,7 @@ class RenderMetaTests(unittest.TestCase):
     def _build_template(self, path: Path) -> None:
         doc = Document()
         doc.add_paragraph("重點標")
-        doc.add_paragraph("{{TITLE_LINE_1}}")
+        doc.add_paragraph("{{TITLE_EN}}")
         doc.add_paragraph("名字職銜")
         doc.add_paragraph("")
         doc.add_paragraph("{{PEOPLE}}")
@@ -94,6 +94,43 @@ class RenderMetaTests(unittest.TestCase):
                 "English overview.",
             ],
         )
+
+    def test_generate_meta_replaces_title_placeholder(self) -> None:
+        source_text = "\n".join(
+            [
+                "TITLE: English Title",
+                "OVERVIEW: English overview.",
+                "",
+                "BODY:",
+                "(  13   Alice )",
+                "/*SUPER:",
+                "病患│甲//",
+                "*/",
+                "",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            payload_path = tmpdir_path / "news_input.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            doc = Document()
+            doc.add_paragraph("重點標")
+            doc.add_paragraph("{{TITLE_EN}}")
+            doc.add_paragraph("YT簡介")
+            doc.add_paragraph("{{OVERVIEW_EN}}")
+            doc.save(str(template_path))
+            payload_path.write_text(source_text, encoding="utf-8")
+
+            generate_meta(template_path, payload_path, output_path)
+
+            rendered = Document(str(output_path))
+            texts = [p.text for p in rendered.paragraphs]
+
+        self.assertIn("English Title", texts)
+        self.assertNotIn("{{TITLE_EN}}", texts)
 
     def test_generate_meta_raises_when_title_and_overview_missing(self) -> None:
         source_text = "\n".join(

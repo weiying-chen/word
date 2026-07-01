@@ -19,7 +19,7 @@ from generate_subs import fix_docx_namespaces, normalize_input_text
 from style_tokens import BODY_TEXT_SIZE_PT
 
 
-TITLE_PLACEHOLDER = "{{TITLE_LINE_1}}"
+TITLE_PLACEHOLDER = "{{TITLE_EN}}"
 PEOPLE_PLACEHOLDER = "{{PEOPLE}}"
 OVERVIEW_PLACEHOLDER = "{{OVERVIEW_EN}}"
 HIGHLIGHT_LABELS = {"重點標", "名字職銜", "YT簡介"}
