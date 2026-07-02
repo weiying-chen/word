@@ -558,6 +558,18 @@ def ensure_annotation_style(doc: Document):
     return style_name
 
 
+def _reset_thumbnail_paragraph(paragraph) -> None:
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    paragraph.paragraph_format.left_indent = 0
+    paragraph.paragraph_format.right_indent = 0
+    paragraph.paragraph_format.first_line_indent = 0
+
+
+def _add_thumbnail_number(paragraph, number: int, annotation_style: str) -> None:
+    _reset_thumbnail_paragraph(paragraph)
+    _add_text_runs(paragraph, f"{number}.", run_style=annotation_style)
+
+
 def ensure_hyperlink_style(doc: Document):
     style_name = "Hyperlink"
     styles = doc.styles
@@ -874,20 +886,20 @@ def generate_subs(
                     )
 
                     clear_paragraph(paragraph)
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    paragraph.paragraph_format.left_indent = 0
-                    paragraph.paragraph_format.right_indent = 0
-                    paragraph.paragraph_format.first_line_indent = 0
-                    run = paragraph.add_run()
+                    multiple_thumbnails = len(thumbnail_paths) > 1
+                    if multiple_thumbnails:
+                        _add_thumbnail_number(paragraph, 1, annotation_style)
+                        image_paragraph = insert_paragraph_after(paragraph, "")
+                    else:
+                        image_paragraph = paragraph
+                    _reset_thumbnail_paragraph(image_paragraph)
+                    run = image_paragraph.add_run()
                     run.add_picture(str(thumbnail_paths[0]), width=metrics["usable_width"])
 
-                    current = paragraph
+                    current = image_paragraph
                     if credit_flags and credit_flags[0]:
                         credit_paragraph = insert_paragraph_after(current, "")
-                        credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                        credit_paragraph.paragraph_format.left_indent = 0
-                        credit_paragraph.paragraph_format.right_indent = 0
-                        credit_paragraph.paragraph_format.first_line_indent = 0
+                        _reset_thumbnail_paragraph(credit_paragraph)
                         _add_text_runs(
                             credit_paragraph,
                             DEFAULT_THUMBNAIL_CREDIT,
@@ -900,10 +912,10 @@ def generate_subs(
                     ):
                         current = insert_paragraph_after(current, "")
                         image_paragraph = insert_paragraph_after(current, "")
-                        image_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                        image_paragraph.paragraph_format.left_indent = 0
-                        image_paragraph.paragraph_format.right_indent = 0
-                        image_paragraph.paragraph_format.first_line_indent = 0
+                        _add_thumbnail_number(
+                            current, idx_thumb + 1, annotation_style
+                        )
+                        _reset_thumbnail_paragraph(image_paragraph)
                         image_run = image_paragraph.add_run()
                         image_run.add_picture(
                             str(thumbnail_path), width=metrics["usable_width"]
@@ -912,10 +924,7 @@ def generate_subs(
 
                         if credit_flags[idx_thumb]:
                             credit_paragraph = insert_paragraph_after(current, "")
-                            credit_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                            credit_paragraph.paragraph_format.left_indent = 0
-                            credit_paragraph.paragraph_format.right_indent = 0
-                            credit_paragraph.paragraph_format.first_line_indent = 0
+                            _reset_thumbnail_paragraph(credit_paragraph)
                             _add_text_runs(
                                 credit_paragraph,
                                 DEFAULT_THUMBNAIL_CREDIT,

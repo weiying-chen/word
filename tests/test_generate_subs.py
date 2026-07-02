@@ -577,14 +577,24 @@ def test_generate_subs_renders_multiple_thumbnails_in_order(tmp_path: Path) -> N
     paragraphs = []
     for p in doc.findall(".//w:p", ns):
         text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+        styles = {
+            r_style.get("{%s}val" % ns["w"])
+            for run in p.findall("w:r", ns)
+            for r_style in [run.find("w:rPr/w:rStyle", ns)]
+            if r_style is not None
+        }
         has_drawing = p.find(".//w:drawing", ns) is not None
-        paragraphs.append((text, has_drawing))
+        paragraphs.append((text, styles, has_drawing))
 
-    image_indexes = [i for i, (_, has_drawing) in enumerate(paragraphs) if has_drawing]
+    image_indexes = [i for i, (_, _, has_drawing) in enumerate(paragraphs) if has_drawing]
     assert len(image_indexes) == 2
+    first_number_text, first_number_styles, _ = paragraphs[image_indexes[0] - 1]
+    second_number_text, second_number_styles, _ = paragraphs[image_indexes[1] - 1]
+    assert first_number_text == "1."
+    assert "Annotation" in first_number_styles
+    assert second_number_text == "2."
+    assert "Annotation" in second_number_styles
     assert paragraphs[image_indexes[0] + 1][0] == "Image created with ChatGPT."
-    assert paragraphs[image_indexes[0] + 2][0] == ""
-    assert paragraphs[image_indexes[0] + 2][1] is False
     assert image_indexes[1] - image_indexes[0] == 3
     assert paragraphs[image_indexes[1] + 1][0] == "Image created with ChatGPT."
     assert paragraphs[image_indexes[1] + 2][0] == "After thumbnail."
