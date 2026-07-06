@@ -420,6 +420,59 @@ def test_generated_bodhi_docx_puts_english_title_under_chinese_title(tmp_path: P
     assert "#hashtagline" in texts
 
 
+def test_generated_bodhi_docx_strips_title_placeholder_block(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "bodhi.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "菩提1則",
+            "1. alex",
+            "7/3善用此生厚美德",
+            "https://www.daai.tv/master/life-wisdom/P90230307?more=true",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{HEADER_TITLE}}",
+            "{{HEADER_URL}}",
+            "標題",
+            "{{TITLE_EN}}",
+            "{{TITLE_ZH}}",
+            "{{POST_EN}}",
+            "{{HASHTAGS_EN}}",
+            "{{POST_ZH}}",
+            "{{HASHTAGS_ZH}}",
+            "參考資料：",
+            "{{REF_URL}}",
+            "{{REF_TITLE}}",
+        ],
+    )
+    output_dir.mkdir()
+
+    en_title = "Cherishing Every Opportunity to Serve"
+    with patch("generate_posts.fetch_bodhi_english_subtitle", return_value=en_title):
+        output_paths = generate_docs(
+            schedule_path=schedule_path,
+            template_path=template_path,
+            output_dir=output_dir,
+            filename_prefix="",
+            filename_suffix="",
+        )
+
+    texts = [p.text.strip() for p in Document(str(output_paths[0])).paragraphs]
+
+    assert "標題" not in texts
+    assert "{{TITLE_EN}}" not in texts
+    assert "{{TITLE_ZH}}" not in texts
+    assert "{{POST_EN}}" in texts
+    assert "{{POST_ZH}}" in texts
+
+
 def test_generated_bodhi_docx_injects_english_under_fixed_title_lines_not_hashtags(
     tmp_path: Path,
 ) -> None:

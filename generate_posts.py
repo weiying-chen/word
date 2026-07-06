@@ -343,14 +343,15 @@ def _extract_schedule_reference(
                 default_year=date.today().year,
             )
             ref_lines = [part.strip() for part in ref_title.splitlines() if part.strip()]
-            ref_title = ref_lines[0] if ref_lines else ""
             ref_summary_zh = ""
             ref_title_en = ""
             ref_summary_en = ""
-            if len(ref_lines) >= 2:
-                ref_summary_en = ref_lines[1]
             if len(ref_lines) >= 3:
+                ref_title = ref_lines[0]
+                ref_summary_en = ref_lines[1]
                 ref_summary_zh = ref_lines[2]
+            else:
+                ref_title = "\n".join(ref_lines)
             return (
                 ref_url,
                 ref_title,
@@ -471,7 +472,7 @@ def _build_standard_schedule_entry(
         video_desc_en=ref_summary_en,
         video_desc_zh=ref_summary_zh,
     )
-    if ref_title:
+    if ref_title and title_line.strip() in ref_title:
         entry["source_video_title"] = ref_title
     task_prefix = _extract_task_date_prefix(line, default_year=default_year)
     task_display = _extract_task_date_display(line)
@@ -1060,7 +1061,12 @@ def strip_bodhi_title_block(doc: Document) -> None:
         text = paragraph.text.strip()
         if text == "標題":
             remove_indices.append(idx)
-        if text in {"{{TITLE_LINE_1}}", "{{TITLE_LINE_2}}"}:
+        if text in {
+            "{{TITLE_LINE_1}}",
+            "{{TITLE_LINE_2}}",
+            "{{TITLE_EN}}",
+            "{{TITLE_ZH}}",
+        }:
             remove_indices.append(idx)
     for idx in reversed(remove_indices):
         remove_paragraph(doc.paragraphs[idx])
