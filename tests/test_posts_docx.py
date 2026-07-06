@@ -505,8 +505,8 @@ def test_generated_bodhi_docx_strips_title_placeholder_block(tmp_path: Path) -> 
             "{{HEADER_TITLE}}",
             "{{HEADER_URL}}",
             "標題",
-            "{{TITLE_EN}}",
-            "{{TITLE_ZH}}",
+            "{{TITLE_LINE_1}}",
+            "{{TITLE_LINE_2}}",
             "{{POST_EN}}",
             "{{HASHTAGS_EN}}",
             "{{POST_ZH}}",
@@ -531,8 +531,8 @@ def test_generated_bodhi_docx_strips_title_placeholder_block(tmp_path: Path) -> 
     texts = [p.text.strip() for p in Document(str(output_paths[0])).paragraphs]
 
     assert "標題" not in texts
-    assert "{{TITLE_EN}}" not in texts
-    assert "{{TITLE_ZH}}" not in texts
+    assert "{{TITLE_LINE_1}}" not in texts
+    assert "{{TITLE_LINE_2}}" not in texts
     assert "{{POST_EN}}" in texts
     assert "{{POST_ZH}}" in texts
 
