@@ -213,6 +213,70 @@ def test_generated_docx_from_schedule_includes_reference_bilingual_summary_in_so
         ), text
 
 
+def test_generated_docx_fetches_youtube_video_summary_when_missing(
+    tmp_path: Path,
+) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+
+    _write_docx(
+        schedule_path,
+        [
+            "節目1則",
+            "1. alex",
+            "All About Health - When Liver Disease Goes Unnoticed (大愛醫生館 - 雲霧肝癌)",
+            "https://www.youtube.com/watch?v=47tbzXquNm8",
+            "--------------------------------",
+        ],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{HEADER_TITLE}}",
+            "{{HEADER_URL}}",
+            "要用的影片：",
+            "{{VIDEO_URL}}",
+            "{{VIDEO_TITLE}}",
+            "{{VIDEO_DESC_EN}}",
+            "{{VIDEO_DESC_ZH}}",
+        ],
+    )
+    output_dir.mkdir()
+
+    with patch(
+        "generate_posts.fetch_youtube_video_descriptions",
+        return_value=(
+            "For hepatitis B and C carriers, regular blood tests are important—but they don't tell the whole story. Because the liver has no pain sensation, problems can develop silently. In one case, a tumor wasn't discovered until it had grown to 10 centimeters. How did it go unnoticed for so long? Why are imaging tests so important for early detection? Let's hear what the doctor has to say.",
+            "對於B型與C型肝炎帶原者而言，單靠定期的抽血檢查並不足夠。由於肝臟沒有痛覺神經，問題往往不易被察覺。有一個案例，腫瘤長到10公分才被發現。為何會這麼晚才察覺？影像檢查在早期發現中扮演什麼角色？一起來聽聽醫師怎麼說。",
+        ),
+    ):
+        output_paths = generate_docs(
+            schedule_path=schedule_path,
+            template_path=template_path,
+            output_dir=output_dir,
+            filename_prefix="",
+            filename_suffix="",
+        )
+
+    raw_texts = [p.text for p in Document(str(output_paths[0])).paragraphs]
+    video_label_idx = raw_texts.index("要用的影片：")
+
+    assert raw_texts[video_label_idx + 1] == ""
+    assert raw_texts[video_label_idx + 2] == "https://www.youtube.com/watch?v=47tbzXquNm8"
+    assert raw_texts[video_label_idx + 3] == (
+        "All About Health - When Liver Disease Goes Unnoticed (大愛醫生館 - 雲霧肝癌)"
+    )
+    assert raw_texts[video_label_idx + 4] == ""
+    assert raw_texts[video_label_idx + 5] == (
+        "For hepatitis B and C carriers, regular blood tests are important—but they don't tell the whole story. Because the liver has no pain sensation, problems can develop silently. In one case, a tumor wasn't discovered until it had grown to 10 centimeters. How did it go unnoticed for so long? Why are imaging tests so important for early detection? Let's hear what the doctor has to say."
+    )
+    assert raw_texts[video_label_idx + 6] == ""
+    assert raw_texts[video_label_idx + 7] == (
+        "對於B型與C型肝炎帶原者而言，單靠定期的抽血檢查並不足夠。由於肝臟沒有痛覺神經，問題往往不易被察覺。有一個案例，腫瘤長到10公分才被發現。為何會這麼晚才察覺？影像檢查在早期發現中扮演什麼角色？一起來聽聽醫師怎麼說。"
+    )
+
+
 def test_generated_docx_has_highlighted_ref_hyperlink(tmp_path: Path) -> None:
     schedule_path = tmp_path / "schedule.docx"
     template_path = tmp_path / "template.docx"

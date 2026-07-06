@@ -62,6 +62,10 @@ EPISODE_JSON_RE = re.compile(
     r"""\b(?:episodeJson|episdoeJson)\s*=\s*(?:"(?P<double>(?:\\.|[^"\\])*)"|'(?P<single>(?:\\.|[^'\\])*)')""",
     re.DOTALL,
 )
+YOUTUBE_SHORT_DESCRIPTION_RE = re.compile(
+    r'"shortDescription"\s*:\s*"(?P<description>(?:\\.|[^"\\])*)"',
+    re.DOTALL,
+)
 
 
 def _extract_person_name(line: str) -> str | None:
@@ -374,6 +378,10 @@ def _build_standard_entry(
     video_desc_en: str = "",
     video_desc_zh: str = "",
 ) -> dict[str, str]:
+    if video_url and "youtu" in video_url and not (video_desc_en and video_desc_zh):
+        fetched_desc_en, fetched_desc_zh = fetch_youtube_video_descriptions(video_url)
+        video_desc_en = video_desc_en or fetched_desc_en
+        video_desc_zh = video_desc_zh or fetched_desc_zh
     hashtags_en, hashtags_zh = build_hashtags_from_title_line(video_title)
     return {
         "filename_title": build_filename_title_from_title_line(video_title),
@@ -570,6 +578,76 @@ def _collect_english_title_lines(lines: list[str], start_idx: int) -> str:
             break
         collected.append(_normalize_line_for_match(line))
     return " ".join(collected).strip()
+
+
+def _extract_youtube_short_description(page: str) -> str:
+    match = YOUTUBE_SHORT_DESCRIPTION_RE.search(page)
+    if match:
+        try:
+            return json.loads(f'"{match.group("description")}"')
+        except json.JSONDecodeError:
+            pass
+
+    meta_match = re.search(
+        r'<meta\s+name="description"\s+content="(?P<description>[^"]*)"',
+        page,
+        re.IGNORECASE,
+    )
+    if meta_match:
+        return html.unescape(meta_match.group("description"))
+    return ""
+
+
+def _description_paragraphs(description: str) -> list[str]:
+    paragraphs: list[str] = []
+    current: list[str] = []
+    for raw_line in description.splitlines():
+        line = _normalize_line_for_match(html.unescape(raw_line))
+        if not line:
+            if current:
+                paragraphs.append(" ".join(current).strip())
+                current = []
+            continue
+        if line.startswith("#") or line.startswith("http"):
+            continue
+        current.append(line)
+    if current:
+        paragraphs.append(" ".join(current).strip())
+    return [paragraph for paragraph in paragraphs if paragraph]
+
+
+def fetch_youtube_video_descriptions(url: str) -> tuple[str, str]:
+    if not url or "youtu" not in url:
+        return "", ""
+    try:
+        req = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7",
+            },
+        )
+        with urlopen(req, timeout=8) as resp:
+            raw = resp.read()
+    except Exception:
+        return "", ""
+
+    description = _extract_youtube_short_description(
+        raw.decode("utf-8", errors="ignore")
+    )
+    if not description:
+        return "", ""
+
+    english = ""
+    chinese = ""
+    for paragraph in _description_paragraphs(description):
+        if not chinese and _is_cjk(paragraph):
+            chinese = paragraph
+        elif not english and re.search(r"[A-Za-z]", paragraph):
+            english = paragraph
+        if english and chinese:
+            break
+    return english, chinese
 
 
 def fetch_bodhi_english_subtitle(url: str, chinese_title: str) -> str:

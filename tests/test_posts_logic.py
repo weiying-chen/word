@@ -13,6 +13,7 @@ from generate_posts import (
     extract_post_titles,
     fetch_bodhi_english_subtitle,
     fetch_bodhi_reference_excerpt,
+    fetch_youtube_video_descriptions,
     normalize_title,
     _build_hashtags,
     build_hashtags_from_title_line,
@@ -110,6 +111,30 @@ def test_bodhi_reference_excerpt_skips_copyright_and_stops_before_timeline() -> 
             "佛法在人間，需要走入人群、落實於行動。",
         ]
     )
+
+
+def test_youtube_video_descriptions_parse_english_and_chinese() -> None:
+    description = (
+        "For hepatitis B and C carriers, regular blood tests are important.\n\n"
+        "對於B型與C型肝炎帶原者而言，單靠定期的抽血檢查並不足夠。\n\n"
+        "#AllAboutHealth"
+    )
+    escaped = (
+        description.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+    )
+
+    with patch(
+        "generate_posts.urlopen",
+        return_value=_FakeResponse(f'{{"shortDescription":"{escaped}"}}'),
+    ):
+        desc_en, desc_zh = fetch_youtube_video_descriptions(
+            "https://www.youtube.com/watch?v=47tbzXquNm8"
+        )
+
+    assert desc_en == "For hepatitis B and C carriers, regular blood tests are important."
+    assert desc_zh == "對於B型與C型肝炎帶原者而言，單靠定期的抽血檢查並不足夠。"
 
 
 def test_bodhi_reference_excerpt_uses_episode_json_description() -> None:
