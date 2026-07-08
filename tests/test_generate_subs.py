@@ -595,7 +595,9 @@ def test_generate_subs_renders_multiple_thumbnails_in_order(tmp_path: Path) -> N
     assert second_number_text == "2."
     assert "Annotation" in second_number_styles
     assert paragraphs[image_indexes[0] + 1][0] == "Image created with ChatGPT."
-    assert image_indexes[1] - image_indexes[0] == 3
+    assert paragraphs[image_indexes[0] + 2][0] == ""
+    assert paragraphs[image_indexes[0] + 2][2] is False
+    assert image_indexes[1] - image_indexes[0] == 4
     assert paragraphs[image_indexes[1] + 1][0] == "Image created with ChatGPT."
     assert paragraphs[image_indexes[1] + 2][0] == "After thumbnail."
 

@@ -910,10 +910,12 @@ def generate_subs(
                     for idx_thumb, thumbnail_path in enumerate(
                         thumbnail_paths[1:], start=1
                     ):
-                        current = insert_paragraph_after(current, "")
-                        image_paragraph = insert_paragraph_after(current, "")
+                        spacer_paragraph = insert_paragraph_after(current, "")
+                        _reset_thumbnail_paragraph(spacer_paragraph)
+                        number_paragraph = insert_paragraph_after(spacer_paragraph, "")
+                        image_paragraph = insert_paragraph_after(number_paragraph, "")
                         _add_thumbnail_number(
-                            current, idx_thumb + 1, annotation_style
+                            number_paragraph, idx_thumb + 1, annotation_style
                         )
                         _reset_thumbnail_paragraph(image_paragraph)
                         image_run = image_paragraph.add_run()
