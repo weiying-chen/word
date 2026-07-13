@@ -782,6 +782,53 @@ def test_generate_subs_preserves_source_hyperlink_and_highlight_formatting(
     assert subtitle_highlight.get("{%s}val" % ns["w"]) == source_subtitle_highlight
 
 
+def test_generate_subs_uses_marked_highlight_for_marked_source_url(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "https://www.facebook.com/*hong*.*zhen*.*yu*.564980/",
+                "*洪震宇*",
+                "",
+                "00:01:00:00\t00:01:02:00\tInput body line.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    url_highlight = None
+    name_highlight = None
+    for paragraph in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in paragraph.findall(".//w:t", ns))
+        if text == "https://www.facebook.com/hong.zhen.yu.564980/":
+            url_highlight = paragraph.find(".//w:hyperlink//w:rPr/w:highlight", ns)
+        if text == "洪震宇":
+            name_highlight = paragraph.find("w:r/w:rPr/w:highlight", ns)
+
+    assert url_highlight is not None
+    assert (
+        url_highlight.get("{%s}val" % ns["w"])
+        == generate_subs.SOURCE_HYPERLINK_HIGHLIGHT_MARKED
+    )
+    assert name_highlight is not None
+    assert name_highlight.get("{%s}val" % ns["w"]) == "green"
+
+
 def test_generate_subs_remaps_cloned_hyperlink_style_id_to_template_style(
     tmp_path: Path,
 ) -> None:

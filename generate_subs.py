@@ -437,7 +437,9 @@ def replace_body_paragraph(
             marked_highlight=SOURCE_HIGHLIGHT_MARKED,
         )
 
-    def write_line(target, text: str, source_line: bool, is_url: bool) -> None:
+    def write_line(
+        target, text: str, source_line: bool, is_url: bool, marked_url: bool
+    ) -> None:
         if not text:
             return
         if source_line:
@@ -448,7 +450,9 @@ def replace_body_paragraph(
                     text,
                     text,
                     highlight=True,
-                    highlight_color="cyan",
+                    highlight_color=(
+                        SOURCE_HYPERLINK_HIGHLIGHT_MARKED if marked_url else "cyan"
+                    ),
                 )
                 return
             _add_source_runs(target, text)
@@ -518,6 +522,7 @@ def replace_body_paragraph(
         cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line_without_cps_marker)
         is_link = bool(SOURCE_LINK_RE.match(cleaned_line))
         is_doc_reference = is_source_doc_reference(cleaned_line)
+        has_highlight_marker = bool(HIGHLIGHT_MARKER_RE.search(line_without_cps_marker))
         if is_link or is_doc_reference:
             in_source_block = True
 
@@ -526,6 +531,7 @@ def replace_body_paragraph(
             cleaned_line if is_link else line_without_cps_marker,
             in_source_block and not is_subtitle_line,
             bool(is_link),
+            has_highlight_marker and bool(is_link),
         )
 
         if (
