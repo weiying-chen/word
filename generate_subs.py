@@ -253,7 +253,19 @@ def _thumbnail_paths_from_data(data: dict[str, str], input_base: Path) -> list[P
         if not thumbnail_path.is_absolute():
             thumbnail_path = input_base / thumbnail_path
         paths.append(thumbnail_path)
+    if len(paths) == 1:
+        paths.extend(_numbered_thumbnail_siblings(paths[0]))
     return paths
+
+
+def _numbered_thumbnail_siblings(base_path: Path) -> list[Path]:
+    siblings: list[Path] = []
+    for index in range(2, 100):
+        sibling = base_path.with_name(f"{base_path.stem} {index}{base_path.suffix}")
+        if not sibling.is_file():
+            break
+        siblings.append(sibling)
+    return siblings
 
 
 def _thumbnail_credit_flags_from_data(data: dict[str, str], count: int) -> list[bool]:
@@ -261,6 +273,8 @@ def _thumbnail_credit_flags_from_data(data: dict[str, str], count: int) -> list[
     if not raw_flags:
         return [False] * count
     flags = [line.strip() == "1" for line in raw_flags.splitlines()]
+    if len(flags) == 1 and count > 1:
+        flags.extend([flags[0]] * (count - 1))
     if len(flags) < count:
         flags.extend([False] * (count - len(flags)))
     return flags[:count]

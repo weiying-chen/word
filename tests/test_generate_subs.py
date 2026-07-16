@@ -602,6 +602,91 @@ def test_generate_subs_renders_multiple_thumbnails_in_order(tmp_path: Path) -> N
     assert paragraphs[image_indexes[1] + 2][0] == "After thumbnail."
 
 
+def test_generate_subs_auto_discovers_numbered_thumbnail_siblings(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+    image_a_path = tmp_path / "Developing Senior-Friendly Foods.png"
+    image_b_path = tmp_path / "Developing Senior-Friendly Foods 2.png"
+
+    _write_docx(template_path, ["選圖：", "{{THUMBNAIL}}", "After thumbnail."])
+    _write_source_docx(source_docx)
+    _write_png(image_a_path)
+    _write_png(image_b_path)
+    input_path.write_text(
+        "\n".join(
+            [
+                f"THUMBNAIL: {image_a_path.name} *",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    paragraphs = []
+    for p in doc.findall(".//w:p", ns):
+        text = "".join(t.text or "" for t in p.findall(".//w:t", ns)).strip()
+        has_drawing = p.find(".//w:drawing", ns) is not None
+        paragraphs.append((text, has_drawing))
+
+    image_indexes = [i for i, (_, has_drawing) in enumerate(paragraphs) if has_drawing]
+    assert len(image_indexes) == 2
+    assert paragraphs[image_indexes[0] - 1][0] == "1."
+    assert paragraphs[image_indexes[0] + 1][0] == "Image created with ChatGPT."
+    assert paragraphs[image_indexes[1] - 1][0] == "2."
+    assert paragraphs[image_indexes[1] + 1][0] == "Image created with ChatGPT."
+    assert paragraphs[image_indexes[1] + 2][0] == "After thumbnail."
+
+
+def test_generate_subs_does_not_auto_discover_when_multiple_thumbnails_are_explicit(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+    image_a_path = tmp_path / "thumbnail_a.png"
+    image_a_auto_path = tmp_path / "thumbnail_a 2.png"
+    image_b_path = tmp_path / "thumbnail_b.png"
+
+    _write_docx(template_path, ["選圖：", "{{THUMBNAIL}}", "After thumbnail."])
+    _write_source_docx(source_docx)
+    _write_png(image_a_path)
+    _write_png(image_a_auto_path)
+    _write_png(image_b_path)
+    input_path.write_text(
+        "\n".join(
+            [
+                f"THUMBNAIL: {image_a_path.name} *",
+                f"THUMBNAIL: {image_b_path.name} *",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    with zipfile.ZipFile(output_path) as zf:
+        doc = etree.fromstring(zf.read("word/document.xml"))
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    image_count = sum(
+        1 for p in doc.findall(".//w:p", ns) if p.find(".//w:drawing", ns) is not None
+    )
+
+    assert image_count == 2
+
+
 def test_generate_subs_thumbnail_marker_controls_credit_in_same_field(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     source_docx = tmp_path / "source.docx"
