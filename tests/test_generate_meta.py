@@ -95,6 +95,39 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_parse_input_splits_super_header_with_cjk_spacing(self) -> None:
+        source_text = "\n".join(
+            [
+                "TITLE: English Title",
+                "OVERVIEW: English overview.",
+                "",
+                "BODY:",
+                "(11, Chalton)",
+                "/*SUPER:",
+                "慈濟志工    尤向光//",
+                "每年此時 進入冬季//",
+                "*/",
+                "",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            payload_path = Path(tmpdir) / "news_input.txt"
+            payload_path.write_text(source_text, encoding="utf-8")
+
+            data = parse_input(payload_path)
+
+        self.assertEqual(
+            data["people"][0],
+            {
+                "name_zh": "尤向光",
+                "name_en": "Chalton",
+                "role_zh": "慈濟志工",
+                "role_en": "",
+                "org_en": "",
+            },
+        )
+
     def test_generate_meta_replaces_title_placeholder(self) -> None:
         source_text = "\n".join(
             [

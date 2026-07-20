@@ -95,18 +95,29 @@ def _extract_english_name_hint(text: str) -> str:
     return ""
 
 
+def _split_super_header(header: str) -> tuple[str, str]:
+    if "│" in header:
+        role_zh, name_zh = header.split("│", 1)
+        return role_zh.strip(), name_zh.strip()
+    if "｜" in header:
+        role_zh, name_zh = header.split("｜", 1)
+        return role_zh.strip(), name_zh.strip()
+
+    parts = [
+        part.strip()
+        for part in re.split(r"(?:[ \t]{2,})", header.strip(), maxsplit=1)
+    ]
+    if len(parts) == 2 and all(_contains_cjk(part) for part in parts):
+        return parts[0], parts[1]
+    return "", header.strip()
+
+
 def _parse_super(lines: list[str]) -> dict:
     role_zh = ""
     name_zh = ""
     quotes_zh: list[str] = []
     if lines:
-        header = lines[0]
-        if "│" in header:
-            role_zh, name_zh = [part.strip() for part in header.split("│", 1)]
-        elif "｜" in header:
-            role_zh, name_zh = [part.strip() for part in header.split("｜", 1)]
-        else:
-            name_zh = header.strip()
+        role_zh, name_zh = _split_super_header(lines[0])
         if len(lines) > 1:
             quotes_zh = [line for line in lines[1:] if line]
     return {
