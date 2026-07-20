@@ -716,6 +716,54 @@ class RenderMetaTests(unittest.TestCase):
             ],
         )
 
+    def test_parse_input_splits_meta_people_label_with_cjk_spacing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            body_path = tmpdir_path / "source.txt"
+            meta_path = tmpdir_path / "meta.txt"
+
+            body_path.write_text("", encoding="utf-8")
+            meta_path.write_text(
+                "\n".join(
+                    [
+                        "TITLE: Winter Relief Warms Families in South Africa",
+                        "",
+                        "OVERVIEW: Overview.",
+                        "",
+                        "PEOPLE:",
+                        "",
+                        "慈濟志工    尤向光",
+                        "Chalton",
+                        "Tzu Chi volunteer",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data = parse_input(body_path, meta_path)
+
+        self.assertEqual(
+            data["people_meta_blocks"],
+            [
+                {
+                    "kind": "person",
+                    "entry": {
+                        "name_zh": "尤向光",
+                        "name_en": "Chalton",
+                        "role_zh": "慈濟志工",
+                        "role_en": "Tzu Chi volunteer",
+                        "org_en": "",
+                        "label_zh": "慈濟志工｜尤向光",
+                    },
+                }
+            ],
+        )
+        self.assertEqual(
+            build_people_lines([], ordered_blocks=data["people_meta_blocks"]),
+            ["", "慈濟志工｜尤向光", "Chalton", "Tzu Chi volunteer"],
+        )
+
     def test_parse_input_keeps_non_person_blocks_from_meta_people(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)

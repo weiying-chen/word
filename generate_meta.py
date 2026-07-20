@@ -170,12 +170,11 @@ def _parse_meta_people_blocks(
             ordered_blocks.append({"kind": "free", "lines": block})
             continue
         label_zh = block[0].strip()
-        name_zh = ""
-        role_zh = ""
-        if "｜" in label_zh:
-            role_zh, name_zh = [part.strip() for part in label_zh.split("｜", 1)]
-            if role_zh and not name_zh:
-                label_zh = role_zh
+        role_zh, name_zh = _split_super_header(label_zh)
+        if role_zh and name_zh:
+            label_zh = f"{role_zh}｜{name_zh}"
+        elif role_zh:
+            label_zh = role_zh
         else:
             name_zh = label_zh.strip()
 
