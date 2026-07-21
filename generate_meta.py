@@ -199,26 +199,75 @@ def _merge_meta_people_overrides(
         return people
 
     merged = [dict(person) for person in people]
+    role_only_label_counts: dict[str, int] = {}
+    for entry in overrides:
+        label = entry.get("label_zh", "").strip()
+        if label and not entry.get("role_zh", "").strip():
+            role_only_label_counts[label] = role_only_label_counts.get(label, 0) + 1
+    consumed_ambiguous_overrides: set[int] = set()
+    named_overrides: dict[tuple[str, str], dict[str, str]] = {}
+    reserved_named_override_ids: set[int] = set()
+
+    # A name on the right side of the SUPER separator identifies the person.
+    # Reserve those metadata blocks before matching anonymous same-role speakers.
+    for person in merged:
+        role_zh = person.get("role_zh", "").strip()
+        name_zh = person.get("name_zh", "").strip()
+        if not role_zh or not name_zh:
+            continue
+        identity = (role_zh, name_zh.casefold())
+        if identity in named_overrides:
+            continue
+        person_name_en = person.get("name_en", "").strip().casefold()
+        names = {name_zh.casefold(), person_name_en} - {""}
+        label_zh = f"{role_zh}｜{name_zh}"
+        match = next(
+            (
+                entry
+                for entry in overrides
+                if id(entry) not in reserved_named_override_ids
+                and (
+                    entry.get("label_zh", "").strip() == label_zh
+                    or entry.get("name_zh", "").strip().casefold() in names
+                    or (
+                        entry.get("label_zh", "").strip() == role_zh
+                        and entry.get("name_en", "").strip().casefold() in names
+                    )
+                )
+            ),
+            None,
+        )
+        if match is not None:
+            named_overrides[identity] = match
+            reserved_named_override_ids.add(id(match))
+
     for person in merged:
         role_zh = person.get("role_zh", "").strip()
         name_zh = person.get("name_zh", "").strip()
         label_zh = f"{role_zh}｜{name_zh}" if role_zh and name_zh else (role_zh or name_zh)
 
-        match = next(
-            (
-                entry
-                for entry in overrides
-                if entry.get("label_zh", "").strip()
-                and entry.get("label_zh", "").strip() == label_zh
-            ),
-            None,
-        )
+        identity = (role_zh, name_zh.casefold())
+        match = named_overrides.get(identity) if role_zh and name_zh else None
+        if match is None:
+            match = next(
+                (
+                    entry
+                    for entry in overrides
+                    if id(entry) not in consumed_ambiguous_overrides
+                    and id(entry) not in reserved_named_override_ids
+                    and entry.get("label_zh", "").strip()
+                    and entry.get("label_zh", "").strip() == label_zh
+                ),
+                None,
+            )
         if match is None and name_zh:
             match = next(
                 (
                     entry
                     for entry in overrides
-                    if entry.get("name_zh", "").strip() == name_zh
+                    if id(entry) not in consumed_ambiguous_overrides
+                    and id(entry) not in reserved_named_override_ids
+                    and entry.get("name_zh", "").strip() == name_zh
                 ),
                 None,
             )
@@ -232,7 +281,9 @@ def _merge_meta_people_overrides(
                 (
                     entry
                     for entry in overrides
-                    if entry.get("label_zh", "").strip() == role_zh
+                    if id(entry) not in consumed_ambiguous_overrides
+                    and id(entry) not in reserved_named_override_ids
+                    and entry.get("label_zh", "").strip() == role_zh
                     and entry.get("name_en", "").strip()
                     and entry.get("name_en", "").strip().casefold()
                     in {name_zh.casefold(), person_name_en.casefold()}
@@ -248,7 +299,9 @@ def _merge_meta_people_overrides(
                 (
                     entry
                     for entry in overrides
-                    if entry.get("label_zh", "").strip() == role_zh
+                    if id(entry) not in consumed_ambiguous_overrides
+                    and id(entry) not in reserved_named_override_ids
+                    and entry.get("label_zh", "").strip() == role_zh
                     and entry.get("name_en", "").strip()
                 ),
                 None,
@@ -263,13 +316,19 @@ def _merge_meta_people_overrides(
                 (
                     entry
                     for entry in overrides
-                    if entry.get("role_zh", "").strip() == role_zh
+                    if id(entry) not in consumed_ambiguous_overrides
+                    and id(entry) not in reserved_named_override_ids
+                    and entry.get("role_zh", "").strip() == role_zh
                     and not entry.get("name_zh", "").strip()
                 ),
                 None,
             )
         if match is None:
             continue
+
+        matched_label = match.get("label_zh", "").strip()
+        if role_only_label_counts.get(matched_label, 0) > 1:
+            consumed_ambiguous_overrides.add(id(match))
 
         label_override = match.get("label_zh", "").strip()
         if label_override:

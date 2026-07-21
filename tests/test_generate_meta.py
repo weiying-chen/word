@@ -1034,6 +1034,103 @@ class RenderMetaTests(unittest.TestCase):
         assert texts.index("Maya") < last_baijnath
 
 
+def test_meta_people_overrides_do_not_reuse_same_role_person() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        body_path = tmpdir_path / "source.txt"
+        meta_path = tmpdir_path / "meta.txt"
+
+        body_path.write_text(
+            "\n".join(
+                [
+                    "BODY:",
+                    "/*SUPER:",
+                    "保和青年志工｜Ronilo R. Homeo//",
+                    "內容一//",
+                    "*/",
+                    "/*SUPER:",
+                    "保和青年志工｜//",
+                    "內容二//",
+                    "*/",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        meta_path.write_text(
+            "\n".join(
+                [
+                    "PEOPLE:",
+                    "保和青年志工",
+                    "Ronilo R. Homeo",
+                    "Youth volunteer",
+                    "",
+                    "保和青年志工",
+                    "Youth volunteer",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        data = parse_input(body_path, meta_path)
+
+    assert data["people"][0]["name_en"] == "Ronilo R. Homeo"
+    assert data["people"][1]["name_en"] == "Youth volunteer"
+    assert data["people"][1]["name_en"] != "Ronilo R. Homeo"
+
+
+def test_meta_people_overrides_reuse_name_for_repeated_named_person() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        body_path = tmpdir_path / "source.txt"
+        meta_path = tmpdir_path / "meta.txt"
+
+        body_path.write_text(
+            "\n".join(
+                [
+                    "BODY:",
+                    "/*SUPER:",
+                    "保和青年志工｜Ronilo R. Homeo//",
+                    "內容一//",
+                    "*/",
+                    "/*SUPER:",
+                    "保和青年志工｜Ronilo R. Homeo//",
+                    "內容二//",
+                    "*/",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        meta_path.write_text(
+            "\n".join(
+                [
+                    "PEOPLE:",
+                    "保和青年志工",
+                    "Ronilo R. Homeo",
+                    "Youth volunteer",
+                    "",
+                    "保和青年志工",
+                    "Youth volunteer",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        data = parse_input(body_path, meta_path)
+
+    assert [person["name_en"] for person in data["people"]] == [
+        "Ronilo R. Homeo",
+        "Ronilo R. Homeo",
+    ]
+    assert [person["role_en"] for person in data["people"]] == [
+        "Youth volunteer",
+        "Youth volunteer",
+    ]
+
+
 def test_build_people_lines_appends_tail_lines_after_people() -> None:
     lines = build_people_lines(
         [
