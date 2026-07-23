@@ -5,16 +5,18 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 
-from docx_utils import add_hyperlink, apply_font_size_to_runs
+from docx_utils import add_hyperlink, apply_font_size_to_runs, set_run_font_family
 from style_tokens import BODY_TEXT_SIZE_PT
 
 
 HARDCODED_TIMESTAMP_LINE = "07:27-09:20 (1分53秒)"
+SYMBOL_FONT_NAME = "Segoe UI Symbol"
 DESCRIPTION_TIMESTAMP_RE = re.compile(r"^\s*(?P<mm>\d{1,2}):(?P<ss>\d{2})｜")
 TIMECODE_ROW_RE = re.compile(
     r"^(?P<sh>\d{2}):(?P<sm>\d{2}):(?P<ss>\d{2}):(?P<sf>\d{2})\t"
@@ -30,6 +32,34 @@ def _safe_filename(text: str) -> str:
     return safe
 
 
+def _add_text_with_symbol_runs(paragraph, text: str) -> None:
+    if not text:
+        return
+    chunks: list[tuple[str, bool]] = []
+    start = 0
+    current_is_symbol = unicodedata.category(text[0]) == "So"
+    for index in range(1, len(text)):
+        is_symbol = unicodedata.category(text[index]) == "So"
+        if is_symbol != current_is_symbol:
+            chunks.append((text[start:index], current_is_symbol))
+            start = index
+            current_is_symbol = is_symbol
+    chunks.append((text[start:], current_is_symbol))
+
+    symbol_runs = []
+    for chunk, is_symbol in chunks:
+        run = paragraph.add_run(chunk)
+        if is_symbol:
+            symbol_runs.append(run)
+    apply_font_size_to_runs(paragraph, font_size_pt=BODY_TEXT_SIZE_PT)
+    for run in symbol_runs:
+        set_run_font_family(
+            run,
+            ascii_font_name=SYMBOL_FONT_NAME,
+            east_asia_font_name=SYMBOL_FONT_NAME,
+        )
+
+
 def _find_subtitle_file(subtitles_dir: Path, ep_id: str) -> Path | None:
     if not ep_id:
         return None
@@ -41,12 +71,81 @@ def _find_subtitle_file(subtitles_dir: Path, ep_id: str) -> Path | None:
     return None
 
 
+def _normalize_match_text(text: str) -> str:
+    return re.sub(r"[^0-9A-Za-z\u3400-\u9fff]+", "", text).lower()
+
+
+def _subtitle_match_phrases(path: Path) -> list[str]:
+    label = path.stem.split("_ch_", 1)[-1]
+    return [
+        normalized
+        for part in re.split(r"\s+", label.strip())
+        if (normalized := _normalize_match_text(part))
+    ]
+
+
+def _match_subtitle_files(
+    episodes: list[dict], subtitles_dir: Path
+) -> dict[int, Path]:
+    """Match exact episode IDs first, then unique title/description phrases."""
+    candidates = [
+        path
+        for path in sorted(subtitles_dir.glob("*.txt"))
+        if ":Zone.Identifier" not in path.name
+    ]
+    matches: dict[int, Path] = {}
+    used_files: set[Path] = set()
+
+    for index, episode in enumerate(episodes):
+        ep_id = str(episode.get("epId", "")).strip()
+        exact = _find_subtitle_file(subtitles_dir, ep_id)
+        if exact is not None:
+            matches[index] = exact
+            used_files.add(exact)
+
+    for subtitle in candidates:
+        if subtitle in used_files:
+            continue
+        phrases = _subtitle_match_phrases(subtitle)
+        if not phrases:
+            continue
+        episode_matches: list[int] = []
+        for index, episode in enumerate(episodes):
+            if index in matches:
+                continue
+            search_text = _normalize_match_text(
+                " ".join(
+                    (
+                        str(episode.get("youtubeTitle", "")),
+                        str(episode.get("titleZh", "")),
+                        str(episode.get("youtubeDescription", "")),
+                    )
+                )
+            )
+            if all(phrase in search_text for phrase in phrases):
+                episode_matches.append(index)
+        if len(episode_matches) == 1:
+            matches[episode_matches[0]] = subtitle
+            used_files.add(subtitle)
+
+    return matches
+
+
 def _first_summary_line(description: str) -> str:
     for line in description.splitlines():
         stripped = line.strip()
         if stripped:
             return stripped
     return ""
+
+
+def _description_for_docx(description: str) -> str:
+    if any(
+        line.strip().replace(" ", "").startswith("➯5分鐘動起來！")
+        for line in description.splitlines()
+    ):
+        return description.strip()
+    return _first_summary_line(description)
 
 
 def _format_minutes_seconds(total_seconds: int) -> str:
@@ -233,8 +332,8 @@ def _render_docx(
     apply_font_size_to_runs(p_time, font_size_pt=BODY_TEXT_SIZE_PT)
 
     doc.add_paragraph("")
-    p_summary = doc.add_paragraph(summary)
-    apply_font_size_to_runs(p_summary, font_size_pt=BODY_TEXT_SIZE_PT)
+    p_summary = doc.add_paragraph("")
+    _add_text_with_symbol_runs(p_summary, summary)
 
     if subtitle_lines:
         doc.add_paragraph("")
@@ -260,10 +359,10 @@ def generate_sources(
     generated = 0
     skipped = 0
     errors = 0
+    subtitle_matches = _match_subtitle_files(episodes, subtitles_dir)
 
-    for item in episodes:
-        ep_id = str(item.get("epId", "")).strip()
-        subtitle_file = _find_subtitle_file(subtitles_dir, ep_id)
+    for index, item in enumerate(episodes):
+        subtitle_file = subtitle_matches.get(index)
         if subtitle_file is None:
             skipped += 1
             continue
@@ -273,7 +372,9 @@ def generate_sources(
                 item.get("titleZh", "")
             ).strip()
             youtube_url = str(item.get("youtubeUrl", "")).strip()
-            summary = _first_summary_line(str(item.get("youtubeDescription", "")))
+            summary = _description_for_docx(
+                str(item.get("youtubeDescription", ""))
+            )
             last_ts_line = str(item.get("descriptionLastTimestampLine", "")).strip()
             subtitle_lines = [
                 line.rstrip("\n")
