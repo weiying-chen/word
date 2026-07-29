@@ -14,6 +14,26 @@ import generate_news
 from style_tokens import BODY_TEXT_SIZE_PT
 
 
+def test_bare_timecode_is_numbered_and_highlighted() -> None:
+    doc = Document()
+
+    generate_news._render_multiline_block(doc, "0014\nSpoken line\n0025")
+
+    assert [paragraph.text for paragraph in doc.paragraphs] == [
+        "1_0014",
+        "Spoken line",
+        "2_0025",
+    ]
+    assert any(
+        run.font.highlight_color and run.font.highlight_color.name == "BRIGHT_GREEN"
+        for run in doc.paragraphs[0].runs
+    )
+    assert any(
+        run.font.highlight_color and run.font.highlight_color.name == "BRIGHT_GREEN"
+        for run in doc.paragraphs[2].runs
+    )
+
+
 def _write_source_docx(path: Path) -> None:
     doc = Document()
     doc.add_paragraph("Community Clinic Brings Care to Coastal Town")
@@ -72,7 +92,7 @@ def test_parse_input_extracts_body_section(tmp_path: Path) -> None:
                 "Ignored summary",
                 "",
                 "BODY:",
-                "1_0014",
+                "0014",
                 "中文內文。",
                 "English line.",
             ]
@@ -82,16 +102,16 @@ def test_parse_input_extracts_body_section(tmp_path: Path) -> None:
 
     data = generate_news.parse_input(input_path)
 
-    assert data["BODY"] == "1_0014\n中文內文。\nEnglish line."
+    assert data["BODY"] == "0014\n中文內文。\nEnglish line."
 
 
 def test_parse_input_uses_whole_file_when_no_body_label(tmp_path: Path) -> None:
     input_path = tmp_path / "news_input.txt"
-    input_path.write_text("1_0014\n中文內文。\nEnglish line.\n", encoding="utf-8")
+    input_path.write_text("0014\n中文內文。\nEnglish line.\n", encoding="utf-8")
 
     data = generate_news.parse_input(input_path)
 
-    assert data["BODY"] == "1_0014\n中文內文。\nEnglish line."
+    assert data["BODY"] == "0014\n中文內文。\nEnglish line."
 
 
 def test_parse_input_fallback_encoding_warns_and_rewrites_utf8(tmp_path: Path) -> None:
@@ -121,10 +141,10 @@ def test_generate_news_preserves_header_and_replaces_body(tmp_path: Path) -> Non
         "\n".join(
             [
                 "BODY:",
-                "1_0014",
+                "0014",
                 "Two days of free screenings brought steady lines of local residents.",
                 "",
-                "2_0025",
+                "0025",
                 "Residents arrived early to receive free screenings and follow-up advice.",
             ]
         ),

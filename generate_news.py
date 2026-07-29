@@ -21,7 +21,8 @@ from generate_subs import fix_docx_namespaces, normalize_input_text, remove_para
 from style_tokens import BODY_TEXT_SIZE_PT
 
 
-SHOT_ID_RE = re.compile(r"^\d+_\d+$")
+BARE_SHOT_ID_RE = re.compile(r"^\d{3,4}$")
+SHOT_ID_RE = re.compile(r"^\d+_\d{3,4}$")
 BODY_LABEL_LINE_RE = re.compile(r"^\s*(BODY|字幕)\s*[:：]\s*$")
 BODY_INLINE_LINE_RE = re.compile(r"^\s*(BODY|字幕)\s*[:：]\s*(.*)$")
 SOURCE_LINK_RE = re.compile(r"^https?://\S+$")
@@ -130,11 +131,23 @@ def _add_plain_paragraph(doc: Document, text: str, hyperlink: str = "") -> None:
     _set_line_in_paragraph(paragraph, text, hyperlink)
 
 
+def _number_shot_ids(lines: list[str]) -> list[str]:
+    numbered_lines: list[str] = []
+    shot_number = 0
+    for line in lines:
+        stripped = line.strip()
+        if BARE_SHOT_ID_RE.match(stripped):
+            shot_number += 1
+            line = f"{shot_number}_{stripped}"
+        numbered_lines.append(line)
+    return numbered_lines
+
+
 def _render_multiline_block(doc: Document, text: str) -> None:
     lines = text.splitlines()
     while lines and not lines[0].strip():
         lines.pop(0)
-    for line in lines:
+    for line in _number_shot_ids(lines):
         _add_plain_paragraph(doc, line)
 
 
@@ -240,7 +253,9 @@ def generate_news_from_data(
         if body:
             content_lines.append(RenderLine(""))
     if body:
-        content_lines.extend(RenderLine(line) for line in body.splitlines())
+        content_lines.extend(
+            RenderLine(line) for line in _number_shot_ids(body.splitlines())
+        )
 
     lines = content_lines
     if body:
