@@ -1304,6 +1304,80 @@ def test_generate_review_splits_months_using_created_at_when_start_at_missing(
     )
 
 
+def test_generate_review_only_carries_new_feedback_from_previous_qcd(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    previous_review_path = tmp_path / "previous_review.docx"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    previous_doc = Document()
+    previous_table = previous_doc.add_table(rows=3, cols=4)
+    previous_table.cell(0, 0).text = "5/1"
+    previous_table.cell(0, 1).text = "1.\nAlready reviewed"
+    previous_table.cell(0, 2).text = "• existing feedback"
+    previous_table.cell(1, 0).text = "5/2"
+    previous_table.cell(1, 1).text = "2.\nFeedback arrived later"
+    previous_table.cell(2, 0).text = "5/3"
+    previous_table.cell(2, 1).text = "3.\nStill awaiting feedback"
+    previous_doc.save(previous_review_path)
+
+    tasks_json.write_text(
+        json.dumps(
+            [
+                _stage_task(
+                    "Already reviewed",
+                    start_at="2026-05-01T08:00:00Z",
+                    notes=["existing feedback"],
+                ),
+                _stage_task(
+                    "Feedback arrived later",
+                    start_at="2026-05-02T08:00:00Z",
+                    notes=["new feedback"],
+                ),
+                _stage_task(
+                    "Still awaiting feedback",
+                    start_at="2026-05-03T08:00:00Z",
+                ),
+                _stage_task(
+                    "Current month task",
+                    start_at="2026-06-01T08:00:00Z",
+                    notes=["current feedback"],
+                ),
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(
+        template_path,
+        output_path,
+        tasks_json,
+        previous_review_path=previous_review_path,
+    )
+
+    out_doc = Document(output_path)
+    table = out_doc.tables[0]
+    previous_row_idx = next(
+        idx
+        for idx, row in enumerate(table.rows)
+        if row.cells[0].text.strip() == "之前工作紀錄"
+    )
+    assert table.cell(previous_row_idx + 2, 1).text.strip() == (
+        "1.\nFeedback arrived later"
+    )
+    assert table.cell(previous_row_idx + 2, 2).text.strip() == "• new feedback"
+    assert "Already reviewed" not in "\n".join(
+        cell.text for row in table.rows for cell in row.cells
+    )
+    assert "Still awaiting feedback" not in "\n".join(
+        cell.text for row in table.rows for cell in row.cells
+    )
+
+
 def test_generate_review_ignores_previous_month_extensions_for_temp_work_and_news_count(
     tmp_path: Path,
 ) -> None:

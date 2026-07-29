@@ -48,6 +48,21 @@ def resolve_output_path(output_path: Path | None, tasks: list[dict]) -> Path:
     return Path(f"output/QCD_{OUTPUT_REVIEWER_NAME}_{month_suffix}.docx")
 
 
+def resolve_previous_review_path(output_path: Path, tasks: list[dict]) -> Path | None:
+    target_month = _derive_target_month(tasks)
+    if target_month is None:
+        return None
+
+    year, month = target_month
+    if month == 1:
+        year -= 1
+        month = 12
+    else:
+        month -= 1
+    month_suffix = f"{year % 100:02d}{month:02d}"
+    return output_path.parent / f"QCD_{OUTPUT_REVIEWER_NAME}_{month_suffix}.docx"
+
+
 def _format_year_month_text(value: str) -> str:
     text = value.strip()
     if not text:
@@ -289,6 +304,44 @@ def _extract_feedback_lines(task: dict) -> list[str]:
     if isinstance(raw_notes, list):
         return [f"• {str(note).strip()}" for note in raw_notes if str(note).strip()]
     return []
+
+
+def _reviewed_task_names(review_path: Path) -> set[str]:
+    if not review_path.exists():
+        return set()
+
+    reviewed_names: set[str] = set()
+    doc = Document(str(review_path))
+    for table in doc.tables:
+        for row in table.rows:
+            if len(row.cells) < 3 or not row.cells[2].text.strip():
+                continue
+            item_lines = [
+                line.strip() for line in row.cells[1].text.splitlines() if line.strip()
+            ]
+            if not item_lines:
+                continue
+            if item_lines[0].rstrip(".").isdigit():
+                item_lines = item_lines[1:]
+            if item_lines:
+                reviewed_names.add(item_lines[0])
+    return reviewed_names
+
+
+def _filter_previous_tasks(
+    tasks: list[dict],
+    previous_review_path: Path | None,
+) -> list[dict]:
+    if previous_review_path is None or not previous_review_path.exists():
+        return tasks
+
+    reviewed_names = _reviewed_task_names(previous_review_path)
+    return [
+        task
+        for task in tasks
+        if _extract_feedback_lines(task)
+        and str(task.get("name", "")).strip() not in reviewed_names
+    ]
 
 
 def _find_regular_translation_rows(table) -> list[int]:
@@ -788,11 +841,19 @@ def generate_review(
     template_path: Path,
     output_path: Path,
     tasks_path: Path,
+    previous_review_path: Path | None = None,
 ) -> None:
     tasks = parse_tasks_payload(tasks_path)
     target_month = _derive_target_month(tasks)
     current_subs_tasks, previous_subs_tasks = _partition_parent_subs_tasks(
         tasks, target_month
+    )
+    resolved_previous_review_path = previous_review_path
+    if resolved_previous_review_path is None:
+        resolved_previous_review_path = resolve_previous_review_path(output_path, tasks)
+    previous_subs_tasks = _filter_previous_tasks(
+        previous_subs_tasks,
+        resolved_previous_review_path,
     )
     data = {"NAME": REVIEWER_NAME, MONTH_KEY: derive_month_from_tasks(tasks)}
     doc = Document(str(resolve_template_path(template_path)))
@@ -834,6 +895,11 @@ def main() -> None:
         default="tasks.json",
         help="Path to tasks JSON array.",
     )
+    parser.add_argument(
+        "--previous-review",
+        default=None,
+        help="Previous QCD DOCX; defaults to the prior month beside the output.",
+    )
     args = parser.parse_args()
 
     tasks_path = Path(args.tasks_json)
@@ -842,6 +908,9 @@ def main() -> None:
         Path(args.template),
         resolve_output_path(Path(args.output) if args.output else None, tasks),
         tasks_path,
+        previous_review_path=(
+            Path(args.previous_review) if args.previous_review else None
+        ),
     )
 
 
