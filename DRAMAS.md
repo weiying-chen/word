@@ -38,6 +38,10 @@ order, scene numbering, English fields, source hash, or review flags fail
 validation. Without `--output`, the final document is written beside the JSON
 with `_英文.docx` appended to its base name.
 
+`merged_visual_continuation` is informational extraction provenance and does
+not block final output. Ambiguity flags such as
+`possible_dialogue_continuation`, plus unknown review flags, remain blocking.
+
 Each source record is mapped to one hidden DOCX bookmark. The generator checks
 the saved package and mapping before reporting success.
 

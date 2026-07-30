@@ -31,6 +31,7 @@ SUPPORTED_ELEMENT_TYPES = {
     "production_note",
     "translation_note",
 }
+INFORMATIONAL_REVIEW_FLAGS = {"merged_visual_continuation"}
 SOURCE_BOOKMARK_PREFIX = "src_"
 RAW_PLACEHOLDER_RE = re.compile(r"\{\{[^{}]+\}\}")
 
@@ -132,6 +133,14 @@ def _review_flags(record: dict) -> list[str]:
     if not isinstance(flags, list):
         return []
     return [str(flag).strip() for flag in flags if str(flag).strip()]
+
+
+def _blocking_review_flags(record: dict) -> list[str]:
+    return [
+        flag
+        for flag in _review_flags(record)
+        if flag not in INFORMATIONAL_REVIEW_FLAGS
+    ]
 
 
 def collect_missing_english(payload: dict) -> list[str]:
@@ -241,7 +250,7 @@ def validate_payload(payload: dict, *, final: bool) -> list[str]:
     if final:
         errors.extend(f"Missing required English field: {field}." for field in missing_english)
         for record_id, _, record in records:
-            for flag in _review_flags(record):
+            for flag in _blocking_review_flags(record):
                 errors.append(
                     f"{record_id or 'missing-id'} has unresolved review flag: {flag}."
                 )

@@ -215,6 +215,18 @@ def test_final_rejects_missing_english_and_unresolved_flags(tmp_path: Path) -> N
     assert not output_path.exists()
 
 
+def test_final_allows_confirmed_visual_merge_metadata() -> None:
+    payload = _payload()
+    payload["scenes"][1]["heading_en"] = "SCENE 2. EXT. STREET – DAY"
+    payload["scenes"][1]["elements"][0]["translation_en"] = "A car passes."
+    payload["scenes"][1]["elements"][1]["translation_en"] = "END"
+    payload["scenes"][0]["elements"][0]["review"]["flags"] = [
+        "merged_visual_continuation"
+    ]
+
+    assert generate_drama.validate_payload(payload, final=True) == []
+
+
 def test_preview_skips_dialogue_with_missing_required_speaker(tmp_path: Path) -> None:
     input_path = tmp_path / "drama.json"
     reference_path = tmp_path / "reference.docx"
