@@ -168,11 +168,16 @@ def test_preview_generates_translated_records_in_source_order(tmp_path: Path) ->
     assert doc.paragraphs[0].text.startswith("PREVIEW")
     heading = next(p for p in doc.paragraphs if p.text.startswith("SCENE 1."))
     assert heading.runs[0].bold is True
-    assert heading.runs[0].font.name == "Times New Roman"
-    assert heading.runs[0].font.size == Pt(13.5)
+    assert heading.runs[0].font.name == "Calibri"
+    assert heading.runs[0].font.size == Pt(12)
+    assert heading.paragraph_format.space_before is None
+    assert heading.paragraph_format.space_after is None
+    assert heading.paragraph_format.line_spacing is None
 
     action = next(p for p in doc.paragraphs if p.text == "A door opens.")
     assert action.runs[0].italic is True
+    assert action.runs[0].font.name == "Calibri"
+    assert action.runs[0].font.size == Pt(12)
 
     dialogue = next(p for p in doc.paragraphs if "Hello." in p.text)
     assert dialogue.text == "PERSON A (V.O.)\n(smiling)\nHello."

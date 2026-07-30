@@ -21,6 +21,12 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 from docx_utils import set_run_font_family, set_style_font_family
+from style_tokens import (
+    BODY_TEXT_SIZE_PT,
+    DEFAULT_DOCX_ASCII_FONT_NAME,
+    DEFAULT_DOCX_EAST_ASIA_FONT_NAME,
+)
+from template_styles import ensure_base_styles
 
 
 SCHEMA_VERSION = "2.0"
@@ -50,13 +56,14 @@ class DramaFormat:
     right_margin_inches: float = 1.25
     header_distance_inches: float = 0.5
     footer_distance_inches: float = 0.5
-    font_name: str = "Times New Roman"
-    body_size_pt: float = 12
-    heading_size_pt: float = 13.5
-    title_size_pt: float = 18
-    space_before_pt: float = 14
-    space_after_pt: float = 14
-    line_spacing: float = 1
+    font_name: str = DEFAULT_DOCX_ASCII_FONT_NAME
+    east_asia_font_name: str = DEFAULT_DOCX_EAST_ASIA_FONT_NAME
+    body_size_pt: float = BODY_TEXT_SIZE_PT
+    heading_size_pt: float = BODY_TEXT_SIZE_PT
+    title_size_pt: float = BODY_TEXT_SIZE_PT
+    space_before_pt: float | None = None
+    space_after_pt: float | None = None
+    line_spacing: float | None = None
 
 
 @dataclass(frozen=True)
@@ -278,48 +285,12 @@ def _inches(value, fallback: float) -> float:
     return float(value.inches) if value is not None else fallback
 
 
-def _points(value, fallback: float) -> float:
-    return float(value.pt) if value is not None else fallback
-
-
 def inspect_reference_format(reference_path: Path) -> DramaFormat:
     try:
         doc = Document(str(reference_path))
     except (OSError, ValueError, BadZipFile) as exc:
         raise DramaValidationError(f"Unable to read reference DOCX: {exc}") from exc
     section = doc.sections[0]
-    heading = next(
-        (p for p in doc.paragraphs if p.text.strip().upper().startswith("SCENE ")),
-        None,
-    )
-    action = next(
-        (
-            p
-            for p in doc.paragraphs
-            if p.text.strip() and any(run.italic is True for run in p.runs)
-        ),
-        None,
-    )
-    dialogue = next(
-        (
-            p
-            for p in doc.paragraphs
-            if "\n" in p.text and p.runs and p.runs[0].bold is True
-        ),
-        None,
-    )
-    format_source = heading or action or dialogue
-    font_run = None
-    for paragraph in (action, dialogue, heading):
-        if paragraph is None:
-            continue
-        font_run = next((run for run in paragraph.runs if run.text), None)
-        if font_run is not None:
-            break
-    paragraph_format = format_source.paragraph_format if format_source else None
-    heading_run = (
-        next((run for run in heading.runs if run.text), None) if heading else None
-    )
     return DramaFormat(
         page_width_inches=_inches(section.page_width, 8.5),
         page_height_inches=_inches(section.page_height, 11),
@@ -329,25 +300,6 @@ def inspect_reference_format(reference_path: Path) -> DramaFormat:
         right_margin_inches=_inches(section.right_margin, 1.25),
         header_distance_inches=_inches(section.header_distance, 0.5),
         footer_distance_inches=_inches(section.footer_distance, 0.5),
-        font_name=(font_run.font.name if font_run and font_run.font.name else "Times New Roman"),
-        body_size_pt=_points(font_run.font.size if font_run else None, 12),
-        heading_size_pt=_points(
-            heading_run.font.size if heading_run else None,
-            13.5,
-        ),
-        space_before_pt=_points(
-            paragraph_format.space_before if paragraph_format else None,
-            14,
-        ),
-        space_after_pt=_points(
-            paragraph_format.space_after if paragraph_format else None,
-            14,
-        ),
-        line_spacing=(
-            float(paragraph_format.line_spacing)
-            if paragraph_format and paragraph_format.line_spacing is not None
-            else 1
-        ),
     )
 
 
@@ -364,19 +316,23 @@ def _add_style(
     set_style_font_family(
         style,
         ascii_font_name=format_spec.font_name,
-        east_asia_font_name=format_spec.font_name,
+        east_asia_font_name=format_spec.east_asia_font_name,
     )
     style.font.size = Pt(size_pt)
     style.font.bold = bold
     style.font.italic = italic
     paragraph_format = style.paragraph_format
-    paragraph_format.space_before = Pt(format_spec.space_before_pt)
-    paragraph_format.space_after = Pt(format_spec.space_after_pt)
-    paragraph_format.line_spacing = format_spec.line_spacing
+    if format_spec.space_before_pt is not None:
+        paragraph_format.space_before = Pt(format_spec.space_before_pt)
+    if format_spec.space_after_pt is not None:
+        paragraph_format.space_after = Pt(format_spec.space_after_pt)
+    if format_spec.line_spacing is not None:
+        paragraph_format.line_spacing = format_spec.line_spacing
     return style
 
 
 def _configure_document(doc: Document, format_spec: DramaFormat) -> None:
+    ensure_base_styles(doc)
     section = doc.sections[0]
     section.page_width = Inches(format_spec.page_width_inches)
     section.page_height = Inches(format_spec.page_height_inches)
@@ -448,7 +404,7 @@ def _set_run_font(run, format_spec: DramaFormat, *, size_pt: float | None = None
     set_run_font_family(
         run,
         ascii_font_name=format_spec.font_name,
-        east_asia_font_name=format_spec.font_name,
+        east_asia_font_name=format_spec.east_asia_font_name,
     )
     run.font.size = Pt(size_pt or format_spec.body_size_pt)
 

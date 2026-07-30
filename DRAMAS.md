@@ -2,8 +2,9 @@
 
 `generate_drama.py` renders a Schema Version 2.0 bilingual drama JSON as an
 English shooting-script DOCX. It uses the Chinese-source record order and a
-manager-produced English DOCX for presentation settings. It never translates
-text or falls back to Chinese.
+manager-produced English DOCX for screenplay structure and page layout. Font,
+text size, and paragraph spacing come from this repository's shared document
+style system. It never translates text or falls back to Chinese.
 
 ## Preview
 
