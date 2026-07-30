@@ -484,6 +484,59 @@ def _add_note(doc: Document, item: dict, format_spec: DramaFormat):
     return paragraph
 
 
+def _add_upright_text(
+    doc: Document,
+    item: dict,
+    format_spec: DramaFormat,
+    *,
+    bold: bool = False,
+):
+    paragraph = doc.add_paragraph(style="Drama Note")
+    run = paragraph.add_run(str(item["translation_en"]).strip())
+    _set_run_font(run, format_spec)
+    run.bold = bold
+    run.italic = False
+    return paragraph
+
+
+def classify_presentation_types(
+    records: list[tuple[str, str, dict]],
+) -> list[str]:
+    presentation_types: list[str] = []
+    title_card_mode = False
+    previous_record_type: str | None = None
+    for _, record_type, record in records:
+        if record_type == "scene_heading":
+            title_card_mode = False
+
+        text = str(
+            record.get("heading_en")
+            if record_type == "scene_heading"
+            else record.get("translation_en") or ""
+        ).strip()
+        presentation_type = record_type
+        if record_type == "production_note" and text.upper().startswith(
+            "TITLE CARDS:"
+        ):
+            title_card_mode = True
+        elif record_type == "action" and title_card_mode:
+            presentation_type = "title_card_text"
+        elif record_type == "action" and text.upper() == "DELETE.":
+            presentation_type = "production_directive"
+        elif (
+            record_type == "action"
+            and text[:1].islower()
+            and previous_record_type in {"production_note", "translation_note"}
+        ):
+            presentation_type = "note_continuation"
+        elif title_card_mode and record_type != "action":
+            title_card_mode = False
+
+        presentation_types.append(presentation_type)
+        previous_record_type = record_type
+    return presentation_types
+
+
 def _iter_preview_records(payload: dict) -> Iterable[tuple[str, str, dict]]:
     for item in payload["front_matter"]:
         if _nonempty(item.get("translation_en")):
@@ -586,11 +639,14 @@ def generate_drama(
     records = list(
         _iter_preview_records(payload) if preview else _iter_final_records(payload)
     )
+    presentation_types = classify_presentation_types(records)
     generated_ids: list[str] = []
     front_count = sum(1 for _, record_type, _ in records if record_type == "title_page")
     front_seen = 0
     bookmark_id = 1
-    for source_id, record_type, record in records:
+    for (source_id, record_type, record), presentation_type in zip(
+        records, presentation_types
+    ):
         if record_type == "title_page":
             paragraph = _add_title_page(
                 doc,
@@ -603,6 +659,10 @@ def generate_drama(
                 paragraph.paragraph_format.page_break_after = True
         elif record_type == "scene_heading":
             paragraph = _add_scene_heading(doc, record, format_spec)
+        elif presentation_type in {"title_card_text", "note_continuation"}:
+            paragraph = _add_upright_text(doc, record, format_spec)
+        elif presentation_type == "production_directive":
+            paragraph = _add_upright_text(doc, record, format_spec, bold=True)
         elif record_type == "action":
             paragraph = _add_action(doc, record, format_spec)
         elif record_type == "dialogue":

@@ -309,6 +309,36 @@ def test_default_output_path_uses_english_suffix() -> None:
     assert preview_path == Path("/work/靜曦拍攝本V.4.2_英文.preview.docx")
 
 
+def test_presentation_types_distinguish_actions_from_on_screen_text() -> None:
+    records = [
+        ("heading-1", "scene_heading", {"heading_en": "SCENE 1. ROOM"}),
+        ("action-1", "action", {"translation_en": "A person enters."}),
+        ("delete-1", "action", {"translation_en": "DELETE."}),
+        ("cards-1", "production_note", {"translation_en": "TITLE CARDS:"}),
+        ("card-1", "action", {"translation_en": "First on-screen card."}),
+        ("card-2", "action", {"translation_en": "Second on-screen card."}),
+        ("heading-2", "scene_heading", {"heading_en": "SCENE 2. STREET"}),
+        (
+            "note-1",
+            "production_note",
+            {"translation_en": "INS. A sentence continues"},
+        ),
+        ("continuation-1", "action", {"translation_en": "on the next line."}),
+    ]
+
+    assert generate_drama.classify_presentation_types(records) == [
+        "scene_heading",
+        "action",
+        "production_directive",
+        "production_note",
+        "title_card_text",
+        "title_card_text",
+        "scene_heading",
+        "production_note",
+        "note_continuation",
+    ]
+
+
 def test_cli_preview_reports_incomplete_translation(
     tmp_path: Path, capsys
 ) -> None:

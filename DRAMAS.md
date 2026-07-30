@@ -46,6 +46,11 @@ not block final output. Ambiguity flags such as
 Each source record is mapped to one hidden DOCX bookmark. The generator checks
 the saved package and mapping before reporting success.
 
+Screenplay presentation is context-aware: genuine action is italic, on-screen
+title-card text and note continuations are upright, and `DELETE.` production
+directives are upright and bold. These rules do not alter JSON types or source
+order.
+
 ## Commands
 
 - `gen-dramas`: generate a drama DOCX with this repository.
