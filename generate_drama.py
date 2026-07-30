@@ -79,6 +79,21 @@ def load_payload(path: Path) -> dict:
     return payload
 
 
+def resolve_output_path(
+    input_path: Path,
+    output_path: Path | None,
+    *,
+    preview: bool,
+) -> Path:
+    if output_path is not None:
+        return output_path
+    base_name = input_path.stem
+    if base_name.endswith(".translation"):
+        base_name = base_name[: -len(".translation")]
+    preview_marker = ".preview" if preview else ""
+    return input_path.with_name(f"{base_name}_英文{preview_marker}.docx")
+
+
 def _nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
@@ -650,7 +665,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Manager-produced English DOCX formatting reference.",
     )
-    parser.add_argument("--output", required=True, type=Path, help="Output DOCX path.")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output DOCX path; defaults beside the input with an _英文 suffix.",
+    )
     parser.add_argument(
         "--preview",
         action="store_true",
@@ -666,11 +685,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    output_path = resolve_output_path(args.input, args.output, preview=args.preview)
     try:
         result = generate_drama(
             args.input,
             args.reference,
-            args.output,
+            output_path,
             preview=args.preview,
             verify_source_path=args.verify_source,
         )

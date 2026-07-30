@@ -14,12 +14,12 @@ gen-dramas \
   --input "/home/weiying/text/dramas/sy/working/靜曦拍攝本V.4.2.translation.json" \
   --reference "/home/weiying/text/dramas/sy/refs/他的靈魂與他的書店第8集_劇本_英文.docx" \
   --verify-source "/home/weiying/text/dramas/sy/refs/靜曦拍攝本V.4.2.pdf" \
-  --output "/home/weiying/text/dramas/sy/working/靜曦拍攝本V.4.2.preview.docx" \
   --preview
 ```
 
 The preview is visibly marked incomplete, emits only translated records in
 global order, and reports the number of required English fields still missing.
+Its default name is `靜曦拍攝本V.4.2_英文.preview.docx`.
 
 ## Final document
 
@@ -30,12 +30,13 @@ gen-dramas \
   --input "/path/to/completed.translation.json" \
   --reference "/path/to/manager-reference.docx" \
   --verify-source "/path/to/source.pdf" \
-  --output "/path/to/final.docx"
+  --output "/optional/custom/final.docx"
 ```
 
 Final generation refuses to write a document when the schema, IDs, global
 order, scene numbering, English fields, source hash, or review flags fail
-validation.
+validation. Without `--output`, the final document is written beside the JSON
+with `_英文.docx` appended to its base name.
 
 Each source record is mapped to one hidden DOCX bookmark. The generator checks
 the saved package and mapping before reporting success.

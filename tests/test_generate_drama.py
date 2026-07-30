@@ -282,6 +282,16 @@ def test_source_hash_verification_uses_metadata_hash(tmp_path: Path) -> None:
         generate_drama.verify_source_pdf(payload, source_pdf)
 
 
+def test_default_output_path_uses_english_suffix() -> None:
+    input_path = Path("/work/靜曦拍攝本V.4.2.translation.json")
+
+    final_path = generate_drama.resolve_output_path(input_path, None, preview=False)
+    preview_path = generate_drama.resolve_output_path(input_path, None, preview=True)
+
+    assert final_path == Path("/work/靜曦拍攝本V.4.2_英文.docx")
+    assert preview_path == Path("/work/靜曦拍攝本V.4.2_英文.preview.docx")
+
+
 def test_cli_preview_reports_incomplete_translation(
     tmp_path: Path, capsys
 ) -> None:
