@@ -339,6 +339,49 @@ def test_presentation_types_distinguish_actions_from_on_screen_text() -> None:
     ]
 
 
+def test_note_continuation_renders_as_one_paragraph(tmp_path: Path) -> None:
+    payload = _payload()
+    scene = payload["scenes"][0]
+    scene["elements"] = [
+        _record(
+            "note-1",
+            3,
+            "production_note",
+            "INS. The sentence continues",
+        ),
+        _record("continuation-1", 4, "action", "on the next visual line."),
+    ]
+    payload["scenes"] = [scene]
+    payload["statistics"].update(
+        {
+            "scene_count": 1,
+            "last_scene": 1,
+            "element_count": 4,
+        }
+    )
+    input_path = tmp_path / "drama.json"
+    reference_path = tmp_path / "reference.docx"
+    output_path = tmp_path / "output.docx"
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+    _write_reference(reference_path)
+
+    result = generate_drama.generate_drama(
+        input_path,
+        reference_path,
+        output_path,
+        preview=True,
+    )
+
+    doc = Document(output_path)
+    matches = [
+        p for p in doc.paragraphs if p.text.startswith("INS. The sentence")
+    ]
+    assert len(matches) == 1
+    assert matches[0].text == "INS. The sentence continues on the next visual line."
+    assert all(run.bold is True for run in matches[0].runs if run.text)
+    assert result.generated_ids[-2:] == ["note-1", "continuation-1"]
+
+
 def test_cli_preview_reports_incomplete_translation(
     tmp_path: Path, capsys
 ) -> None:

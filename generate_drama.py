@@ -400,6 +400,16 @@ def _add_source_bookmark(paragraph, source_id: str, bookmark_id: int) -> None:
     paragraph._p.append(end)
 
 
+def _add_source_bookmark_around_run(run, source_id: str, bookmark_id: int) -> None:
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), str(bookmark_id))
+    start.set(qn("w:name"), _bookmark_name(source_id))
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), str(bookmark_id))
+    run._r.addprevious(start)
+    run._r.addnext(end)
+
+
 def _set_run_font(run, format_spec: DramaFormat, *, size_pt: float | None = None) -> None:
     set_run_font_family(
         run,
@@ -659,8 +669,24 @@ def generate_drama(
                 paragraph.paragraph_format.page_break_after = True
         elif record_type == "scene_heading":
             paragraph = _add_scene_heading(doc, record, format_spec)
-        elif presentation_type in {"title_card_text", "note_continuation"}:
+        elif presentation_type == "title_card_text":
             paragraph = _add_upright_text(doc, record, format_spec)
+        elif presentation_type == "note_continuation":
+            continuation = str(record["translation_en"]).strip()
+            paragraph = doc.paragraphs[-1]
+            previous_run = next(
+                (run for run in reversed(paragraph.runs) if run.text),
+                None,
+            )
+            separator = "" if paragraph.text.endswith(("-", "—", "/")) else " "
+            run = paragraph.add_run(separator + continuation)
+            _set_run_font(run, format_spec)
+            run.bold = previous_run.bold if previous_run is not None else False
+            run.italic = previous_run.italic if previous_run is not None else False
+            _add_source_bookmark_around_run(run, source_id, bookmark_id)
+            bookmark_id += 1
+            generated_ids.append(source_id)
+            continue
         elif presentation_type == "production_directive":
             paragraph = _add_upright_text(doc, record, format_spec, bold=True)
         elif record_type == "action":
