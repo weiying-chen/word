@@ -40,6 +40,14 @@ SUPPORTED_ELEMENT_TYPES = {
 INFORMATIONAL_REVIEW_FLAGS = {"merged_visual_continuation"}
 SOURCE_BOOKMARK_PREFIX = "src_"
 RAW_PLACEHOLDER_RE = re.compile(r"\{\{[^{}]+\}\}")
+UNDETERMINED_ENGLISH_TITLE_MARKER = (
+    "[OFFICIAL ENGLISH TITLE TO BE DETERMINED BY THE DEPARTMENT]"
+)
+UNDETERMINED_ON_SCREEN_TITLE_MARKER = (
+    "TITLE: [OFFICIAL ENGLISH TITLE TO BE DETERMINED]"
+)
+DEPARTMENT_TITLE_NOTICE_ZH = "【正式英文片名由部門決定】"
+DEPARTMENT_ON_SCREEN_TITLE_NOTICE_ZH = "片名：【正式英文片名由部門決定】"
 
 
 class DramaValidationError(ValueError):
@@ -438,7 +446,10 @@ def _add_title_page(
 ):
     paragraph = doc.add_paragraph(style="Drama Title" if first else "Drama Note")
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    lines = str(item["translation_en"]).splitlines()
+    title_text = str(item["translation_en"])
+    if first and title_text.strip() == UNDETERMINED_ENGLISH_TITLE_MARKER:
+        title_text = DEPARTMENT_TITLE_NOTICE_ZH
+    lines = title_text.splitlines()
     for index, line in enumerate(lines):
         run = paragraph.add_run(line)
         _set_run_font(
@@ -490,6 +501,8 @@ def _add_dialogue(doc: Document, item: dict, format_spec: DramaFormat):
 def _add_note(doc: Document, item: dict, format_spec: DramaFormat):
     paragraph = doc.add_paragraph(style="Drama Note")
     text = str(item["translation_en"]).strip()
+    if text == UNDETERMINED_ON_SCREEN_TITLE_MARKER:
+        text = DEPARTMENT_ON_SCREEN_TITLE_NOTICE_ZH
     marker_match = re.match(r"^(\([^()]+\)|[^:]+:)(.*)$", text, re.DOTALL)
     if marker_match:
         marker = paragraph.add_run(marker_match.group(1))

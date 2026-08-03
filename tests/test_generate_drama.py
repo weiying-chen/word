@@ -384,6 +384,12 @@ def test_note_continuation_renders_as_one_paragraph(tmp_path: Path) -> None:
 
 def test_title_page_keeps_only_department_title_notice_visible(tmp_path: Path) -> None:
     payload = _payload()
+    payload["front_matter"][0]["translation_en"] = (
+        "[OFFICIAL ENGLISH TITLE TO BE DETERMINED BY THE DEPARTMENT]"
+    )
+    payload["scenes"][0]["elements"][-1]["translation_en"] = (
+        "TITLE: [OFFICIAL ENGLISH TITLE TO BE DETERMINED]"
+    )
     payload["front_matter"].extend(
         [
             _record(
@@ -416,7 +422,9 @@ def test_title_page_keeps_only_department_title_notice_visible(tmp_path: Path) -
 
     doc = Document(output_path)
     visible_text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
-    assert "WORKING TITLE" in visible_text
+    assert "【正式英文片名由部門決定】" in visible_text
+    assert "片名：【正式英文片名由部門決定】" in visible_text
+    assert "OFFICIAL ENGLISH TITLE TO BE DETERMINED" not in visible_text
     assert "SHOOTING SCRIPT V.4" not in visible_text
     assert "Written by Someone" not in visible_text
     assert "Produced by Company" not in visible_text
