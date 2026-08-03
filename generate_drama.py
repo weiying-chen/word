@@ -410,6 +410,16 @@ def _add_source_bookmark_around_run(run, source_id: str, bookmark_id: int) -> No
     run._r.addnext(end)
 
 
+def _add_empty_source_bookmark(paragraph, source_id: str, bookmark_id: int) -> None:
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), str(bookmark_id))
+    start.set(qn("w:name"), _bookmark_name(source_id))
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), str(bookmark_id))
+    paragraph._p.append(start)
+    paragraph._p.append(end)
+
+
 def _set_run_font(run, format_spec: DramaFormat, *, size_pt: float | None = None) -> None:
     set_run_font_family(
         run,
@@ -653,17 +663,34 @@ def generate_drama(
     generated_ids: list[str] = []
     front_count = sum(1 for _, record_type, _ in records if record_type == "title_page")
     front_seen = 0
+    title_paragraph = None
     bookmark_id = 1
     for (source_id, record_type, record), presentation_type in zip(
         records, presentation_types
     ):
         if record_type == "title_page":
-            paragraph = _add_title_page(
-                doc,
-                record,
-                format_spec,
-                first=front_seen == 0,
-            )
+            if front_seen == 0:
+                paragraph = _add_title_page(
+                    doc,
+                    record,
+                    format_spec,
+                    first=True,
+                )
+                title_paragraph = paragraph
+            else:
+                if title_paragraph is None:
+                    raise DramaValidationError("Unable to map title-page metadata.")
+                _add_empty_source_bookmark(
+                    title_paragraph,
+                    source_id,
+                    bookmark_id,
+                )
+                bookmark_id += 1
+                generated_ids.append(source_id)
+                front_seen += 1
+                if front_seen == front_count:
+                    title_paragraph.paragraph_format.page_break_after = True
+                continue
             front_seen += 1
             if front_seen == front_count:
                 paragraph.paragraph_format.page_break_after = True

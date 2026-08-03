@@ -382,6 +382,54 @@ def test_note_continuation_renders_as_one_paragraph(tmp_path: Path) -> None:
     assert result.generated_ids[-2:] == ["note-1", "continuation-1"]
 
 
+def test_title_page_keeps_only_department_title_notice_visible(tmp_path: Path) -> None:
+    payload = _payload()
+    payload["front_matter"].extend(
+        [
+            _record(
+                "title-2",
+                2,
+                "title_page",
+                "SHOOTING SCRIPT V.4\nWritten by Someone\nProduced by Company",
+            ),
+            _record("title-3", 3, "title_page", "Date: 2025/11/9"),
+        ]
+    )
+    for scene in payload["scenes"]:
+        scene["heading_order"] += 2
+        for element in scene["elements"]:
+            element["order"] += 2
+    payload["statistics"]["front_matter_count"] = 3
+    payload["statistics"]["element_count"] = 10
+    input_path = tmp_path / "drama.json"
+    reference_path = tmp_path / "reference.docx"
+    output_path = tmp_path / "output.docx"
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+    _write_reference(reference_path)
+
+    result = generate_drama.generate_drama(
+        input_path,
+        reference_path,
+        output_path,
+        preview=True,
+    )
+
+    doc = Document(output_path)
+    visible_text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
+    assert "WORKING TITLE" in visible_text
+    assert "SHOOTING SCRIPT V.4" not in visible_text
+    assert "Written by Someone" not in visible_text
+    assert "Produced by Company" not in visible_text
+    assert "Date: 2025/11/9" not in visible_text
+    assert generate_drama.read_document_mapping(output_path) == result.generated_ids
+    assert result.generated_ids[:4] == [
+        "title-1",
+        "title-2",
+        "title-3",
+        "heading-1",
+    ]
+
+
 def test_cli_preview_reports_incomplete_translation(
     tmp_path: Path, capsys
 ) -> None:
