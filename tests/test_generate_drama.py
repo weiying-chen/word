@@ -384,11 +384,9 @@ def test_note_continuation_renders_as_one_paragraph(tmp_path: Path) -> None:
 
 def test_title_page_keeps_only_department_title_notice_visible(tmp_path: Path) -> None:
     payload = _payload()
-    payload["front_matter"][0]["translation_en"] = (
-        "[OFFICIAL ENGLISH TITLE TO BE DETERMINED BY THE DEPARTMENT]"
-    )
+    payload["front_matter"][0]["translation_en"] = "【正式英文片名由部門決定】"
     payload["scenes"][0]["elements"][-1]["translation_en"] = (
-        "TITLE: [OFFICIAL ENGLISH TITLE TO BE DETERMINED]"
+        "片名：【正式英文片名由部門決定】"
     )
     payload["front_matter"].extend(
         [
