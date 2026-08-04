@@ -196,6 +196,32 @@ def test_preview_generates_translated_records_in_source_order(tmp_path: Path) ->
     assert generate_drama.read_document_mapping(output_path) == result.generated_ids
 
 
+def test_dialogue_can_render_trailing_action(tmp_path: Path) -> None:
+    input_path = tmp_path / "drama.json"
+    reference_path = tmp_path / "reference.docx"
+    output_path = tmp_path / "preview.docx"
+    payload = _payload()
+    dialogue = payload["scenes"][0]["elements"][1]
+    dialogue["trailing_action_en"] = "She turns away."
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+    _write_reference(reference_path)
+
+    generate_drama.generate_drama(
+        input_path,
+        reference_path,
+        output_path,
+        preview=True,
+    )
+
+    doc = Document(output_path)
+    dialogue_index = next(
+        index for index, paragraph in enumerate(doc.paragraphs) if "Hello." in paragraph.text
+    )
+    action = doc.paragraphs[dialogue_index + 1]
+    assert action.text == "She turns away."
+    assert action.runs[0].italic is True
+
+
 def test_final_rejects_missing_english_and_unresolved_flags(tmp_path: Path) -> None:
     input_path = tmp_path / "drama.json"
     reference_path = tmp_path / "reference.docx"

@@ -725,6 +725,13 @@ def generate_drama(
         _add_source_bookmark(paragraph, source_id, bookmark_id)
         bookmark_id += 1
         generated_ids.append(source_id)
+        trailing_action = str(record.get("trailing_action_en") or "").strip()
+        if record_type == "dialogue" and trailing_action:
+            _add_action(
+                doc,
+                {"translation_en": trailing_action},
+                format_spec,
+            )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
