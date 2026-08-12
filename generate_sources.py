@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 import unicodedata
 from pathlib import Path
 
@@ -84,10 +85,26 @@ def _subtitle_match_phrases(path: Path) -> list[str]:
     ]
 
 
+def _subtitle_internal_episode_id(path: Path) -> str | None:
+    match = re.search(r"第(\d+)集", path.stem)
+    return match.group(1) if match else None
+
+
+def _subtitle_broadcast_date(path: Path) -> str | None:
+    """Return YYYY-MM-DD only for the canonical YYYYMMDD.txt filename."""
+    match = re.fullmatch(r"(20\d{6})", path.stem)
+    if not match:
+        return None
+    value = match.group(1)
+    return f"{value[:4]}-{value[4:6]}-{value[6:]}"
+
+
 def _match_subtitle_files(
-    episodes: list[dict], subtitles_dir: Path
+    episodes: list[dict],
+    subtitles_dir: Path,
+    episode_aliases: dict[str, str] | None = None,
 ) -> dict[int, Path]:
-    """Match exact episode IDs first, then unique title/description phrases."""
+    """Match unique date filenames, exact IDs, aliases, then unique phrases."""
     candidates = [
         path
         for path in sorted(subtitles_dir.glob("*.txt"))
@@ -95,16 +112,60 @@ def _match_subtitle_files(
     ]
     matches: dict[int, Path] = {}
     used_files: set[Path] = set()
+    aliases = episode_aliases or {}
+
+    date_named_files: set[Path] = set()
+    episode_indexes_by_date: dict[str, list[int]] = {}
+    for index, episode in enumerate(episodes):
+        date = str(episode.get("date", "")).strip()
+        if date:
+            episode_indexes_by_date.setdefault(date, []).append(index)
+    for subtitle in candidates:
+        date = _subtitle_broadcast_date(subtitle)
+        if date is None:
+            continue
+        date_named_files.add(subtitle)
+        indexes = episode_indexes_by_date.get(date, [])
+        if len(indexes) == 1:
+            matches[indexes[0]] = subtitle
+            used_files.add(subtitle)
+        elif not indexes:
+            print(
+                f"[warn] {subtitle.name}: no episode found for {date}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"[warn] {subtitle.name}: {len(indexes)} episodes found for "
+                f"{date}; skipped because the date is ambiguous",
+                file=sys.stderr,
+            )
 
     for index, episode in enumerate(episodes):
+        if index in matches:
+            continue
         ep_id = str(episode.get("epId", "")).strip()
         exact = _find_subtitle_file(subtitles_dir, ep_id)
         if exact is not None:
             matches[index] = exact
             used_files.add(exact)
 
+    episode_indexes_by_id = {
+        str(episode.get("epId", "")).strip(): index
+        for index, episode in enumerate(episodes)
+    }
     for subtitle in candidates:
-        if subtitle in used_files:
+        if subtitle in used_files or subtitle in date_named_files:
+            continue
+        internal_id = _subtitle_internal_episode_id(subtitle)
+        target_id = aliases.get(internal_id or "", "")
+        index = episode_indexes_by_id.get(str(target_id).strip())
+        if index is not None and index not in matches:
+            matches[index] = subtitle
+            used_files.add(subtitle)
+
+    for subtitle in candidates:
+        if subtitle in used_files or subtitle in date_named_files:
             continue
         phrases = _subtitle_match_phrases(subtitle)
         if not phrases:
@@ -359,7 +420,15 @@ def generate_sources(
     generated = 0
     skipped = 0
     errors = 0
-    subtitle_matches = _match_subtitle_files(episodes, subtitles_dir)
+    aliases_path = episodes_file.parent / "episode_aliases.json"
+    episode_aliases = (
+        json.loads(aliases_path.read_text(encoding="utf-8"))
+        if aliases_path.is_file()
+        else {}
+    )
+    subtitle_matches = _match_subtitle_files(
+        episodes, subtitles_dir, episode_aliases
+    )
 
     for index, item in enumerate(episodes):
         subtitle_file = subtitle_matches.get(index)
