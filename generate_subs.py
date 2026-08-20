@@ -54,7 +54,6 @@ SUBTITLE_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
 TIME_MARKER_LINE_RE = re.compile(r"^\d{1,2}:\d{2}$")
-PARENTHESIZED_LINE_RE = re.compile(r"^[（(].*[）)]$")
 SYMBOL_FONT_NAME = "Segoe UI Symbol"
 CJK_FONT_NAME = "新細明體"
 CJK_MIDDLE_DOT = "\u2027"
@@ -438,8 +437,6 @@ def replace_body_paragraph(
 
     current = paragraph
     in_source_block = False
-    previous_was_subtitle_line = False
-    in_parenthesized_super_block = False
     in_xxx_highlight_block = False
     pending_xxx_time_marker = None
 
@@ -483,7 +480,7 @@ def replace_body_paragraph(
                 _add_text_runs(target, text)
 
     emitted_any_line = False
-    for idx, line in enumerate(lines):
+    for line in lines:
         if is_full_line_comment(line):
             continue
 
@@ -493,8 +490,6 @@ def replace_body_paragraph(
         normalized_line = _normalized_paragraph_text(line)
         if not normalized_line.strip():
             in_source_block = False
-            previous_was_subtitle_line = False
-            in_parenthesized_super_block = False
             in_xxx_highlight_block = False
             pending_xxx_time_marker = None
             emitted_any_line = True
@@ -519,18 +514,6 @@ def replace_body_paragraph(
             pending_xxx_time_marker = None
         if is_subtitle_line:
             in_source_block = False
-            in_parenthesized_super_block = False
-
-        stripped_line = line.strip()
-        is_parenthesized_line = bool(PARENTHESIZED_LINE_RE.match(stripped_line))
-        next_stripped_line = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
-        subtitle_has_super_block = is_subtitle_line and bool(
-            PARENTHESIZED_LINE_RE.match(next_stripped_line)
-        )
-        if is_parenthesized_line and (previous_was_subtitle_line or in_parenthesized_super_block):
-            in_parenthesized_super_block = True
-        elif not is_parenthesized_line:
-            in_parenthesized_super_block = False
 
         line_without_cps_marker = strip_cps_ignore_marker(line)
         cleaned_line = HIGHLIGHT_MARKER_RE.sub(r"\1", line_without_cps_marker)
@@ -548,17 +531,12 @@ def replace_body_paragraph(
             has_highlight_marker and bool(is_link),
         )
 
-        if (
-            in_xxx_highlight_block
-            or subtitle_has_super_block
-            or in_parenthesized_super_block
-        ):
+        if in_xxx_highlight_block:
             apply_highlight_to_runs(current, highlight_color=WD_COLOR_INDEX.YELLOW)
 
         if is_time_marker and not in_xxx_highlight_block:
             pending_xxx_time_marker = current
 
-        previous_was_subtitle_line = is_subtitle_line
         emitted_any_line = True
 
 

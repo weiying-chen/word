@@ -1836,7 +1836,7 @@ def test_generate_subs_treats_doc_file_line_as_source_block(tmp_path: Path) -> N
     assert term_paragraph.find("w:r/w:rPr/w:highlight", ns) is not None
 
 
-def test_generate_subs_highlights_parenthesized_super_block_after_subtitle_line(
+def test_generate_subs_does_not_highlight_parenthesized_translation_without_xxx_prefix(
     tmp_path: Path,
 ) -> None:
     template_path = tmp_path / "template.docx"
@@ -1871,9 +1871,7 @@ def test_generate_subs_highlights_parenthesized_super_block_after_subtitle_line(
     )
     p3 = next(p for p in doc.paragraphs if p.text.strip() == "00:01:44:00\t00:01:46:00\t下一句")
 
-    assert p_time.runs and all(
-        r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in p_time.runs if r.text
-    )
-    assert p1.runs and all(r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in p1.runs if r.text)
-    assert p2.runs and all(r.font.highlight_color == WD_COLOR_INDEX.YELLOW for r in p2.runs if r.text)
+    assert all(r.font.highlight_color is None for r in p_time.runs if r.text)
+    assert all(r.font.highlight_color is None for r in p1.runs if r.text)
+    assert all(r.font.highlight_color is None for r in p2.runs if r.text)
     assert all(r.font.highlight_color is None for r in p3.runs if r.text)
