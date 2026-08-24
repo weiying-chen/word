@@ -59,6 +59,9 @@ DASH_SPLIT_RE = re.compile(r"\s*-\s*")
 TAG_RE = re.compile(r"<[^>]+>")
 MULTISPACE_RE = re.compile(r"\s+")
 BODHI_TIMELINE_RE = re.compile(r"^\d{2}:\d{2}\s*[│|｜]")
+REVISION_SPEAKER_RE = re.compile(
+    r"^\s*[（(][^()（）\r\n]+[）)]\s*(?:_?\s*\d+(?:[’′']\d+)?[”″]?)?\s*$"
+)
 EPISODE_JSON_RE = re.compile(
     r"""\b(?:episodeJson|episdoeJson)\s*=\s*(?:"(?P<double>(?:\\.|[^"\\])*)"|'(?P<single>(?:\\.|[^'\\])*)')""",
     re.DOTALL,
@@ -456,6 +459,7 @@ def _build_bodhi_entry(
     if date_prefix:
         parsed_prefix = _parse_date_prefix(date_prefix, default_year=default_year)
         if parsed_prefix:
+            entry["reference_date"] = parsed_prefix
             entry["filename_prefix_override"] = f"{parsed_prefix}_"
     return entry
 
@@ -1132,6 +1136,89 @@ def strip_reference_block(doc: Document, ref_url: str, *, keep_ref_title: bool =
         remove_paragraph(doc.paragraphs[idx])
 
 
+def revision_path_for_date(refs_dir: Path | None, date_prefix: str) -> Path | None:
+    if refs_dir is None or not date_prefix or len(date_prefix) != 6:
+        return None
+    try:
+        year = 2000 + int(date_prefix[:2])
+        month_day = date_prefix[2:]
+    except ValueError:
+        return None
+    roc_year = year - 1911
+    candidate = refs_dir / f"al_{roc_year:03d}{month_day}_revision.docx"
+    return candidate if candidate.is_file() else None
+
+
+def extract_revision_transcript(path: Path) -> list[str]:
+    """Extract the detailed transcript while preserving internal blank lines."""
+    source = Document(str(path))
+    paragraphs = [paragraph.text for paragraph in source.paragraphs]
+    title_indices = [
+        index for index, text in enumerate(paragraphs) if "◎標題" in text
+    ]
+
+    if title_indices:
+        start = title_indices[0] + 1
+        end = title_indices[1] if len(title_indices) > 1 else len(paragraphs)
+    else:
+        speaker_indices = [
+            index
+            for index, text in enumerate(paragraphs)
+            if REVISION_SPEAKER_RE.fullmatch(text.strip())
+        ]
+        if not speaker_indices:
+            return []
+        start = speaker_indices[0]
+        end = len(paragraphs)
+
+    transcript = paragraphs[start:end]
+    while transcript and not transcript[0].strip():
+        transcript.pop(0)
+    while transcript and not transcript[-1].strip():
+        transcript.pop()
+    return transcript
+
+
+def append_revision_transcript(
+    doc: Document,
+    *,
+    ref_url: str,
+    transcript: list[str],
+    indent_inches: float,
+) -> None:
+    if not transcript:
+        return
+
+    in_reference_section = False
+    ref_url_seen = False
+    anchor: Paragraph | None = None
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        if text == "參考資料：":
+            in_reference_section = True
+            continue
+        if not in_reference_section:
+            continue
+        if text == "要用的影片：":
+            break
+        if ref_url and text == ref_url:
+            ref_url_seen = True
+            continue
+        if ref_url_seen and text:
+            anchor = paragraph
+            break
+
+    if anchor is None:
+        return
+
+    current = anchor
+    for text in transcript:
+        current = insert_paragraph_after(current, text)
+        set_source_indent(current, indent_inches)
+        if text:
+            apply_source_style(current)
+
+
 def strip_bodhi_video_labels(doc: Document) -> None:
     remove_indices = []
     for idx, paragraph in enumerate(doc.paragraphs):
@@ -1281,6 +1368,7 @@ def generate_docs(
     output_dir: Path,
     filename_prefix: str,
     filename_suffix: str,
+    refs_dir: Path | None = None,
 ) -> list[Path]:
     entries = extract_post_entries(schedule_path)
     output_paths: list[Path] = []
@@ -1342,11 +1430,23 @@ def generate_docs(
                     doc, chinese_title, english_title
                 )
         if entry.get("reference_only"):
+            revision_path = revision_path_for_date(
+                refs_dir, entry.get("reference_date", "")
+            )
+            transcript = (
+                extract_revision_transcript(revision_path) if revision_path else []
+            )
             strip_reference_block(doc, entry.get("ref_url", ""), keep_ref_title=True)
             strip_bodhi_video_labels(doc)
             strip_bodhi_title_block(doc)
             ensure_blank_after_labels(doc, {"參考資料："})
             normalize_empty_paragraphs(doc)
+            append_revision_transcript(
+                doc,
+                ref_url=entry.get("ref_url", ""),
+                transcript=transcript,
+                indent_inches=default_tab_stop,
+            )
         else:
             insert_video_section_spacing(
                 doc,
@@ -1383,6 +1483,11 @@ def main() -> None:
         help="Directory to write generated DOCX files.",
     )
     parser.add_argument(
+        "--refs-dir",
+        default=None,
+        help="Revision DOCX folder. Default: a refs folder beside the schedule.",
+    )
+    parser.add_argument(
         "--prefix",
         default="日期未定_",
         help="Filename prefix.",
@@ -1397,12 +1502,17 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    schedule_path = Path(args.schedule)
+    refs_dir = Path(args.refs_dir) if args.refs_dir else schedule_path.parent / "refs"
+    refs_dir = refs_dir if refs_dir.is_dir() else None
+
     generate_docs(
-        schedule_path=Path(args.schedule),
+        schedule_path=schedule_path,
         template_path=Path(args.template),
         output_dir=output_dir,
         filename_prefix=args.prefix,
         filename_suffix=args.suffix,
+        refs_dir=refs_dir,
     )
 
 

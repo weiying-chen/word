@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,7 +11,11 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 from generate_posts import generate_docs
-from style_tokens import BODY_TEXT_SIZE_PT, REFERENCE_TEXT_SIZE_PT
+from style_tokens import (
+    BODY_TEXT_SIZE_PT,
+    REFERENCE_HIGHLIGHT_DEFAULT,
+    REFERENCE_TEXT_SIZE_PT,
+)
 
 
 def _write_docx(path: Path, paragraphs: list[str]) -> None:
@@ -822,6 +827,98 @@ def test_generated_bodhi_docx_does_not_duplicate_ref_url_inside_reference_block(
     ref_idx = next(i for i, p in enumerate(texts) if p == "參考資料：")
     tail = texts[ref_idx:]
     assert tail.count(url) == 1
+
+
+def test_generated_bodhi_docx_appends_matching_revision_transcript(
+    tmp_path: Path,
+) -> None:
+    schedule_path = tmp_path / "bodhi.docx"
+    template_path = tmp_path / "template.docx"
+    output_dir = tmp_path / "outputs"
+    refs_dir = tmp_path / "refs"
+
+    url = "https://www.daai.tv/master/life-wisdom/example"
+    _write_docx(
+        schedule_path,
+        ["菩提1則", "1. alex", "8/17 真誠大愛護眾生", url],
+    )
+    _write_docx(
+        template_path,
+        [
+            "{{HEADER_TITLE}}",
+            "{{HEADER_URL}}",
+            "參考資料：",
+            "{{REF_URL}}",
+            "{{REF_TITLE}}",
+            "要用的影片：",
+            "{{VIDEO_URL}}",
+            "{{VIDEO_TITLE}}",
+        ],
+    )
+    refs_dir.mkdir()
+    roc_year = date.today().year - 1911
+    revision_path = refs_dir / f"al_{roc_year:03d}0817_revision.docx"
+    _write_docx(
+        revision_path,
+        [
+            "edited material that must not be copied",
+            "◎標題：真誠大愛護眾生",
+            "",
+            "(腎臟科醫師 張賀翔)1’11”",
+            "醫師分享第一段",
+            "",
+            "(上人)",
+            "聽來，",
+            "",
+            "",
+            "我都是感恩。",
+            "",
+            "◎標題：真誠大愛護眾生",
+            "◎結語",
+        ],
+    )
+    output_dir.mkdir()
+
+    with (
+        patch("generate_posts.fetch_bodhi_english_subtitle", return_value="Great Love"),
+        patch(
+            "generate_posts.fetch_bodhi_reference_excerpt",
+            return_value="Reference summary.",
+        ),
+    ):
+        output_paths = generate_docs(
+            schedule_path=schedule_path,
+            template_path=template_path,
+            output_dir=output_dir,
+            filename_prefix="",
+            filename_suffix="",
+            refs_dir=refs_dir,
+        )
+
+    doc = Document(str(output_paths[0]))
+    texts = [paragraph.text for paragraph in doc.paragraphs]
+    doctor_idx = texts.index("(腎臟科醫師 張賀翔)1’11”")
+    master_idx = texts.index("(上人)")
+    assert texts[doctor_idx : doctor_idx + 3] == [
+        "(腎臟科醫師 張賀翔)1’11”",
+        "醫師分享第一段",
+        "",
+    ]
+    assert texts[master_idx : master_idx + 5] == [
+        "(上人)",
+        "聽來，",
+        "",
+        "",
+        "我都是感恩。",
+    ]
+    for index in (doctor_idx, master_idx):
+        assert all(
+            run.font.highlight_color == REFERENCE_HIGHLIGHT_DEFAULT
+            for run in doc.paragraphs[index].runs
+            if run.text
+        )
+    assert "edited material that must not be copied" not in texts
+    assert "◎結語" not in texts
 
 
 def test_generated_posts_title_is_12pt_and_source_block_is_10pt(tmp_path: Path) -> None:
