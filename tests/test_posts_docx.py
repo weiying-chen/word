@@ -827,6 +827,8 @@ def test_generated_bodhi_docx_does_not_duplicate_ref_url_inside_reference_block(
     ref_idx = next(i for i, p in enumerate(texts) if p == "參考資料：")
     tail = texts[ref_idx:]
     assert tail.count(url) == 1
+    ref_url_idx = texts.index(url, ref_idx)
+    assert texts[ref_url_idx + 1] == ""
 
 
 def test_generated_bodhi_docx_appends_matching_revision_transcript(
@@ -975,6 +977,9 @@ def test_generated_posts_title_is_12pt_and_source_block_is_10pt(tmp_path: Path) 
         filename_suffix="",
     )
     rendered = Document(str(output_paths[0]))
+    rendered_texts = [paragraph.text.strip() for paragraph in rendered.paragraphs]
+    ref_url_idx = rendered_texts.index("https://example.com/news")
+    assert rendered_texts[ref_url_idx + 1] == ""
 
     p_by_text = {p.text.strip(): p for p in rendered.paragraphs if p.text.strip()}
     assert all(

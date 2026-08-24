@@ -1052,6 +1052,35 @@ def insert_paragraph_after(paragraph, text: str = "") -> Paragraph:
     return new_para
 
 
+def ensure_blank_after_reference_url(
+    doc: Document, *, ref_url: str, indent_inches: float
+) -> None:
+    if not ref_url:
+        return
+
+    in_reference_section = False
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        if text == "參考資料：":
+            in_reference_section = True
+            continue
+        if not in_reference_section:
+            continue
+        if text == "要用的影片：":
+            return
+        if text != ref_url:
+            continue
+
+        next_element = paragraph._p.getnext()
+        if next_element is not None and next_element.tag == qn("w:p"):
+            next_paragraph = Paragraph(next_element, paragraph._parent)
+            if not next_paragraph.text.strip():
+                return
+        blank = insert_paragraph_after(paragraph)
+        set_source_indent(blank, indent_inches)
+        return
+
+
 def insert_video_section_spacing(
     doc: Document,
     *,
@@ -1458,6 +1487,11 @@ def generate_docs(
             ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
             normalize_empty_paragraphs(doc)
             sync_empty_paragraph_indents(doc)
+        ensure_blank_after_reference_url(
+            doc,
+            ref_url=entry.get("ref_url", ""),
+            indent_inches=default_tab_stop,
+        )
         doc.save(str(output_path))
         output_paths.append(output_path)
     return output_paths
