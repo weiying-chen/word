@@ -911,6 +911,7 @@ def test_generated_bodhi_docx_appends_matching_revision_transcript(
         "",
         "我都是感恩。",
     ]
+    assert any("Reference summary." in text for text in texts)
     for index in (doctor_idx, master_idx):
         assert all(
             run.font.highlight_color == REFERENCE_HIGHLIGHT_DEFAULT
