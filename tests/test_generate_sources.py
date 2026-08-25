@@ -5,8 +5,8 @@ from docx import Document
 
 from generate_sources import (
     generate_sources,
-    resolve_default_episodes_json,
-    resolve_default_sources_dir,
+    resolve_default_episodes_file,
+    resolve_default_subtitles_dir,
 )
 
 
@@ -16,27 +16,17 @@ def _write_template(path: Path) -> None:
     doc.save(str(path))
 
 
-def test_resolve_default_episodes_json_uses_current_folder_file(tmp_path: Path) -> None:
+def test_resolve_default_episodes_file_uses_current_folder_file(tmp_path: Path) -> None:
     episodes_path = tmp_path / "episodes.json"
     episodes_path.write_text("[]", encoding="utf-8")
 
-    assert resolve_default_episodes_json(tmp_path) == episodes_path
+    assert resolve_default_episodes_file(tmp_path) == episodes_path
 
 
-def test_resolve_default_sources_dir_prefers_subtitles(tmp_path: Path) -> None:
-    sources_dir = tmp_path / "sources"
+def test_resolve_default_subtitles_dir_uses_subtitles_folder(tmp_path: Path) -> None:
     subtitles_dir = tmp_path / "subtitles"
-    sources_dir.mkdir()
-    subtitles_dir.mkdir()
 
-    assert resolve_default_sources_dir(tmp_path) == subtitles_dir
-
-
-def test_resolve_default_sources_dir_falls_back_to_sources(tmp_path: Path) -> None:
-    sources_dir = tmp_path / "sources"
-    sources_dir.mkdir()
-
-    assert resolve_default_sources_dir(tmp_path) == sources_dir
+    assert resolve_default_subtitles_dir(tmp_path) == subtitles_dir
 
 
 def test_generate_sources_skips_when_subtitle_file_missing(tmp_path: Path) -> None:
@@ -61,9 +51,9 @@ def test_generate_sources_skips_when_subtitle_file_missing(tmp_path: Path) -> No
     episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
 
     result = generate_sources(
-        episodes_json=episodes_path,
+        episodes_file=episodes_path,
         template_path=template_path,
-        sources_dir=sources_dir,
+        subtitles_dir=sources_dir,
         output_dir=output_dir,
     )
 
@@ -100,9 +90,9 @@ def test_generate_sources_writes_docx_for_existing_subtitle_file(tmp_path: Path)
     episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
 
     result = generate_sources(
-        episodes_json=episodes_path,
+        episodes_file=episodes_path,
         template_path=template_path,
-        sources_dir=sources_dir,
+        subtitles_dir=sources_dir,
         output_dir=output_dir,
     )
 
@@ -147,9 +137,9 @@ def test_generate_sources_reads_utf16_subtitle_file(tmp_path: Path) -> None:
     episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
 
     result = generate_sources(
-        episodes_json=episodes_path,
+        episodes_file=episodes_path,
         template_path=template_path,
-        sources_dir=sources_dir,
+        subtitles_dir=sources_dir,
         output_dir=output_dir,
     )
     assert result["generated"] == 1
@@ -185,9 +175,9 @@ def test_generate_sources_falls_back_to_hardcoded_timestamp_without_last_line(
     episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
 
     generate_sources(
-        episodes_json=episodes_path,
+        episodes_file=episodes_path,
         template_path=template_path,
-        sources_dir=sources_dir,
+        subtitles_dir=sources_dir,
         output_dir=output_dir,
     )
 
@@ -230,9 +220,9 @@ def test_generate_sources_uses_two_star_markers_for_range_and_highlights(
     episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
 
     generate_sources(
-        episodes_json=episodes_path,
+        episodes_file=episodes_path,
         template_path=template_path,
-        sources_dir=sources_dir,
+        subtitles_dir=sources_dir,
         output_dir=output_dir,
     )
 
@@ -291,9 +281,9 @@ def test_generate_sources_does_not_highlight_touching_boundary_lines(
     episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
 
     generate_sources(
-        episodes_json=episodes_path,
+        episodes_file=episodes_path,
         template_path=template_path,
-        sources_dir=sources_dir,
+        subtitles_dir=sources_dir,
         output_dir=output_dir,
     )
 
@@ -342,9 +332,9 @@ def test_generate_sources_respects_frame_boundary_after_end_marker(
     episodes_path.write_text(json.dumps(episodes, ensure_ascii=False), encoding="utf-8")
 
     generate_sources(
-        episodes_json=episodes_path,
+        episodes_file=episodes_path,
         template_path=template_path,
-        sources_dir=sources_dir,
+        subtitles_dir=sources_dir,
         output_dir=output_dir,
     )
 
