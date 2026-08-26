@@ -10,7 +10,7 @@ from docx.shared import Pt
 import zipfile
 import xml.etree.ElementTree as ET
 
-from generate_posts import generate_docs
+from prepare_posts import generate_docs
 from style_tokens import (
     BODY_TEXT_SIZE_PT,
     REFERENCE_HIGHLIGHT_DEFAULT,
@@ -250,7 +250,7 @@ def test_generated_docx_fetches_youtube_video_summary_when_missing(
     output_dir.mkdir()
 
     with patch(
-        "generate_posts.fetch_youtube_video_descriptions",
+        "prepare_posts.fetch_youtube_video_descriptions",
         return_value=(
             "For hepatitis B and C carriers, regular blood tests are important—but they don't tell the whole story. Because the liver has no pain sensation, problems can develop silently. In one case, a tumor wasn't discovered until it had grown to 10 centimeters. How did it go unnoticed for so long? Why are imaging tests so important for early detection? Let's hear what the doctor has to say.",
             "對於B型與C型肝炎帶原者而言，單靠定期的抽血檢查並不足夠。由於肝臟沒有痛覺神經，問題往往不易被察覺。有一個案例，腫瘤長到10公分才被發現。為何會這麼晚才察覺？影像檢查在早期發現中扮演什麼角色？一起來聽聽醫師怎麼說。",
@@ -469,7 +469,7 @@ def test_generated_bodhi_docx_puts_english_title_under_chinese_title(tmp_path: P
     output_dir.mkdir()
 
     en_title = "32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
-    with patch("generate_posts.fetch_bodhi_english_subtitle", return_value=en_title):
+    with patch("prepare_posts.fetch_bodhi_english_subtitle", return_value=en_title):
         output_paths = generate_docs(
             schedule_path=schedule_path,
             template_path=template_path,
@@ -524,7 +524,7 @@ def test_generated_bodhi_docx_strips_title_placeholder_block(tmp_path: Path) -> 
     output_dir.mkdir()
 
     en_title = "Cherishing Every Opportunity to Serve"
-    with patch("generate_posts.fetch_bodhi_english_subtitle", return_value=en_title):
+    with patch("prepare_posts.fetch_bodhi_english_subtitle", return_value=en_title):
         output_paths = generate_docs(
             schedule_path=schedule_path,
             template_path=template_path,
@@ -572,7 +572,7 @@ def test_generated_bodhi_docx_injects_english_under_fixed_title_lines_not_hashta
     output_dir.mkdir()
 
     en_title = "32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
-    with patch("generate_posts.fetch_bodhi_english_subtitle", return_value=en_title):
+    with patch("prepare_posts.fetch_bodhi_english_subtitle", return_value=en_title):
         output_paths = generate_docs(
             schedule_path=schedule_path,
             template_path=template_path,
@@ -759,7 +759,7 @@ def test_generated_bodhi_docx_adds_blank_after_ref_label(tmp_path: Path) -> None
     output_dir.mkdir()
 
     with patch(
-        "generate_posts.fetch_bodhi_english_subtitle",
+        "prepare_posts.fetch_bodhi_english_subtitle",
         return_value="32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore",
     ):
         output_paths = generate_docs(
@@ -809,7 +809,7 @@ def test_generated_bodhi_docx_does_not_duplicate_ref_url_inside_reference_block(
     output_dir.mkdir()
 
     with patch(
-        "generate_posts.fetch_bodhi_english_subtitle",
+        "prepare_posts.fetch_bodhi_english_subtitle",
         return_value="32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore",
     ):
         output_paths = generate_docs(
@@ -882,9 +882,9 @@ def test_generated_bodhi_docx_appends_matching_revision_transcript(
     output_dir.mkdir()
 
     with (
-        patch("generate_posts.fetch_bodhi_english_subtitle", return_value="Great Love"),
+        patch("prepare_posts.fetch_bodhi_english_subtitle", return_value="Great Love"),
         patch(
-            "generate_posts.fetch_bodhi_reference_excerpt",
+            "prepare_posts.fetch_bodhi_reference_excerpt",
             return_value="Reference summary.",
         ),
     ):

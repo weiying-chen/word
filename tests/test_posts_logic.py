@@ -8,7 +8,7 @@ from docx.opc.constants import RELATIONSHIP_TYPE as RT
 
 from datetime import date
 
-from generate_posts import (
+from prepare_posts import (
     extract_post_entries,
     extract_post_titles,
     fetch_bodhi_english_subtitle,
@@ -98,7 +98,7 @@ def test_bodhi_reference_excerpt_skips_copyright_and_stops_before_timeline() -> 
     </body></html>
     """
 
-    with patch("generate_posts.urlopen", return_value=_FakeResponse(html)):
+    with patch("prepare_posts.urlopen", return_value=_FakeResponse(html)):
         excerpt = fetch_bodhi_reference_excerpt(
             "https://www.daai.tv/master/life-wisdom/P90230275?more=true",
             "運轉法輪入人群",
@@ -126,7 +126,7 @@ def test_youtube_video_descriptions_parse_english_and_chinese() -> None:
     )
 
     with patch(
-        "generate_posts.urlopen",
+        "prepare_posts.urlopen",
         return_value=_FakeResponse(f'{{"shortDescription":"{escaped}"}}'),
     ):
         desc_en, desc_zh = fetch_youtube_video_descriptions(
@@ -174,7 +174,7 @@ def test_bodhi_reference_excerpt_uses_episode_json_description() -> None:
     </body></html>
     """
 
-    with patch("generate_posts.urlopen", return_value=_FakeResponse(html)):
+    with patch("prepare_posts.urlopen", return_value=_FakeResponse(html)):
         excerpt = fetch_bodhi_reference_excerpt(
             "https://www.daai.tv/master/life-wisdom/P90230281?more=true",
             "愛善傳承締祥和",
@@ -206,7 +206,7 @@ def test_bodhi_english_subtitle_joins_multiline_title() -> None:
     </body></html>
     """
 
-    with patch("generate_posts.urlopen", return_value=_FakeResponse(html)):
+    with patch("prepare_posts.urlopen", return_value=_FakeResponse(html)):
         title = fetch_bodhi_english_subtitle(
             "https://www.daai.tv/master/life-wisdom/P90230275?more=true",
             "轉貧為富轉心輪",
@@ -374,7 +374,7 @@ def test_bodhi_entry_includes_english_title_from_page(tmp_path: Path) -> None:
     )
 
     with patch(
-        "generate_posts.fetch_bodhi_english_subtitle",
+        "prepare_posts.fetch_bodhi_english_subtitle",
         return_value="32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore",
     ):
         entries = extract_post_entries(schedule_path)
