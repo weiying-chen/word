@@ -165,6 +165,35 @@ class RenderMetaTests(unittest.TestCase):
         self.assertIn("English Title", texts)
         self.assertNotIn("{{TITLE_EN}}", texts)
 
+    def test_generate_meta_removes_trailing_blank_template_paragraph(self) -> None:
+        source_text = "\n".join(
+            [
+                "TITLE: English Title",
+                "OVERVIEW: English overview.",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            template_path = tmpdir_path / "meta_template.docx"
+            payload_path = tmpdir_path / "news_input.txt"
+            output_path = tmpdir_path / "meta.docx"
+
+            doc = Document()
+            doc.add_paragraph("重點標")
+            doc.add_paragraph("{{TITLE_EN}}")
+            doc.add_paragraph("YT簡介")
+            doc.add_paragraph("{{OVERVIEW_EN}}")
+            doc.add_paragraph("")
+            doc.save(str(template_path))
+            payload_path.write_text(source_text, encoding="utf-8")
+
+            generate_meta(template_path, payload_path, output_path)
+
+            texts = [p.text for p in Document(str(output_path)).paragraphs]
+
+        self.assertEqual(texts[-1], "English overview.")
+
     def test_generate_meta_raises_when_title_and_overview_missing(self) -> None:
         source_text = "\n".join(
             [

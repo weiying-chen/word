@@ -612,6 +612,17 @@ def ensure_single_blank_before_label(doc: Document, label_text: str) -> None:
         remove_paragraph(paragraphs[idx - 2])
 
 
+def remove_trailing_blank_paragraphs(doc: Document) -> None:
+    while doc.paragraphs:
+        paragraph = doc.paragraphs[-1]
+        has_drawing = (
+            paragraph._p.find(".//w:drawing", paragraph._p.nsmap) is not None
+        )
+        if paragraph.text.strip() or has_drawing:
+            return
+        remove_paragraph(paragraph)
+
+
 def _label_without_repeated_english_name(
     label_zh: str,
     *,
@@ -857,6 +868,7 @@ def generate_meta(
         overview_placeholder, str(data.get("overview_en", ""))
     )
     ensure_blank_after_labels(doc, HIGHLIGHT_LABELS)
+    remove_trailing_blank_paragraphs(doc)
     apply_font_size_to_document_runs(doc, font_size_pt=BODY_TEXT_SIZE_PT)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
