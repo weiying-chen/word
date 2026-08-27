@@ -70,6 +70,11 @@ YOUTUBE_SHORT_DESCRIPTION_RE = re.compile(
     r'"shortDescription"\s*:\s*"(?P<description>(?:\\.|[^"\\])*)"',
     re.DOTALL,
 )
+YOUTUBE_META_TITLE_RE = re.compile(
+    r'<meta\s+(?:name="title"|property="og:title")\s+'
+    r'content="(?P<title>[^"]*)"',
+    re.IGNORECASE,
+)
 
 
 def _extract_person_name(line: str) -> str | None:
@@ -613,6 +618,13 @@ def _extract_youtube_short_description(page: str) -> str:
     return ""
 
 
+def _extract_youtube_title(page: str) -> str:
+    match = YOUTUBE_META_TITLE_RE.search(page)
+    if not match:
+        return ""
+    return html.unescape(match.group("title")).strip()
+
+
 def _description_paragraphs(description: str) -> list[str]:
     paragraphs: list[str] = []
     current: list[str] = []
@@ -631,9 +643,9 @@ def _description_paragraphs(description: str) -> list[str]:
     return [paragraph for paragraph in paragraphs if paragraph]
 
 
-def fetch_youtube_video_descriptions(url: str) -> tuple[str, str]:
+def fetch_youtube_video_metadata(url: str) -> tuple[str, str, str]:
     if not url or "youtu" not in url:
-        return "", ""
+        return "", "", ""
     try:
         req = Request(
             url,
@@ -645,13 +657,13 @@ def fetch_youtube_video_descriptions(url: str) -> tuple[str, str]:
         with urlopen(req, timeout=8) as resp:
             raw = resp.read()
     except Exception:
-        return "", ""
+        return "", "", ""
 
-    description = _extract_youtube_short_description(
-        raw.decode("utf-8", errors="ignore")
-    )
+    page = raw.decode("utf-8", errors="ignore")
+    title = _extract_youtube_title(page)
+    description = _extract_youtube_short_description(page)
     if not description:
-        return "", ""
+        return title, "", ""
 
     english = ""
     chinese = ""
@@ -662,6 +674,11 @@ def fetch_youtube_video_descriptions(url: str) -> tuple[str, str]:
             english = paragraph
         if english and chinese:
             break
+    return title, english, chinese
+
+
+def fetch_youtube_video_descriptions(url: str) -> tuple[str, str]:
+    _, english, chinese = fetch_youtube_video_metadata(url)
     return english, chinese
 
 

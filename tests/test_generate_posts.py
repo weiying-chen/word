@@ -2,13 +2,16 @@ from pathlib import Path
 from unittest.mock import patch
 
 from docx import Document
+from docx.shared import Pt
 
 from generate_posts import generate_post, parse_post_text
 
 
-POST_TEXT = """## Da Ai Journal - Staying Young at 105 (大愛全紀實 - 人生歌未央 [1])
+POST_TEXT = """TITLE: Da Ai Journal - Staying Young at 105 (大愛全紀實 - 人生歌未央 [1])
 
-Video: https://www.youtube.com/watch?v=example
+VIDEO_URL: https://www.youtube.com/watch?v=example
+
+BODY:
 
 Lin You-mao is 105 years old—and he's still playing badminton.
 
@@ -18,11 +21,12 @@ Lin You-mao is 105 years old—and he's still playing badminton.
 
 #大愛全紀實 #人生歌未央
 
-### Sources
+SOURCES:
 
-9/20 World Cleanup Day 世界環境清潔日
+source.docx
 
-https://www.worldcleanupday.org/
+00:01:31:22\t00:01:34:22\t中文字幕
+English translation.
 """
 
 
@@ -39,8 +43,25 @@ def test_parse_completed_post_text() -> None:
     assert post["hashtags_en"] == "#DaAiJournal #StayingYoungAt105"
     assert post["post_zh"] == "林友茂今年105歲了，至今仍在打羽球。"
     assert post["hashtags_zh"] == "#大愛全紀實 #人生歌未央"
-    assert post["ref_title"] == "9/20 World Cleanup Day 世界環境清潔日"
-    assert post["ref_url"] == "https://www.worldcleanupday.org/"
+    assert post["sources"] == (
+        "source.docx\n\n"
+        "00:01:31:22\t00:01:34:22\t中文字幕\n"
+        "English translation."
+    )
+
+
+def test_parse_completed_post_text_requires_valid_video_url() -> None:
+    invalid = POST_TEXT.replace(
+        "VIDEO_URL: https://www.youtube.com/watch?v=example",
+        "VIDEO_URL: interview.mp4",
+    )
+
+    try:
+        parse_post_text(invalid)
+    except ValueError as exc:
+        assert str(exc) == "[error] VIDEO_URL must be an HTTP or HTTPS URL."
+    else:
+        raise AssertionError("Expected invalid VIDEO_URL to be rejected.")
 
 
 def test_generate_completed_post_uses_post_template_without_draft_header(
@@ -51,8 +72,12 @@ def test_generate_completed_post_uses_post_template_without_draft_header(
     input_path.write_text(POST_TEXT, encoding="utf-8")
 
     with patch(
-        "generate_posts.fetch_youtube_video_descriptions",
-        return_value=("English video summary.", "中文影片摘要。"),
+        "generate_posts.fetch_youtube_video_metadata",
+        return_value=(
+            "Actual YouTube Video Title",
+            "English video summary.",
+            "中文影片摘要。",
+        ),
     ):
         generate_post(
             input_path=input_path,
@@ -64,12 +89,28 @@ def test_generate_completed_post_uses_post_template_without_draft_header(
     assert "標題" not in texts
     assert not any(text.startswith("9/20(日)") for text in texts)
     assert texts[0] == (
-        "Da Ai Journal - Staying Young at 105 "
-        "(大愛全紀實 - 人生歌未央 [1])\n\n"
+        "Da Ai Journal - Staying Young at 105 (大愛全紀實 - 人生歌未央 [1])"
+    )
+    assert texts[1] == "https://www.youtube.com/watch?v=example"
+    assert texts[3] == (
         "Lin You-mao is 105 years old—and he's still playing badminton."
     )
-    assert "https://www.worldcleanupday.org/" in texts
-    assert "9/20 World Cleanup Day 世界環境清潔日" in texts
-    assert "https://www.youtube.com/watch?v=example" in texts
-    assert "English video summary." in texts
+    assert sum(
+        "Da Ai Journal - Staying Young at 105" in text for text in texts
+    ) == 1
+    assert "Actual YouTube Video Title" in texts
+    assert "source.docx" in texts
+    assert "00:01:31:22\t00:01:34:22\t中文字幕" in texts
+    assert "English translation." in texts
+    assert "English video summary." not in texts
     assert "中文影片摘要。" in texts
+
+    timestamp = next(
+        paragraph
+        for paragraph in Document(output_path).paragraphs
+        if paragraph.text.startswith("00:01:31:22")
+    )
+    assert timestamp.paragraph_format.left_indent is not None
+    assert timestamp.text.count("\t") == 2
+    assert all(run.font.size == Pt(10) for run in timestamp.runs if run.text)
+    assert all(run.font.highlight_color is not None for run in timestamp.runs if run.text)

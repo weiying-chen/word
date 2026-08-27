@@ -9,26 +9,35 @@ from pathlib import Path
 from docx import Document
 
 from docx_utils import (
+    add_highlighted_run,
+    add_hyperlink,
     apply_font_size_to_document_runs,
+    clear_paragraph,
     ensure_blank_after_labels,
     get_default_tab_stop_inches,
+    set_source_indent,
 )
 from prepare_posts import (
+    apply_source_style,
     ensure_blank_after_reference_url,
-    fetch_youtube_video_descriptions,
+    fetch_youtube_video_metadata,
     insert_video_section_spacing,
+    insert_paragraph_after,
     normalize_empty_paragraphs,
     remove_paragraph,
     replace_placeholders,
     sync_empty_paragraph_indents,
 )
-from style_tokens import BODY_TEXT_SIZE_PT
+from style_tokens import (
+    BODY_TEXT_SIZE_PT,
+    REFERENCE_HIGHLIGHT_DEFAULT,
+    REFERENCE_TEXT_SIZE_PT,
+)
 
 
-TITLE_RE = re.compile(r"^##\s+(?P<title>.+?)\s*$")
-SOURCES_RE = re.compile(r"^###\s+Sources\s*$", re.IGNORECASE)
-VIDEO_RE = re.compile(r"^Video(?:\s+URL)?\s*:\s*(?P<url>https?://\S+)\s*$", re.I)
-YOUTUBE_RE = re.compile(r"^https?://(?:www\.)?(?:youtube\.com|youtu\.be)/\S+$", re.I)
+FIELD_RE = re.compile(r"^(?P<key>[A-Za-z_]+)\s*:\s*(?P<value>.*)$")
+FIELD_KEYS = {"TITLE", "VIDEO_URL", "BODY", "SOURCES"}
+HTTP_URL_RE = re.compile(r"^https?://\S+$", re.IGNORECASE)
 
 
 def _join_content(lines: list[str]) -> str:
@@ -41,67 +50,49 @@ def _join_content(lines: list[str]) -> str:
 
 def parse_post_text(text: str) -> dict[str, str]:
     lines = text.lstrip("\ufeff").splitlines()
-    title_idx = next(
-        (idx for idx, line in enumerate(lines) if TITLE_RE.match(line.strip())),
-        None,
-    )
-    if title_idx is None:
-        raise ValueError("[error] Missing post title: expected a '## Title' line.")
-    title_match = TITLE_RE.match(lines[title_idx].strip())
-    assert title_match is not None
-    title = title_match.group("title").strip()
-
-    sources_idx = next(
-        (
-            idx
-            for idx in range(title_idx + 1, len(lines))
-            if SOURCES_RE.match(lines[idx].strip())
-        ),
-        len(lines),
-    )
-    content = lines[title_idx + 1 : sources_idx]
-    source_lines = lines[sources_idx + 1 :] if sources_idx < len(lines) else []
-
-    video_url = ""
-    cleaned_content: list[str] = []
-    for line in content:
-        stripped = line.strip()
-        video_match = VIDEO_RE.match(stripped)
-        if video_match and not video_url:
-            video_url = video_match.group("url")
+    fields: dict[str, str] = {}
+    idx = 0
+    while idx < len(lines):
+        match = FIELD_RE.match(lines[idx].strip())
+        if match is None or match.group("key").upper() not in FIELD_KEYS:
+            idx += 1
             continue
-        if YOUTUBE_RE.match(stripped) and not video_url:
-            video_url = stripped
-            continue
-        cleaned_content.append(line)
+        key = match.group("key").upper()
+        collected = [match.group("value")] if match.group("value") else []
+        idx += 1
+        while idx < len(lines):
+            next_match = FIELD_RE.match(lines[idx].strip())
+            if next_match and next_match.group("key").upper() in FIELD_KEYS:
+                break
+            collected.append(lines[idx])
+            idx += 1
+        fields[key] = "\n".join(collected).strip()
+
+    for key in ("TITLE", "VIDEO_URL", "BODY", "SOURCES"):
+        if not fields.get(key, "").strip():
+            raise ValueError(f"[error] Missing required field: {key}")
+
+    video_url = fields["VIDEO_URL"].strip()
+    if not HTTP_URL_RE.fullmatch(video_url):
+        raise ValueError("[error] VIDEO_URL must be an HTTP or HTTPS URL.")
+
+    content = fields["BODY"].splitlines()
 
     hashtag_indices = [
-        idx for idx, line in enumerate(cleaned_content) if line.strip().startswith("#")
+        idx for idx, line in enumerate(content) if line.strip().startswith("#")
     ]
-    if len(hashtag_indices) < 2:
-        raise ValueError("[error] Expected English and Chinese hashtag lines.")
+    if len(hashtag_indices) != 2:
+        raise ValueError("[error] BODY must contain exactly two hashtag lines.")
     en_hash_idx, zh_hash_idx = hashtag_indices[0], hashtag_indices[1]
 
-    ref_url = ""
-    ref_title_lines: list[str] = []
-    for line in source_lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if stripped.startswith("http") and not ref_url:
-            ref_url = stripped
-        else:
-            ref_title_lines.append(stripped)
-
     return {
-        "title": title,
+        "title": fields["TITLE"].strip(),
         "video_url": video_url,
-        "post_en": _join_content(cleaned_content[:en_hash_idx]),
-        "hashtags_en": cleaned_content[en_hash_idx].strip(),
-        "post_zh": _join_content(cleaned_content[en_hash_idx + 1 : zh_hash_idx]),
-        "hashtags_zh": cleaned_content[zh_hash_idx].strip(),
-        "ref_url": ref_url,
-        "ref_title": "\n".join(ref_title_lines),
+        "post_en": _join_content(content[:en_hash_idx]),
+        "hashtags_en": content[en_hash_idx].strip(),
+        "post_zh": _join_content(content[en_hash_idx + 1 : zh_hash_idx]),
+        "hashtags_zh": content[zh_hash_idx].strip(),
+        "sources": fields["SOURCES"],
     }
 
 
@@ -111,8 +102,6 @@ def parse_post_file(path: Path) -> dict[str, str]:
 
 def _remove_draft_scaffolding(doc: Document) -> None:
     remove_text = {
-        "{{HEADER_TITLE}}",
-        "{{HEADER_URL}}",
         "標題",
         "{{TITLE_LINE_1}}",
         "{{TITLE_LINE_2}}",
@@ -122,6 +111,40 @@ def _remove_draft_scaffolding(doc: Document) -> None:
             remove_paragraph(paragraph)
     while doc.paragraphs and not doc.paragraphs[0].text.strip():
         remove_paragraph(doc.paragraphs[0])
+
+
+def _render_sources(doc: Document, sources: str, indent_inches: float) -> None:
+    target = next(
+        (
+            paragraph
+            for paragraph in doc.paragraphs
+            if paragraph.text.strip() == "{{REF_TITLE}}"
+        ),
+        None,
+    )
+    if target is None:
+        return
+
+    lines = sources.splitlines()
+    clear_paragraph(target)
+    current = target
+    for idx, line in enumerate(lines):
+        if idx:
+            current = insert_paragraph_after(current)
+        stripped = line.strip()
+        if not stripped:
+            continue
+        set_source_indent(current, indent_inches)
+        if HTTP_URL_RE.fullmatch(stripped):
+            add_hyperlink(current, stripped, stripped, highlight=True)
+        else:
+            add_highlighted_run(
+                current,
+                line,
+                font_size_pt=REFERENCE_TEXT_SIZE_PT,
+                highlight_color=REFERENCE_HIGHLIGHT_DEFAULT,
+            )
+        apply_source_style(current)
 
 
 def _resolve_template_path(path: Path) -> Path:
@@ -140,35 +163,36 @@ def generate_post(
     video_url = post["video_url"]
     video_desc_en = ""
     video_desc_zh = ""
+    video_title = ""
     if video_url:
-        video_desc_en, video_desc_zh = fetch_youtube_video_descriptions(video_url)
+        video_title, _, video_desc_zh = fetch_youtube_video_metadata(video_url)
+    video_title = video_title or post["title"]
 
     doc = Document(str(_resolve_template_path(template_path)))
     apply_font_size_to_document_runs(doc, font_size_pt=BODY_TEXT_SIZE_PT)
     _remove_draft_scaffolding(doc)
     default_tab_stop = get_default_tab_stop_inches(doc)
-    post_en = post["title"]
-    if post["post_en"]:
-        post_en = f"{post_en}\n\n{post['post_en']}"
     mapping = {
-        "{{POST_EN}}": post_en,
+        "{{HEADER_TITLE}}": post["title"],
+        "{{HEADER_URL}}": video_url,
+        "{{POST_EN}}": post["post_en"],
         "{{HASHTAGS_EN}}": post["hashtags_en"],
         "{{POST_ZH}}": post["post_zh"],
         "{{HASHTAGS_ZH}}": post["hashtags_zh"],
-        "{{REF_URL}}": post["ref_url"],
-        "{{REF_TITLE}}": post["ref_title"],
+        "{{REF_URL}}": "",
         "{{REF_SUMMARY_ZH}}": "",
         "{{REF_TITLE_EN}}": "",
         "{{REF_SUMMARY_EN}}": "",
         "{{VIDEO_URL}}": video_url,
-        "{{VIDEO_TITLE}}": post["title"],
+        "{{VIDEO_TITLE}}": video_title,
         "{{VIDEO_DESC_EN}}": video_desc_en,
         "{{VIDEO_DESC_ZH}}": video_desc_zh,
     }
+    _render_sources(doc, post["sources"], default_tab_stop)
     replace_placeholders(doc, mapping, default_tab_stop)
     insert_video_section_spacing(
         doc,
-        video_title=post["title"],
+        video_title=video_title,
         video_desc_en=video_desc_en,
         video_desc_zh=video_desc_zh,
         indent_inches=default_tab_stop,
@@ -178,7 +202,7 @@ def generate_post(
     sync_empty_paragraph_indents(doc)
     ensure_blank_after_reference_url(
         doc,
-        ref_url=post["ref_url"],
+        ref_url="",
         indent_inches=default_tab_stop,
     )
 
