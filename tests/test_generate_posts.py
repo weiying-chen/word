@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from docx import Document
+from docx.oxml.ns import qn
 from docx.shared import Pt
 
 from generate_posts import generate_post, parse_post_text
@@ -114,3 +115,46 @@ def test_generate_completed_post_uses_post_template_without_draft_header(
     assert timestamp.text.count("\t") == 2
     assert all(run.font.size == Pt(10) for run in timestamp.runs if run.text)
     assert all(run.font.highlight_color is not None for run in timestamp.runs if run.text)
+
+
+def test_generate_completed_post_renders_body_as_real_paragraphs(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "post.txt"
+    output_path = tmp_path / "post.docx"
+    input_path.write_text(
+        POST_TEXT.replace(
+            "Lin You-mao is 105 years old—and he's still playing badminton.",
+            "English paragraph one.\n\nEnglish paragraph two.",
+        ).replace(
+            "林友茂今年105歲了，至今仍在打羽球。",
+            "中文第一段。\n\n中文第二段。",
+        ),
+        encoding="utf-8",
+    )
+
+    with patch(
+        "generate_posts.fetch_youtube_video_metadata",
+        return_value=("Video title", "", "中文影片摘要。"),
+    ):
+        generate_post(
+            input_path=input_path,
+            template_path=Path("templates/post_template.docx"),
+            output_path=output_path,
+        )
+
+    doc = Document(output_path)
+    texts = [paragraph.text for paragraph in doc.paragraphs]
+    assert "English paragraph one." in texts
+    assert "English paragraph two." in texts
+    assert "中文第一段。" in texts
+    assert "中文第二段。" in texts
+    for text in {
+        "English paragraph one.",
+        "English paragraph two.",
+        "中文第一段。",
+        "中文第二段。",
+    }:
+        paragraph = next(p for p in doc.paragraphs if p.text == text)
+        assert not paragraph._p.findall(".//" + qn("w:br"))
+        assert not paragraph._p.findall(".//" + qn("w:cr"))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from copy import deepcopy
 from pathlib import Path
 
 from docx import Document
@@ -12,6 +13,7 @@ from docx_utils import (
     add_highlighted_run,
     add_hyperlink,
     apply_font_size_to_document_runs,
+    apply_font_size_to_runs,
     clear_paragraph,
     ensure_blank_after_labels,
     get_default_tab_stop_inches,
@@ -147,6 +149,28 @@ def _render_sources(doc: Document, sources: str, indent_inches: float) -> None:
         apply_source_style(current)
 
 
+def _render_multiline_placeholder(doc: Document, placeholder: str, text: str) -> None:
+    target = next(
+        (paragraph for paragraph in doc.paragraphs if placeholder in paragraph.text),
+        None,
+    )
+    if target is None:
+        return
+
+    paragraph_properties = deepcopy(target._p.pPr)
+    lines = text.split("\n") if text else [""]
+    clear_paragraph(target)
+    current = target
+    for idx, line in enumerate(lines):
+        if idx:
+            current = insert_paragraph_after(current)
+            if paragraph_properties is not None:
+                current._p.insert(0, deepcopy(paragraph_properties))
+        if line:
+            current.add_run(line)
+            apply_font_size_to_runs(current, font_size_pt=BODY_TEXT_SIZE_PT)
+
+
 def _resolve_template_path(path: Path) -> Path:
     if path.is_absolute() or path.exists():
         return path
@@ -175,9 +199,7 @@ def generate_post(
     mapping = {
         "{{HEADER_TITLE}}": post["title"],
         "{{HEADER_URL}}": video_url,
-        "{{POST_EN}}": post["post_en"],
         "{{HASHTAGS_EN}}": post["hashtags_en"],
-        "{{POST_ZH}}": post["post_zh"],
         "{{HASHTAGS_ZH}}": post["hashtags_zh"],
         "{{REF_URL}}": "",
         "{{REF_SUMMARY_ZH}}": "",
@@ -188,6 +210,8 @@ def generate_post(
         "{{VIDEO_DESC_EN}}": video_desc_en,
         "{{VIDEO_DESC_ZH}}": video_desc_zh,
     }
+    _render_multiline_placeholder(doc, "{{POST_EN}}", post["post_en"])
+    _render_multiline_placeholder(doc, "{{POST_ZH}}", post["post_zh"])
     _render_sources(doc, post["sources"], default_tab_stop)
     replace_placeholders(doc, mapping, default_tab_stop)
     insert_video_section_spacing(
