@@ -4,10 +4,22 @@ from pathlib import Path
 from docx import Document
 
 from generate_sources import (
+    _build_timestamp_line,
     generate_sources,
     resolve_default_episodes_file,
     resolve_default_subtitles_dir,
 )
+
+
+def test_build_timestamp_line_uses_final_subtitle_end_not_last_chapter_start() -> None:
+    subtitle_lines = [
+        "00:00:00:00\t00:00:02:00\tIntro",
+        "00:04:38:23\t00:04:39:28\tFinal line",
+    ]
+
+    assert _build_timestamp_line("03:25｜Final exercise", subtitle_lines) == (
+        "00:00-04:39 (4分39秒)"
+    )
 
 
 def _write_template(path: Path) -> None:
@@ -103,7 +115,7 @@ def test_generate_sources_writes_docx_for_existing_subtitle_file(tmp_path: Path)
     texts = [p.text for p in doc.paragraphs if p.text.strip()]
     assert texts[0] == "【大愛醫生館】 肺腺癌先禮後兵 20260520"
     assert texts[1] == "https://www.youtube.com/watch?v=P0uiRM2no18"
-    assert texts[2] == "00:00-07:27 (7分27秒)"
+    assert texts[2] == "00:00-00:03 (0分3秒)"
     assert texts[3] == "五十歲男性長期吸菸、慢性咳嗽。"
     assert texts[4] == "00:00:01:00\t00:00:03:00\t第一句"
     assert texts[5] == "Second line"

@@ -266,6 +266,22 @@ def _extract_star_range(subtitle_lines: list[str]) -> tuple[int, int] | None:
     return marker_spans[0][0], marker_spans[1][1]
 
 
+def _extract_subtitle_end(subtitle_lines: list[str]) -> int | None:
+    ends = []
+    for line in subtitle_lines:
+        match = TIMECODE_ROW_RE.match(line)
+        if not match:
+            continue
+        ends.append(
+            _to_seconds(
+                int(match.group("eh")),
+                int(match.group("em")),
+                int(match.group("es")),
+            )
+        )
+    return max(ends) if ends else None
+
+
 def _extract_star_range_ticks(subtitle_lines: list[str]) -> tuple[int, int] | None:
     marker_spans: list[tuple[int, int]] = []
     for line in subtitle_lines:
@@ -299,6 +315,9 @@ def _build_timestamp_line(last_line: str, subtitle_lines: list[str]) -> str:
     if star_range is not None:
         start, end = star_range
         return f"{_mmss(start)}-{_mmss(end)} ({_format_minutes_seconds(end - start)})"
+    subtitle_end = _extract_subtitle_end(subtitle_lines)
+    if subtitle_end is not None:
+        return f"00:00-{_mmss(subtitle_end)} ({_format_minutes_seconds(subtitle_end)})"
     return _dynamic_timestamp_line(last_line, subtitle_lines)
 
 
