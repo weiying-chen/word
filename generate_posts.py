@@ -26,6 +26,7 @@ from prepare_posts import (
     insert_video_section_spacing,
     insert_paragraph_after,
     normalize_empty_paragraphs,
+    remove_obsolete_post_labels,
     remove_paragraph,
     replace_placeholders,
     sync_empty_paragraph_indents,
@@ -193,6 +194,7 @@ def generate_post(
     video_title = video_title or post["title"]
 
     doc = Document(str(_resolve_template_path(template_path)))
+    remove_obsolete_post_labels(doc)
     apply_font_size_to_document_runs(doc, font_size_pt=BODY_TEXT_SIZE_PT)
     _remove_draft_scaffolding(doc)
     default_tab_stop = get_default_tab_stop_inches(doc)
@@ -221,7 +223,7 @@ def generate_post(
         video_desc_zh=video_desc_zh,
         indent_inches=default_tab_stop,
     )
-    ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
+    ensure_blank_after_labels(doc, {"參考資料：", "要用的影片："})
     normalize_empty_paragraphs(doc)
     sync_empty_paragraph_indents(doc)
     ensure_blank_after_reference_url(

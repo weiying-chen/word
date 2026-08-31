@@ -196,6 +196,7 @@ def test_generated_docx_from_schedule_includes_reference_bilingual_summary_in_so
     assert "Reducing Brain Age to Prevent Dementia (人文講堂 - 養腦 防失智 - 曾文毅 [2])" in texts
     assert "研究發現六十歲以上，若腦年齡退化十歲以上，未來三年內可能會發生認知功能衰退。臺大醫學院兼任教授曾文毅分享逆轉腦齡的七七七法則，告訴大家如何維持腦健康，遠離失智。" in texts
     assert 'From his own example of following the "Three Sevens Rule," Prof. Tseng Wen-yih of the National Taiwan University College of Medicine shares how we can effectively reduce brain age to maintain its health and minimize the risk of dementia.' in texts
+    assert "英文翻譯：" not in texts
     video_label_idx = raw_texts.index("要用的影片：")
     assert raw_texts[video_label_idx + 1] == ""
     assert raw_texts[video_label_idx + 2] == "https://www.youtube.com/watch?v=LA76bSzLVgE&t=280s"
@@ -988,6 +989,7 @@ def test_generated_posts_title_is_12pt_and_source_block_is_10pt(tmp_path: Path) 
     )
     rendered = Document(str(output_paths[0]))
     rendered_texts = [paragraph.text.strip() for paragraph in rendered.paragraphs]
+    assert "英文翻譯：" not in rendered_texts
     ref_url_idx = rendered_texts.index("https://example.com/news")
     assert rendered_texts[ref_url_idx + 1] == ""
 
@@ -1002,7 +1004,6 @@ def test_generated_posts_title_is_12pt_and_source_block_is_10pt(tmp_path: Path) 
         "參考資料：",
         "https://example.com/news",
         "News title\nNews summary zh\nNews title en\nNews summary en",
-        "英文翻譯：",
         "要用的影片：",
         "https://example.com/video",
         "Program - Test Title (健康節目 - 測試標題)",

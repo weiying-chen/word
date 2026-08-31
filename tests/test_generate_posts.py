@@ -88,6 +88,7 @@ def test_generate_completed_post_uses_post_template_without_draft_header(
 
     texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
     assert "標題" not in texts
+    assert "英文翻譯：" not in texts
     assert not any(text.startswith("9/20(日)") for text in texts)
     assert texts[0] == (
         "Da Ai Journal - Staying Young at 105 (大愛全紀實 - 人生歌未央 [1])"

@@ -52,6 +52,7 @@ CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 QUOTE_CHARS = "\"'“”‘’"
 ALEX_REF_LABELS = {"參考資料:", "參考資料："}
 ALEX_VIDEO_LABELS = {"要用的影片:", "要用的影片："}
+OBSOLETE_POST_LABELS = {"英文翻譯:", "英文翻譯："}
 PAIRING_LABELS = {"搭配", "搭配:", "搭配："}
 INLINE_PAIRING_RE = re.compile(r"^搭配(?:[:：])?\s*(?P<text>.+)$")
 PAREN_TITLE_RE = re.compile(r"[\(（]([^()（）]+)[\)）]")
@@ -1120,7 +1121,7 @@ def insert_video_section_spacing(
             continue
         if not in_video_section:
             continue
-        if text in {"參考資料：", "英文翻譯："}:
+        if text == "參考資料：":
             break
         if not text:
             continue
@@ -1361,7 +1362,7 @@ def replace_placeholders(
         "{{VIDEO_DESC_EN}}",
         "{{VIDEO_DESC_ZH}}",
     }
-    indent_labels = {"參考資料：", "英文翻譯：", "要用的影片："}
+    indent_labels = {"參考資料：", "要用的影片："}
 
     for paragraph in doc.paragraphs:
         paragraph_text = paragraph.text
@@ -1406,6 +1407,12 @@ def replace_placeholders(
             if placeholder in paragraph.text:
                 set_source_indent(paragraph, indent_inches)
                 break
+
+
+def remove_obsolete_post_labels(doc: Document) -> None:
+    for paragraph in reversed(doc.paragraphs):
+        if paragraph.text.strip() in OBSOLETE_POST_LABELS:
+            remove_paragraph(paragraph)
 
 
 def make_unique_path(base: Path) -> Path:
@@ -1514,7 +1521,7 @@ def generate_docs(
                 video_desc_zh=entry.get("video_desc_zh", ""),
                 indent_inches=default_tab_stop,
             )
-            ensure_blank_after_labels(doc, {"參考資料：", "英文翻譯：", "要用的影片："})
+            ensure_blank_after_labels(doc, {"參考資料：", "要用的影片："})
             normalize_empty_paragraphs(doc)
             sync_empty_paragraph_indents(doc)
         ensure_blank_after_reference_url(
@@ -1522,6 +1529,7 @@ def generate_docs(
             ref_url=entry.get("ref_url", ""),
             indent_inches=default_tab_stop,
         )
+        remove_obsolete_post_labels(doc)
         doc.save(str(output_path))
         output_paths.append(output_path)
     return output_paths
