@@ -863,7 +863,9 @@ def test_generated_bodhi_docx_appends_matching_revision_transcript(
     _write_docx(
         revision_path,
         [
+            "1150817_20260617ask　花蓮慈院溫馨分享",
             "edited material that must not be copied",
+            "1150817_20260617ask　花蓮慈院溫馨分享",
             "◎標題：真誠大愛護眾生",
             "",
             "(腎臟科醫師 張賀翔)1’11”",
@@ -899,8 +901,16 @@ def test_generated_bodhi_docx_appends_matching_revision_transcript(
 
     doc = Document(str(output_paths[0]))
     texts = [paragraph.text for paragraph in doc.paragraphs]
+    revision_title = "1150817_20260617ask　花蓮慈院溫馨分享"
+    revision_title_idx = texts.index(revision_title)
     doctor_idx = texts.index("(腎臟科醫師 張賀翔)1’11”")
     master_idx = texts.index("(上人)")
+    assert texts[revision_title_idx - 1 : doctor_idx + 1] == [
+        "",
+        revision_title,
+        "",
+        "(腎臟科醫師 張賀翔)1’11”",
+    ]
     assert texts[doctor_idx : doctor_idx + 3] == [
         "(腎臟科醫師 張賀翔)1’11”",
         "醫師分享第一段",

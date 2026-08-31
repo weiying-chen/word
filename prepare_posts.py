@@ -62,6 +62,7 @@ BODHI_TIMELINE_RE = re.compile(r"^\d{2}:\d{2}\s*[│|｜]")
 REVISION_SPEAKER_RE = re.compile(
     r"^\s*[（(][^()（）\r\n]+[）)]\s*(?:_?\s*\d+(?:[’′']\d+)?[”″]?)?\s*$"
 )
+REVISION_TITLE_RE = re.compile(r"^\d{7}_[^\r\n]+$")
 EPISODE_JSON_RE = re.compile(
     r"""\b(?:episodeJson|episdoeJson)\s*=\s*(?:"(?P<double>(?:\\.|[^"\\])*)"|'(?P<single>(?:\\.|[^'\\])*)')""",
     re.DOTALL,
@@ -1204,7 +1205,8 @@ def extract_revision_transcript(path: Path) -> list[str]:
     ]
 
     if title_indices:
-        start = title_indices[0] + 1
+        title_index = title_indices[0]
+        start = title_index + 1
         end = title_indices[1] if len(title_indices) > 1 else len(paragraphs)
     else:
         speaker_indices = [
@@ -1217,11 +1219,21 @@ def extract_revision_transcript(path: Path) -> list[str]:
         start = speaker_indices[0]
         end = len(paragraphs)
 
+    revision_title = next(
+        (
+            text.strip()
+            for text in reversed(paragraphs[:start])
+            if REVISION_TITLE_RE.fullmatch(text.strip())
+        ),
+        "",
+    )
     transcript = paragraphs[start:end]
     while transcript and not transcript[0].strip():
         transcript.pop(0)
     while transcript and not transcript[-1].strip():
         transcript.pop()
+    if revision_title:
+        transcript[:0] = [revision_title, ""]
     return transcript
 
 
@@ -1257,7 +1269,8 @@ def append_revision_transcript(
     if anchor is None:
         return
 
-    current = anchor
+    current = insert_paragraph_after(anchor)
+    set_source_indent(current, indent_inches)
     for text in transcript:
         current = insert_paragraph_after(current, text)
         set_source_indent(current, indent_inches)
