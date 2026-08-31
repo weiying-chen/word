@@ -1100,6 +1100,35 @@ def ensure_blank_after_reference_url(
         return
 
 
+def ensure_blank_after_video_url(
+    doc: Document, *, video_url: str, indent_inches: float
+) -> None:
+    if not video_url:
+        return
+
+    in_video_section = False
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        if text == "要用的影片：":
+            in_video_section = True
+            continue
+        if not in_video_section:
+            continue
+        if text == "參考資料：":
+            return
+        if text != video_url:
+            continue
+
+        next_element = paragraph._p.getnext()
+        if next_element is not None and next_element.tag == qn("w:p"):
+            next_paragraph = Paragraph(next_element, paragraph._parent)
+            if not next_paragraph.text.strip():
+                return
+        blank = insert_paragraph_after(paragraph)
+        set_source_indent(blank, indent_inches)
+        return
+
+
 def insert_video_section_spacing(
     doc: Document,
     *,
@@ -1527,6 +1556,11 @@ def generate_docs(
         ensure_blank_after_reference_url(
             doc,
             ref_url=entry.get("ref_url", ""),
+            indent_inches=default_tab_stop,
+        )
+        ensure_blank_after_video_url(
+            doc,
+            video_url=entry.get("video_url", ""),
             indent_inches=default_tab_stop,
         )
         remove_obsolete_post_labels(doc)

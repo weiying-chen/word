@@ -22,6 +22,7 @@ from docx_utils import (
 from prepare_posts import (
     apply_source_style,
     ensure_blank_after_reference_url,
+    ensure_blank_after_video_url,
     fetch_youtube_video_metadata,
     insert_video_section_spacing,
     insert_paragraph_after,
@@ -229,6 +230,11 @@ def generate_post(
     ensure_blank_after_reference_url(
         doc,
         ref_url="",
+        indent_inches=default_tab_stop,
+    )
+    ensure_blank_after_video_url(
+        doc,
+        video_url=video_url,
         indent_inches=default_tab_stop,
     )
 

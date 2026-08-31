@@ -200,11 +200,12 @@ def test_generated_docx_from_schedule_includes_reference_bilingual_summary_in_so
     video_label_idx = raw_texts.index("要用的影片：")
     assert raw_texts[video_label_idx + 1] == ""
     assert raw_texts[video_label_idx + 2] == "https://www.youtube.com/watch?v=LA76bSzLVgE&t=280s"
-    assert raw_texts[video_label_idx + 3] == "Reducing Brain Age to Prevent Dementia (人文講堂 - 養腦 防失智 - 曾文毅 [2])"
-    assert raw_texts[video_label_idx + 4] == ""
-    assert raw_texts[video_label_idx + 5] == 'From his own example of following the "Three Sevens Rule," Prof. Tseng Wen-yih of the National Taiwan University College of Medicine shares how we can effectively reduce brain age to maintain its health and minimize the risk of dementia.'
-    assert raw_texts[video_label_idx + 6] == ""
-    assert raw_texts[video_label_idx + 7] == "研究發現六十歲以上，若腦年齡退化十歲以上，未來三年內可能會發生認知功能衰退。臺大醫學院兼任教授曾文毅分享逆轉腦齡的七七七法則，告訴大家如何維持腦健康，遠離失智。"
+    assert raw_texts[video_label_idx + 3] == ""
+    assert raw_texts[video_label_idx + 4] == "Reducing Brain Age to Prevent Dementia (人文講堂 - 養腦 防失智 - 曾文毅 [2])"
+    assert raw_texts[video_label_idx + 5] == ""
+    assert raw_texts[video_label_idx + 6] == 'From his own example of following the "Three Sevens Rule," Prof. Tseng Wen-yih of the National Taiwan University College of Medicine shares how we can effectively reduce brain age to maintain its health and minimize the risk of dementia.'
+    assert raw_texts[video_label_idx + 7] == ""
+    assert raw_texts[video_label_idx + 8] == "研究發現六十歲以上，若腦年齡退化十歲以上，未來三年內可能會發生認知功能衰退。臺大醫學院兼任教授曾文毅分享逆轉腦齡的七七七法則，告訴大家如何維持腦健康，遠離失智。"
 
     p_by_text = {p.text.strip(): p for p in rendered.paragraphs if p.text.strip()}
     for text in [
@@ -270,15 +271,16 @@ def test_generated_docx_fetches_youtube_video_summary_when_missing(
 
     assert raw_texts[video_label_idx + 1] == ""
     assert raw_texts[video_label_idx + 2] == "https://www.youtube.com/watch?v=47tbzXquNm8"
-    assert raw_texts[video_label_idx + 3] == (
+    assert raw_texts[video_label_idx + 3] == ""
+    assert raw_texts[video_label_idx + 4] == (
         "All About Health - When Liver Disease Goes Unnoticed (大愛醫生館 - 雲霧肝癌)"
     )
-    assert raw_texts[video_label_idx + 4] == ""
-    assert raw_texts[video_label_idx + 5] == (
+    assert raw_texts[video_label_idx + 5] == ""
+    assert raw_texts[video_label_idx + 6] == (
         "For hepatitis B and C carriers, regular blood tests are important—but they don't tell the whole story. Because the liver has no pain sensation, problems can develop silently. In one case, a tumor wasn't discovered until it had grown to 10 centimeters. How did it go unnoticed for so long? Why are imaging tests so important for early detection? Let's hear what the doctor has to say."
     )
-    assert raw_texts[video_label_idx + 6] == ""
-    assert raw_texts[video_label_idx + 7] == (
+    assert raw_texts[video_label_idx + 7] == ""
+    assert raw_texts[video_label_idx + 8] == (
         "對於B型與C型肝炎帶原者而言，單靠定期的抽血檢查並不足夠。由於肝臟沒有痛覺神經，問題往往不易被察覺。有一個案例，腫瘤長到10公分才被發現。為何會這麼晚才察覺？影像檢查在早期發現中扮演什麼角色？一起來聽聽醫師怎麼說。"
     )
 

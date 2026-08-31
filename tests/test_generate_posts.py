@@ -106,6 +106,9 @@ def test_generate_completed_post_uses_post_template_without_draft_header(
     assert "English translation." in texts
     assert "English video summary." not in texts
     assert "中文影片摘要。" in texts
+    video_url_idx = texts.index("https://www.youtube.com/watch?v=example", 2)
+    assert texts[video_url_idx + 1] == ""
+    assert texts[video_url_idx + 2] == "Actual YouTube Video Title"
 
     timestamp = next(
         paragraph
