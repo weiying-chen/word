@@ -749,7 +749,11 @@ def _parse_episode_json_payload(payload: str) -> dict | None:
         except json.JSONDecodeError:
             pass
 
-        unescaped = normalized.replace('\\"', '"').replace("\\/", "/")
+        unescaped = (
+            normalized.replace('\\"', '"')
+            .replace("\\'", "'")
+            .replace("\\/", "/")
+        )
         if unescaped == normalized:
             break
         normalized = unescaped
@@ -835,36 +839,31 @@ def fetch_bodhi_reference_excerpt(url: str, chinese_title: str) -> str:
     lines = [_normalize_line_for_match(line) for line in text.splitlines()]
     lines = [line for line in lines if line]
 
-    title_idx = -1
-    for idx, line in enumerate(lines):
-        if line == title_norm:
-            title_idx = idx
-            break
-    if title_idx < 0:
-        return ""
-
-    start_idx = -1
-    for idx in range(title_idx + 1, len(lines)):
-        line = lines[idx]
-        if line.startswith("#"):
-            break
-        if _is_bodhi_copyright_line(line):
+    title_indices = [idx for idx, line in enumerate(lines) if line == title_norm]
+    for title_idx in title_indices:
+        start_idx = -1
+        for idx in range(title_idx + 1, len(lines)):
+            line = lines[idx]
+            if line.startswith("#"):
+                break
+            if _is_bodhi_copyright_line(line):
+                continue
+            if len(line) >= 12 and _is_cjk(line) and "。" in line:
+                start_idx = idx
+                break
+        if start_idx < 0:
             continue
-        if len(line) >= 12 and _is_cjk(line) and "。" in line:
-            start_idx = idx
-            break
-    if start_idx < 0:
-        return ""
 
-    collected: list[str] = []
-    for idx in range(start_idx, len(lines)):
-        line = lines[idx]
-        if _is_bodhi_excerpt_boundary(line):
-            break
-        collected.append(line)
-    if not collected:
-        return ""
-    return "\n".join(collected).strip()
+        collected: list[str] = []
+        for idx in range(start_idx, len(lines)):
+            line = lines[idx]
+            if _is_bodhi_excerpt_boundary(line):
+                break
+            collected.append(line)
+        excerpt = "\n".join(collected).strip()
+        if excerpt:
+            return excerpt
+    return ""
 
 
 def _detect_schedule_format(lines: list[str]) -> str:

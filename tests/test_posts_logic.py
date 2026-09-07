@@ -142,7 +142,7 @@ def test_bodhi_reference_excerpt_uses_episode_json_description() -> None:
         "#人間菩提 #證嚴上人\\r\\n"
         "----------------------------------------------------------------------\\r\\n"
         "愛善傳承締祥和\\r\\n"
-        "Carrying Forward the Spirit of Living Bodhisattvas\\r\\n"
+        "Carrying Forward Tzu Chi\\'s Spirit\\r\\n"
         "\\r\\n"
         "柔和忍辱衣護身 慈悲法水潤心田\\r\\n"
         "\\r\\n"
@@ -192,6 +192,34 @@ def test_bodhi_reference_excerpt_uses_episode_json_description() -> None:
             "",
             "03:25 │大中區環保輔具運作中心",
             "https://youtu.be/example",
+        ]
+    )
+
+
+def test_bodhi_reference_excerpt_skips_repeated_navigation_title() -> None:
+    page = """
+    <nav>
+      <span>粽串精神法弘揚</span>
+      <span>#人間菩提</span>
+    </nav>
+    <article>
+      <h1>粽串精神法弘揚</h1>
+      <p>資深志工分享一路走來的生命故事，也逐漸走入慈濟。</p>
+      <p>上人勉勵大家珍惜因緣，讓菩薩道代代相傳。</p>
+      <p>00:00 │粽串精神法弘揚</p>
+    </article>
+    """
+
+    with patch("prepare_posts.urlopen", return_value=_FakeResponse(page)):
+        excerpt = fetch_bodhi_reference_excerpt(
+            "https://daai.tv/master/life-wisdom/example",
+            "粽串精神法弘揚",
+        )
+
+    assert excerpt == "\n".join(
+        [
+            "資深志工分享一路走來的生命故事，也逐漸走入慈濟。",
+            "上人勉勵大家珍惜因緣，讓菩薩道代代相傳。",
         ]
     )
 
