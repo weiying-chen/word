@@ -53,6 +53,9 @@ SOURCE_DOC_RE = re.compile(r"^.+\.docx?$", re.IGNORECASE)
 SUBTITLE_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
+SOURCE_CLIP_MARKER_RE = re.compile(
+    r"^\(\d+\)\s*\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}(?:\s|$)"
+)
 TIME_MARKER_LINE_RE = re.compile(r"^\d{1,2}:\d{2}$")
 SYMBOL_FONT_NAME = "Segoe UI Symbol"
 CJK_FONT_NAME = "新細明體"
@@ -645,6 +648,8 @@ def with_subs_output_suffix(path: Path) -> Path:
 
 def _extract_source_paragraphs(
     source_docx_path: Path,
+    *,
+    allow_clip_marker: bool = False,
 ) -> tuple[Document, list[Paragraph], list[Paragraph]]:
     source_doc = Document(str(source_docx_path))
     paragraphs = list(source_doc.paragraphs)
@@ -652,6 +657,11 @@ def _extract_source_paragraphs(
     for idx, paragraph in enumerate(paragraphs):
         if SUBTITLE_LINE_RE.match(_normalized_paragraph_text(paragraph.text)):
             return source_doc, paragraphs[:idx], paragraphs[idx:]
+
+    if allow_clip_marker:
+        for idx, paragraph in enumerate(paragraphs):
+            if SOURCE_CLIP_MARKER_RE.match(_normalized_paragraph_text(paragraph.text)):
+                return source_doc, paragraphs[:idx], paragraphs[idx:]
 
     raise ValueError("source.docx must contain at least one subtitle timestamp paragraph.")
 
@@ -829,7 +839,11 @@ def generate_subs(
     data = parse_input(input_path)
     input_base = input_path.parent
     _validate_thumbnail_paths(data, input_base)
-    _, source_header, source_body = _extract_source_paragraphs(source_docx_path)
+    body_text = data.get("BODY", "").strip()
+    _, source_header, source_body = _extract_source_paragraphs(
+        source_docx_path,
+        allow_clip_marker=bool(body_text),
+    )
     doc = Document(str(template_path))
     apply_default_margins(doc)
     annotation_style = ensure_annotation_style(doc)
@@ -938,7 +952,6 @@ def generate_subs(
                 break
     ensure_blank_after_labels(doc, SECTION_LABELS)
     subtitle_target = _find_subtitle_target_paragraph(doc)
-    body_text = data.get("BODY", "").strip()
     if body_text and subtitle_target is not None:
         # Keep one blank line between "字幕：" and the first timestamp line.
         clear_paragraph(subtitle_target)

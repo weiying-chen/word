@@ -444,6 +444,35 @@ def test_generate_subs_removes_empty_intro_paragraph(tmp_path: Path) -> None:
     assert "Original title" in texts
 
 
+def test_generate_subs_uses_clip_marker_when_body_replaces_untimed_source(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕：", "Placeholder subtitle."])
+    _write_source_docx(
+        source_docx,
+        header_paragraphs=["Original title", "", "(1)01:14- 07:45"],
+        body_paragraphs=["Original untimed subtitle."],
+    )
+    input_path.write_text(
+        "BODY:\n00:01:14:15\t00:01:17:00\tTimed subtitle.\nTranslation.",
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
+    assert "Original title" in texts
+    assert "00:01:14:15\t00:01:17:00\tTimed subtitle." in texts
+    assert "Translation." in texts
+    assert "(1)01:14- 07:45" not in texts
+    assert "Original untimed subtitle." not in texts
+
+
 def test_generate_subs_inserts_blank_after_labels(tmp_path: Path) -> None:
     template_path = tmp_path / "template.docx"
     source_docx = tmp_path / "source.docx"
