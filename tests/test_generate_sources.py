@@ -121,6 +121,51 @@ def test_generate_sources_writes_docx_for_existing_subtitle_file(tmp_path: Path)
     assert texts[5] == "Second line"
 
 
+def test_generate_sources_archives_only_successfully_generated_subtitle(
+    tmp_path: Path,
+) -> None:
+    episodes_path = tmp_path / "episodes.json"
+    template_path = tmp_path / "sources_template.docx"
+    subtitles_dir = tmp_path / "subtitles"
+    output_dir = tmp_path / "queued"
+    archive_dir = subtitles_dir / "done"
+    subtitles_dir.mkdir()
+    output_dir.mkdir()
+    _write_template(template_path)
+
+    matched = subtitles_dir / "20260520.txt"
+    unmatched = subtitles_dir / "20990101.txt"
+    matched.write_text("00:00:01:00\t00:00:03:00\t第一句", encoding="utf-8")
+    unmatched.write_text("not matched", encoding="utf-8")
+    episodes_path.write_text(
+        json.dumps(
+            [
+                {
+                    "date": "2026-05-20",
+                    "youtubeUrl": "https://www.youtube.com/watch?v=P0uiRM2no18",
+                    "youtubeTitle": "【大愛醫生館】 肺腺癌先禮後兵 20260520",
+                    "youtubeDescription": "摘要",
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_sources(
+        episodes_file=episodes_path,
+        template_path=template_path,
+        subtitles_dir=subtitles_dir,
+        output_dir=output_dir,
+        archive_subtitles_dir=archive_dir,
+    )
+
+    assert result == {"generated": 1, "skipped": 0, "errors": 0}
+    assert not matched.exists()
+    assert (archive_dir / matched.name).is_file()
+    assert unmatched.is_file()
+
+
 def test_generate_sources_reads_utf16_subtitle_file(tmp_path: Path) -> None:
     episodes_path = tmp_path / "episodes.json"
     template_path = tmp_path / "sources_template.docx"

@@ -434,6 +434,7 @@ def generate_sources(
     template_path: Path,
     subtitles_dir: Path,
     output_dir: Path,
+    archive_subtitles_dir: Path | None = None,
 ) -> dict[str, int]:
     episodes = json.loads(episodes_file.read_text(encoding="utf-8"))
     generated = 0
@@ -487,6 +488,16 @@ def generate_sources(
                 subtitle_highlights,
                 timestamp_line,
             )
+            if archive_subtitles_dir is not None:
+                archive_subtitles_dir.mkdir(parents=True, exist_ok=True)
+                archived_path = archive_subtitles_dir / subtitle_file.name
+                suffix = 2
+                while archived_path.exists():
+                    archived_path = archive_subtitles_dir / (
+                        f"{subtitle_file.stem}_{suffix}{subtitle_file.suffix}"
+                    )
+                    suffix += 1
+                subtitle_file.replace(archived_path)
             generated += 1
         except Exception:
             errors += 1
@@ -522,6 +533,11 @@ def main() -> None:
         default="output",
         help="Directory to write generated source docx files.",
     )
+    parser.add_argument(
+        "--archive-subtitles-dir",
+        default="",
+        help="Move successfully generated subtitle files into this directory.",
+    )
     args = parser.parse_args()
 
     episodes_file = (
@@ -540,6 +556,9 @@ def main() -> None:
         template_path=Path(args.template),
         subtitles_dir=subtitles_dir,
         output_dir=Path(args.output_dir),
+        archive_subtitles_dir=(
+            Path(args.archive_subtitles_dir) if args.archive_subtitles_dir else None
+        ),
     )
     print(
         f"generated={result['generated']} skipped={result['skipped']} errors={result['errors']}"
