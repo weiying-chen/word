@@ -333,23 +333,18 @@ def insert_paragraph_after(paragraph, text: str):
     return new_para
 
 
-def _split_marked_parts(text: str) -> list[tuple[str, bool]]:
+def _split_marked_parts(
+    text: str, initially_marked: bool = False
+) -> tuple[list[tuple[str, bool]], bool]:
     parts: list[tuple[str, bool]] = []
-    last_idx = 0
-
-    for match in HIGHLIGHT_MARKER_RE.finditer(text):
-        if match.start() > last_idx:
-            parts.append((text[last_idx : match.start()], False))
-        parts.append((match.group(1), True))
-        last_idx = match.end()
-
-    if last_idx < len(text):
-        parts.append((text[last_idx:], False))
-
-    if not parts:
-        parts.append((text, False))
-
-    return parts
+    marked = initially_marked
+    chunks = text.split("*")
+    for idx, chunk in enumerate(chunks):
+        if chunk:
+            parts.append((chunk, marked))
+        if idx < len(chunks) - 1:
+            marked = not marked
+    return parts, marked
 
 
 def _split_symbol_chunks(text: str) -> list[tuple[str, bool]]:
@@ -402,8 +397,10 @@ def _add_marked_runs(
     marked_highlight=None,
     run_style: str | None = None,
     apply_default_size: bool = True,
-) -> None:
-    for part_text, marked in _split_marked_parts(text):
+    initially_marked: bool = False,
+) -> bool:
+    parts, marked_at_end = _split_marked_parts(text, initially_marked)
+    for part_text, marked in parts:
         if not part_text:
             continue
 
@@ -417,6 +414,7 @@ def _add_marked_runs(
                 REFERENCE_TEXT_SIZE_PT if apply_default_size else BODY_TEXT_SIZE_PT
             ),
         )
+    return marked_at_end
 
 
 def replace_body_paragraph(
@@ -438,14 +436,17 @@ def replace_body_paragraph(
     current = paragraph
     in_source_block = False
     in_xxx_highlight_block = False
+    in_highlight_marker = False
     pending_xxx_time_marker = None
 
     def _add_source_runs(target, text: str) -> None:
-        _add_marked_runs(
+        nonlocal in_highlight_marker
+        in_highlight_marker = _add_marked_runs(
             target,
             text,
             default_highlight=SOURCE_HIGHLIGHT_DEFAULT,
             marked_highlight=SOURCE_HIGHLIGHT_MARKED,
+            initially_marked=in_highlight_marker,
         )
 
     def write_line(
@@ -491,6 +492,7 @@ def replace_body_paragraph(
         if not normalized_line.strip():
             in_source_block = False
             in_xxx_highlight_block = False
+            in_highlight_marker = False
             pending_xxx_time_marker = None
             emitted_any_line = True
             continue

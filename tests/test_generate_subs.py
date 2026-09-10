@@ -1836,6 +1836,38 @@ def test_generate_subs_treats_doc_file_line_as_source_block(tmp_path: Path) -> N
     assert term_paragraph.find("w:r/w:rPr/w:highlight", ns) is not None
 
 
+def test_generate_subs_highlights_marker_across_source_lines(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    _write_docx(template_path, ["字幕："])
+    _write_source_docx(source_docx)
+    input_path.write_text(
+        "\n".join(
+            [
+                "BODY:",
+                "reference.doc",
+                "Later, I saw *(a pregnant woman who could not",
+                "receive the treatment she needed.)*",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+    doc = Document(output_path)
+    first = next(p for p in doc.paragraphs if p.text.startswith("Later, I saw"))
+    second = next(p for p in doc.paragraphs if p.text.startswith("receive the"))
+
+    assert first.text == "Later, I saw (a pregnant woman who could not"
+    assert second.text == "receive the treatment she needed.)"
+    assert first.runs[-1].font.highlight_color == WD_COLOR_INDEX.BRIGHT_GREEN
+    assert second.runs[0].font.highlight_color == WD_COLOR_INDEX.BRIGHT_GREEN
+
+
 def test_generate_subs_does_not_highlight_parenthesized_translation_without_xxx_prefix(
     tmp_path: Path,
 ) -> None:
