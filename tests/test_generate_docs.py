@@ -149,7 +149,7 @@ def test_subtitle_generation_places_english_below_chinese_and_warns_on_length(
     assert all(paragraph.paragraph_format.line_spacing is None for paragraph in doc.paragraphs)
 
 
-def test_subtitle_generation_adds_blank_translation_line(tmp_path: Path) -> None:
+def test_subtitle_generation_omits_blank_translation_line(tmp_path: Path) -> None:
     source = tmp_path / "episode_chus字幕.txt"
     source.write_text(
         "00:00:00:00\t00:00:02:00\t尚待翻譯\n",
@@ -161,7 +161,26 @@ def test_subtitle_generation_adds_blank_translation_line(tmp_path: Path) -> None
 
     assert [paragraph.text for paragraph in Document(output).paragraphs] == [
         "00:00:00:00\t00:00:02:00\t尚待翻譯",
-        "",
+    ]
+
+
+def test_generation_removes_trailing_workflow_hash_markers(tmp_path: Path) -> None:
+    source = tmp_path / "episode_chus字幕.txt"
+    source.write_text(
+        "00:00:00:00\t00:00:02:00\t中文\n"
+        "Separate English line #\n\n"
+        "00:00:02:00\t00:00:04:00\t中文//Inline English line #\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "subtitle.docx"
+
+    generate_docs(source, output_path=output)
+
+    assert [paragraph.text for paragraph in Document(output).paragraphs] == [
+        "00:00:00:00\t00:00:02:00\t中文",
+        "Separate English line",
+        "00:00:02:00\t00:00:04:00\t中文",
+        "Inline English line",
     ]
 
 
@@ -185,7 +204,6 @@ def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -
         "00:00:00:00\t00:00:02:00",
         "風月同天",
         "Sharing the Same Sky.",
-        "",
         "(以下不用翻譯)",
         "歷史活動",
     ]
@@ -261,7 +279,6 @@ def test_shared_highlight_helper_is_used_only_for_explicit_cyan(
         "(本段super以字幕方式呈現，已copy到字幕檔)",
         "00:00:00:00\t00:00:01:00",
         "明確標記",
-        "",
     ]
 
 

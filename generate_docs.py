@@ -218,9 +218,11 @@ def _remove_initial_paragraph(doc: Document) -> None:
 
 
 def _add_paragraph(doc: Document, text: str, kind: DocumentKind, *, cyan: bool = False):
+    text = re.sub(r"\s+#\s*$", "", text)
+    if not text:
+        return None
     paragraph = doc.add_paragraph()
-    if text or cyan:
-        paragraph.add_run(text)
+    paragraph.add_run(text)
     apply_font_size_to_runs(paragraph, font_size_pt=BODY_TEXT_SIZE_PT)
     if cyan:
         apply_highlight_to_runs(
