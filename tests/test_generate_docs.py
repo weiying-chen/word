@@ -9,6 +9,7 @@ from docx.oxml.ns import qn
 import generate_docs as generate_docs_module
 from generate_docs import (
     DocumentKind,
+    default_output_path,
     detect_document_kind,
     generate_docs,
     parse_docs_text,
@@ -18,6 +19,13 @@ from style_tokens import (
     DEFAULT_DOCX_ASCII_FONT_NAME,
     DEFAULT_DOCX_EAST_ASIA_FONT_NAME,
 )
+
+
+def test_gen_docs_wrapper_uses_project_virtual_environment() -> None:
+    wrapper = Path(__file__).resolve().parents[1] / "gen-docs"
+
+    assert wrapper.stat().st_mode & 0o111
+    assert ".venv/bin/python" in wrapper.read_text(encoding="utf-8")
 
 
 def test_subtitle_parser_preserves_timecodes_and_splits_bilingual_text() -> None:
@@ -86,6 +94,38 @@ def test_document_kind_detection_from_filename(
 def test_document_kind_detection_rejects_ambiguous_input() -> None:
     with pytest.raises(ValueError, match="Unable to determine"):
         detect_document_kind(Path("episode.txt"), "unstructured text")
+
+
+@pytest.mark.parametrize("kind", [DocumentKind.SUBTITLE, DocumentKind.SUPER])
+def test_default_output_path_uses_output_directory_and_preserves_basename(
+    kind: DocumentKind,
+) -> None:
+    source = Path("incoming") / "episode_chus字幕.txt"
+
+    assert default_output_path(source, kind) == Path("output/episode_chus字幕.docx")
+
+
+@pytest.mark.parametrize(
+    ("source_name", "kind", "expected_name"),
+    [
+        (
+            "TO編譯-風月同天第4集_獅子山篇(12分版)_chus字幕(確定)(備註).txt",
+            DocumentKind.SUBTITLE,
+            "風月同天第4集_獅子山篇(12分版)_字幕_final.docx",
+        ),
+        (
+            "TO編譯-風月同天第4集_獅子山篇(12分版)_super(確定)(備註).txt",
+            DocumentKind.SUPER,
+            "風月同天第4集_獅子山篇(12分版)_super_final.docx",
+        ),
+    ],
+)
+def test_default_output_path_uses_editor_delivery_name_for_sharing_sky(
+    source_name: str,
+    kind: DocumentKind,
+    expected_name: str,
+) -> None:
+    assert default_output_path(Path(source_name), kind) == Path("output") / expected_name
 
 
 def test_subtitle_generation_places_english_below_chinese_and_warns_on_length(

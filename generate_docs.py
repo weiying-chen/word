@@ -28,6 +28,9 @@ SUPER_AS_SUBTITLE_RE = re.compile(
     r"super.*字幕方式.*copy.*字幕檔", re.IGNORECASE
 )
 NO_TRANSLATION_RE = re.compile(r"(?:以下)?不用翻譯|do not translate", re.IGNORECASE)
+SHARING_SKY_DELIVERY_TITLE_RE = re.compile(
+    r"(?P<title>風月同天第.+?\(\s*12分版\s*\))"
+)
 
 
 class DocumentKind(str, Enum):
@@ -302,8 +305,11 @@ def _render(parsed: ParsedDocs, output_path: Path, template_path: Path) -> Path:
 
 
 def default_output_path(input_path: Path, kind: DocumentKind) -> Path:
-    suffix = "_英文字幕.docx" if kind is DocumentKind.SUBTITLE else "_super.docx"
-    return input_path.with_name(f"{input_path.stem}{suffix}")
+    delivery_title = SHARING_SKY_DELIVERY_TITLE_RE.search(input_path.stem)
+    if delivery_title is not None:
+        suffix = "字幕_final" if kind is DocumentKind.SUBTITLE else "super_final"
+        return Path("output") / f"{delivery_title.group('title')}_{suffix}.docx"
+    return Path("output") / input_path.with_suffix(".docx").name
 
 
 def generate_docs(
@@ -326,10 +332,18 @@ def generate_docs(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
+        prog="gen-docs",
         description="Generate a 風月同天 subtitle or SUPER working DOCX from TXT."
     )
     parser.add_argument("--input", required=True, help="Subtitle or SUPER TXT file.")
-    parser.add_argument("--output", default="", help="Output DOCX path.")
+    parser.add_argument(
+        "--output",
+        default="",
+        help=(
+            "Output DOCX path. Default: ./output/ using the editor delivery name "
+            "for recognized 風月同天 files, otherwise the input basename."
+        ),
+    )
     parser.add_argument(
         "--template",
         default=str(DEFAULT_TEMPLATE_PATH),

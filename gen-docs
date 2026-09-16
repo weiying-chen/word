@@ -1,0 +1,3 @@
+#!/bin/sh
+exec /home/weiying/python/word/.venv/bin/python \
+  /home/weiying/python/word/generate_docs.py "$@"
