@@ -78,7 +78,7 @@ def _timecode_and_text(line: str) -> tuple[str, str | None] | None:
     match = TIMED_LINE_RE.fullmatch(line)
     if match is None:
         return None
-    timecode = f"{match.group('start')}{match.group('between')}{match.group('end')}"
+    timecode = f"{match.group('start')}\t{match.group('end')}"
     return timecode, match.group("text")
 
 

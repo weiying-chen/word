@@ -43,7 +43,7 @@ def test_subtitle_parser_preserves_timecodes_and_splits_bilingual_text() -> None
     assert parsed.blocks[1].english_lines == []
 
 
-def test_super_parser_supports_full_width_timecode_separator_and_multiline() -> None:
+def test_super_parser_normalizes_full_width_timecode_separator_to_tab() -> None:
     source = (
         "00:01:39:08　00:01:43:02\n"
         "2022年八月 美國\n"
@@ -53,7 +53,7 @@ def test_super_parser_supports_full_width_timecode_separator_and_multiline() -> 
 
     parsed = parse_docs_text(source, DocumentKind.SUPER)
 
-    assert parsed.blocks[0].timecode == "00:01:39:08　00:01:43:02"
+    assert parsed.blocks[0].timecode == "00:01:39:08\t00:01:43:02"
     assert parsed.blocks[0].source_lines == ["2022年八月 美國", "俄亥俄州哥倫布市"]
     assert parsed.blocks[1].timecode is None
     assert parsed.blocks[1].source_lines == ["來源說明"]
