@@ -204,6 +204,7 @@ def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -
         "00:00:00:00\t00:00:02:00",
         "風月同天",
         "Sharing the Same Sky.",
+        "",
         "(以下不用翻譯)",
         "歷史活動",
     ]
@@ -279,6 +280,7 @@ def test_shared_highlight_helper_is_used_only_for_explicit_cyan(
         "(本段super以字幕方式呈現，已copy到字幕檔)",
         "00:00:00:00\t00:00:01:00",
         "明確標記",
+        "",
     ]
 
 

@@ -219,10 +219,9 @@ def _remove_initial_paragraph(doc: Document) -> None:
 
 def _add_paragraph(doc: Document, text: str, kind: DocumentKind, *, cyan: bool = False):
     text = re.sub(r"\s+#\s*$", "", text)
-    if not text:
-        return None
     paragraph = doc.add_paragraph()
-    paragraph.add_run(text)
+    if text or cyan:
+        paragraph.add_run(text)
     apply_font_size_to_runs(paragraph, font_size_pt=BODY_TEXT_SIZE_PT)
     if cyan:
         apply_highlight_to_runs(
@@ -296,9 +295,7 @@ def _render(parsed: ParsedDocs, output_path: Path, template_path: Path) -> Path:
         for line in block.english_lines:
             _add_paragraph(doc, line, parsed.kind, cyan=block.cyan)
 
-        if parsed.kind is DocumentKind.SUBTITLE and not block.english_lines:
-            _add_paragraph(doc, "", parsed.kind, cyan=block.cyan)
-        if index in parsed.blank_after:
+        if parsed.kind is DocumentKind.SUPER and index in parsed.blank_after:
             _add_paragraph(doc, "", parsed.kind, cyan=block.cyan)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
