@@ -45,6 +45,7 @@ class DocsBlock:
     english_lines: list[str] = field(default_factory=list)
     cyan: bool = False
     no_translation: bool = False
+    inline_translation: bool = False
 
 
 @dataclass
@@ -89,7 +90,10 @@ def _parse_subtitle(lines: list[str]) -> ParsedDocs:
     for line in lines:
         timed = _timecode_and_text(line)
         if timed is not None:
-            current = DocsBlock(timecode=timed[0])
+            current = DocsBlock(
+                timecode=timed[0],
+                inline_translation=timed[1] is not None and "//" in timed[1],
+            )
             blocks.append(current)
             if timed[1] is not None:
                 source, english = _split_bilingual(timed[1])
@@ -148,6 +152,7 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
                 timecode=timed[0],
                 no_translation=no_translation,
                 cyan=cyan_next,
+                inline_translation=timed[1] is not None and "//" in timed[1],
             )
             cyan_next = False
             blocks.append(current)
@@ -217,7 +222,14 @@ def _remove_initial_paragraph(doc: Document) -> None:
         paragraph._element.getparent().remove(paragraph._element)
 
 
-def _add_paragraph(doc: Document, text: str, kind: DocumentKind, *, cyan: bool = False):
+def _add_paragraph(
+    doc: Document,
+    text: str,
+    kind: DocumentKind,
+    *,
+    cyan: bool = False,
+    yellow: bool = False,
+):
     text = re.sub(r"\s+#\s*$", "", text)
     paragraph = doc.add_paragraph()
     if text or cyan:
@@ -227,6 +239,11 @@ def _add_paragraph(doc: Document, text: str, kind: DocumentKind, *, cyan: bool =
         apply_highlight_to_runs(
             paragraph,
             highlight_color=WD_COLOR_INDEX.TURQUOISE,
+        )
+    elif yellow:
+        apply_highlight_to_runs(
+            paragraph,
+            highlight_color=WD_COLOR_INDEX.YELLOW,
         )
     return paragraph
 
@@ -275,6 +292,7 @@ def _render(parsed: ParsedDocs, output_path: Path, template_path: Path) -> Path:
     ensure_base_styles(doc)
 
     for index, block in enumerate(parsed.blocks):
+        yellow = not block.inline_translation
         if block.timecode is not None:
             if parsed.kind is DocumentKind.SUBTITLE and block.source_lines:
                 _add_paragraph(
@@ -282,21 +300,34 @@ def _render(parsed: ParsedDocs, output_path: Path, template_path: Path) -> Path:
                     f"{block.timecode}\t{block.source_lines[0]}",
                     parsed.kind,
                     cyan=block.cyan,
+                    yellow=yellow,
                 )
                 remaining_source = block.source_lines[1:]
             else:
-                _add_paragraph(doc, block.timecode, parsed.kind, cyan=block.cyan)
+                _add_paragraph(
+                    doc,
+                    block.timecode,
+                    parsed.kind,
+                    cyan=block.cyan,
+                    yellow=yellow,
+                )
                 remaining_source = block.source_lines
         else:
             remaining_source = block.source_lines
 
         for line in remaining_source:
-            _add_paragraph(doc, line, parsed.kind, cyan=block.cyan)
+            _add_paragraph(
+                doc, line, parsed.kind, cyan=block.cyan, yellow=yellow
+            )
         for line in block.english_lines:
-            _add_paragraph(doc, line, parsed.kind, cyan=block.cyan)
+            _add_paragraph(
+                doc, line, parsed.kind, cyan=block.cyan, yellow=yellow
+            )
 
         if parsed.kind is DocumentKind.SUPER and index in parsed.blank_after:
-            _add_paragraph(doc, "", parsed.kind, cyan=block.cyan)
+            _add_paragraph(
+                doc, "", parsed.kind, cyan=block.cyan, yellow=yellow
+            )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(output_path)

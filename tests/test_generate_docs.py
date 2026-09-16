@@ -184,6 +184,58 @@ def test_generation_removes_trailing_workflow_hash_markers(tmp_path: Path) -> No
     ]
 
 
+def test_subtitle_highlights_blocks_without_inline_translation(tmp_path: Path) -> None:
+    source = tmp_path / "episode_chus字幕.txt"
+    source.write_text(
+        "00:00:00:00\t00:00:02:00\t中文\n"
+        "Separate English\n\n"
+        "00:00:02:00\t00:00:04:00\t中文//Inline English\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "subtitle.docx"
+
+    generate_docs(source, output_path=output)
+
+    paragraphs = Document(output).paragraphs
+    assert all(
+        run.font.highlight_color == WD_COLOR_INDEX.YELLOW
+        for paragraph in paragraphs[:2]
+        for run in paragraph.runs
+    )
+    assert all(
+        run.font.highlight_color is None
+        for paragraph in paragraphs[2:]
+        for run in paragraph.runs
+    )
+
+
+def test_super_highlights_blocks_without_inline_translation(tmp_path: Path) -> None:
+    source = tmp_path / "episode_super.txt"
+    source.write_text(
+        "00:00:00:00\t00:00:02:00\n"
+        "中文\n"
+        "//Separate English\n\n"
+        "00:00:02:00\t00:00:04:00\t//Inline English\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "super.docx"
+
+    generate_docs(source, output_path=output)
+
+    paragraphs = Document(output).paragraphs
+    assert all(
+        run.font.highlight_color == WD_COLOR_INDEX.YELLOW
+        for paragraph in paragraphs[:3]
+        for run in paragraph.runs
+    )
+    assert paragraphs[3].text == ""
+    assert all(
+        run.font.highlight_color is None
+        for paragraph in paragraphs[4:]
+        for run in paragraph.runs
+    )
+
+
 def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -> None:
     source = tmp_path / "episode_super.txt"
     source.write_text(
@@ -248,7 +300,7 @@ def test_explicit_super_as_subtitle_note_uses_cyan(tmp_path: Path) -> None:
         )
 
 
-def test_shared_highlight_helper_is_used_only_for_explicit_cyan(
+def test_shared_highlight_helper_preserves_cyan_and_adds_yellow(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source = tmp_path / "episode_super.txt"
@@ -261,11 +313,11 @@ def test_shared_highlight_helper_is_used_only_for_explicit_cyan(
         encoding="utf-8",
     )
     output = tmp_path / "super.docx"
-    highlighted: list[str] = []
+    highlighted: list[tuple[str, WD_COLOR_INDEX]] = []
     shared_helper = generate_docs_module.apply_highlight_to_runs
 
     def record_highlight(paragraph, *, highlight_color) -> None:
-        highlighted.append(paragraph.text)
+        highlighted.append((paragraph.text, highlight_color))
         shared_helper(paragraph, highlight_color=highlight_color)
 
     monkeypatch.setattr(
@@ -277,10 +329,12 @@ def test_shared_highlight_helper_is_used_only_for_explicit_cyan(
     generate_docs(source, output_path=output)
 
     assert highlighted == [
-        "(本段super以字幕方式呈現，已copy到字幕檔)",
-        "00:00:00:00\t00:00:01:00",
-        "明確標記",
-        "",
+        ("(本段super以字幕方式呈現，已copy到字幕檔)", WD_COLOR_INDEX.TURQUOISE),
+        ("00:00:00:00\t00:00:01:00", WD_COLOR_INDEX.TURQUOISE),
+        ("明確標記", WD_COLOR_INDEX.TURQUOISE),
+        ("", WD_COLOR_INDEX.TURQUOISE),
+        ("00:00:02:00\t00:00:03:00", WD_COLOR_INDEX.YELLOW),
+        ("一般內容", WD_COLOR_INDEX.YELLOW),
     ]
 
 
