@@ -47,6 +47,7 @@ class DocsBlock:
     cyan: bool = False
     no_translation: bool = False
     inline_translation: bool = False
+    timestamp_inline_translation: bool = False
 
 
 @dataclass
@@ -148,6 +149,9 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
                 no_translation=no_translation,
                 cyan=cyan_next,
                 inline_translation=timed[1] is not None and "//" in timed[1],
+                timestamp_inline_translation=(
+                    timed[1] is not None and "//" in timed[1]
+                ),
             )
             cyan_next = False
             blocks.append(current)
@@ -265,6 +269,7 @@ def _validate(parsed: ParsedDocs) -> None:
     invalid = [
         line
         for block in parsed.blocks
+        if not block.timestamp_inline_translation
         for line in block.english_lines
         if "." in line or "(" in line or ")" in line
     ]

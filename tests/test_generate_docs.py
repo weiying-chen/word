@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import warnings
 import zipfile
 
 import pytest
@@ -322,6 +323,21 @@ def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -
         "(以下不用翻譯)",
         "歷史活動",
     ]
+
+
+def test_super_timestamp_inline_translation_does_not_warn_about_punctuation(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "episode_super.txt"
+    source.write_text(
+        "00:00:00:00\t00:00:02:00\t//Existing reference translation.\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "super.docx"
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        generate_docs(source, output_path=output)
 
 
 def test_super_generation_does_not_invent_official_program_title(tmp_path: Path) -> None:
