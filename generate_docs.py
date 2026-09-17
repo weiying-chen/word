@@ -17,7 +17,6 @@ from style_tokens import BODY_TEXT_SIZE_PT
 from template_styles import ensure_base_styles
 
 
-OFFICIAL_PROGRAM_TITLE = "Sharing the Same Sky"
 DEFAULT_TEMPLATE_PATH = Path("templates/news_template.docx")
 TIME_TOKEN = r"\d{1,2}:\d{2}:\d{2}:\d{2}"
 TIMED_LINE_RE = re.compile(
@@ -132,12 +131,6 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
         nonlocal current
         if current is None:
             return
-        if (
-            not current.no_translation
-            and not current.english_lines
-            and any(line.strip() == "風月同天" for line in current.source_lines)
-        ):
-            current.english_lines.append(OFFICIAL_PROGRAM_TITLE)
         current = None
 
     for line in lines:

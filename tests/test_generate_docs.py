@@ -324,7 +324,7 @@ def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -
     ]
 
 
-def test_super_generation_uses_official_program_title(tmp_path: Path) -> None:
+def test_super_generation_does_not_invent_official_program_title(tmp_path: Path) -> None:
     source = tmp_path / "episode_super.txt"
     source.write_text(
         "00:00:00:00\t00:00:02:00\n風月同天\n",
@@ -337,7 +337,6 @@ def test_super_generation_uses_official_program_title(tmp_path: Path) -> None:
     assert [paragraph.text for paragraph in Document(output).paragraphs] == [
         "00:00:00:00\t00:00:02:00",
         "風月同天",
-        "Sharing the Same Sky",
     ]
 
 
