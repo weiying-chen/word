@@ -27,8 +27,7 @@ SUPER_AS_SUBTITLE_RE = re.compile(
     r"super.*字幕方式.*copy.*字幕檔", re.IGNORECASE
 )
 NO_TRANSLATION_RE = re.compile(r"(?:以下)?不用翻譯|do not translate", re.IGNORECASE)
-CJK_RE = re.compile(r"[\u3400-\u9fff]")
-LATIN_RE = re.compile(r"[A-Za-z]")
+STAR_MARKER_RE = re.compile(r"\s*\*\s*$")
 SHARING_SKY_DELIVERY_TITLE_RE = re.compile(
     r"(?P<title>風月同天第.+?\(\s*12分版\s*\))"
 )
@@ -47,6 +46,8 @@ class DocsBlock:
     cyan: bool = False
     no_translation: bool = False
     inline_translation: bool = False
+    highlight_marker: bool = False
+    yellow: bool = False
     timestamp_inline_translation: bool = False
 
 
@@ -84,17 +85,38 @@ def _timecode_and_text(line: str) -> tuple[str, str | None] | None:
     return timecode, match.group("text")
 
 
+def _timed_line_and_marker(line: str) -> tuple[tuple[str, str | None] | None, bool]:
+    has_marker = STAR_MARKER_RE.search(line) is not None
+    candidate = STAR_MARKER_RE.sub("", line) if has_marker else line
+    timed = _timecode_and_text(candidate)
+    if timed is None:
+        return _timecode_and_text(line), False
+    return timed, has_marker
+
+
+def _apply_star_highlight_range(blocks: list[DocsBlock]) -> None:
+    marker_indices = [
+        index for index, block in enumerate(blocks) if block.highlight_marker
+    ]
+    if len(marker_indices) < 2:
+        return
+    start, end = marker_indices[:2]
+    for block in blocks[start : end + 1]:
+        block.yellow = True
+
+
 def _parse_subtitle(lines: list[str]) -> ParsedDocs:
     blocks: list[DocsBlock] = []
     blank_after: set[int] = set()
     current: DocsBlock | None = None
 
     for line in lines:
-        timed = _timecode_and_text(line)
+        timed, highlight_marker = _timed_line_and_marker(line)
         if timed is not None:
             current = DocsBlock(
                 timecode=timed[0],
                 inline_translation=timed[1] is not None and "//" in timed[1],
+                highlight_marker=highlight_marker,
             )
             blocks.append(current)
             if timed[1] is not None:
@@ -118,6 +140,7 @@ def _parse_subtitle(lines: list[str]) -> ParsedDocs:
         if english is not None:
             current.english_lines.append(english)
 
+    _apply_star_highlight_range(blocks)
     return ParsedDocs(DocumentKind.SUBTITLE, blocks, blank_after)
 
 
@@ -141,7 +164,7 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
                 blank_after.add(len(blocks) - 1)
             continue
 
-        timed = _timecode_and_text(line)
+        timed, highlight_marker = _timed_line_and_marker(line)
         if timed is not None:
             finish_block()
             current = DocsBlock(
@@ -149,6 +172,7 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
                 no_translation=no_translation,
                 cyan=cyan_next,
                 inline_translation=timed[1] is not None and "//" in timed[1],
+                highlight_marker=highlight_marker,
                 timestamp_inline_translation=(
                     timed[1] is not None and "//" in timed[1]
                 ),
@@ -185,6 +209,7 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
 
     finish_block()
 
+    _apply_star_highlight_range(blocks)
     return ParsedDocs(DocumentKind.SUPER, blocks, blank_after)
 
 
@@ -288,28 +313,13 @@ def _resolve_template_path(template_path: Path) -> Path:
     return Path(__file__).resolve().parent / template_path
 
 
-def _has_separate_super_translation(block: DocsBlock) -> bool:
-    if block.inline_translation or block.no_translation:
-        return False
-    has_chinese = any(CJK_RE.search(line) for line in block.source_lines)
-    has_english = any(
-        LATIN_RE.search(line) and not CJK_RE.search(line)
-        for line in block.source_lines
-    )
-    return has_chinese and has_english
-
-
 def _render(parsed: ParsedDocs, output_path: Path, template_path: Path) -> Path:
     doc = Document(str(_resolve_template_path(template_path)))
     _remove_initial_paragraph(doc)
     ensure_base_styles(doc)
 
     for index, block in enumerate(parsed.blocks):
-        yellow = (
-            not block.inline_translation
-            if parsed.kind is DocumentKind.SUBTITLE
-            else _has_separate_super_translation(block)
-        )
+        yellow = block.yellow and not block.inline_translation and not block.no_translation
         if block.timecode is not None:
             if parsed.kind is DocumentKind.SUBTITLE and block.source_lines:
                 _add_paragraph(

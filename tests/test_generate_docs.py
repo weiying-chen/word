@@ -224,7 +224,7 @@ def test_generation_removes_trailing_workflow_hash_markers(tmp_path: Path) -> No
     ]
 
 
-def test_subtitle_highlights_blocks_without_inline_translation(tmp_path: Path) -> None:
+def test_subtitle_does_not_infer_highlighting_without_markers(tmp_path: Path) -> None:
     source = tmp_path / "episode_chus字幕.txt"
     source.write_text(
         "00:00:00:00\t00:00:02:00\t中文\n"
@@ -238,13 +238,8 @@ def test_subtitle_highlights_blocks_without_inline_translation(tmp_path: Path) -
 
     paragraphs = Document(output).paragraphs
     assert all(
-        run.font.highlight_color == WD_COLOR_INDEX.YELLOW
-        for paragraph in paragraphs[:2]
-        for run in paragraph.runs
-    )
-    assert all(
         run.font.highlight_color is None
-        for paragraph in paragraphs[2:]
+        for paragraph in paragraphs
         for run in paragraph.runs
     )
 
@@ -271,7 +266,7 @@ def test_super_does_not_highlight_slash_translation_blocks(tmp_path: Path) -> No
     )
 
 
-def test_super_highlights_only_separate_bilingual_blocks(tmp_path: Path) -> None:
+def test_super_does_not_infer_highlighting_from_bilingual_content(tmp_path: Path) -> None:
     source = tmp_path / "episode_super.txt"
     source.write_text(
         "00:00:00:00\t00:00:02:00\n"
@@ -288,15 +283,52 @@ def test_super_highlights_only_separate_bilingual_blocks(tmp_path: Path) -> None
 
     paragraphs = Document(output).paragraphs
     assert all(
-        run.font.highlight_color == WD_COLOR_INDEX.YELLOW
-        for paragraph in paragraphs[:3]
-        for run in paragraph.runs
-    )
-    assert all(
         run.font.highlight_color is None
-        for paragraph in paragraphs[4:]
+        for paragraph in paragraphs
         for run in paragraph.runs
     )
+
+
+def test_super_star_markers_define_yellow_range(tmp_path: Path) -> None:
+    source = tmp_path / "episode_super.txt"
+    source.write_text(
+        "00:00:00:00\t00:00:01:00\n"
+        "Outside before\n\n"
+        "00:00:01:00\t00:00:02:00 *\n"
+        "Range start\n\n"
+        "00:00:02:00\t00:00:03:00\t//Slash English\n"
+        "00:00:03:00\t00:00:04:00 *\n"
+        "Range end\n\n"
+        "00:00:04:00\t00:00:05:00\n"
+        "Outside after\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "super.docx"
+
+    generate_docs(source, output_path=output)
+
+    paragraphs = Document(output).paragraphs
+    by_text = {paragraph.text: paragraph for paragraph in paragraphs}
+    assert not any("*" in paragraph.text for paragraph in paragraphs)
+    for text in (
+        "00:00:01:00\t00:00:02:00",
+        "Range start",
+        "00:00:03:00\t00:00:04:00",
+        "Range end",
+    ):
+        assert all(
+            run.font.highlight_color == WD_COLOR_INDEX.YELLOW
+            for run in by_text[text].runs
+        )
+    for text in (
+        "Outside before",
+        "Slash English",
+        "Outside after",
+    ):
+        assert all(
+            run.font.highlight_color is None
+            for run in by_text[text].runs
+        )
 
 
 def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -> None:
