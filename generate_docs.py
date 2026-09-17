@@ -28,6 +28,8 @@ SUPER_AS_SUBTITLE_RE = re.compile(
     r"super.*字幕方式.*copy.*字幕檔", re.IGNORECASE
 )
 NO_TRANSLATION_RE = re.compile(r"(?:以下)?不用翻譯|do not translate", re.IGNORECASE)
+CJK_RE = re.compile(r"[\u3400-\u9fff]")
+LATIN_RE = re.compile(r"[A-Za-z]")
 SHARING_SKY_DELIVERY_TITLE_RE = re.compile(
     r"(?P<title>風月同天第.+?\(\s*12分版\s*\))"
 )
@@ -169,6 +171,8 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
                 cyan_next = False
                 blocks.append(current)
 
+        if "//" in content:
+            current.inline_translation = True
         source, english = _split_bilingual(content)
         if source is not None:
             current.source_lines.append(source)
@@ -286,13 +290,28 @@ def _resolve_template_path(template_path: Path) -> Path:
     return Path(__file__).resolve().parent / template_path
 
 
+def _has_separate_super_translation(block: DocsBlock) -> bool:
+    if block.inline_translation or block.no_translation:
+        return False
+    has_chinese = any(CJK_RE.search(line) for line in block.source_lines)
+    has_english = any(
+        LATIN_RE.search(line) and not CJK_RE.search(line)
+        for line in block.source_lines
+    )
+    return has_chinese and has_english
+
+
 def _render(parsed: ParsedDocs, output_path: Path, template_path: Path) -> Path:
     doc = Document(str(_resolve_template_path(template_path)))
     _remove_initial_paragraph(doc)
     ensure_base_styles(doc)
 
     for index, block in enumerate(parsed.blocks):
-        yellow = not block.inline_translation
+        yellow = (
+            not block.inline_translation
+            if parsed.kind is DocumentKind.SUBTITLE
+            else _has_separate_super_translation(block)
+        )
         if block.timecode is not None:
             if parsed.kind is DocumentKind.SUBTITLE and block.source_lines:
                 _add_paragraph(
@@ -342,6 +361,20 @@ def default_output_path(input_path: Path, kind: DocumentKind) -> Path:
     return Path("output") / input_path.with_suffix(".docx").name
 
 
+def discover_input_paths(directory: Path) -> list[Path]:
+    inputs: list[Path] = []
+    for path in sorted(directory.glob("*.txt")):
+        name = path.name.casefold()
+        if name.startswith("~") or name.endswith(".baseline.txt"):
+            continue
+        try:
+            detect_document_kind(path, "")
+        except ValueError:
+            continue
+        inputs.append(path)
+    return inputs
+
+
 def generate_docs(
     input_path: Path,
     *,
@@ -365,7 +398,14 @@ def main() -> None:
         prog="gen-docs",
         description="Generate a 風月同天 subtitle or SUPER working DOCX from TXT."
     )
-    parser.add_argument("--input", required=True, help="Subtitle or SUPER TXT file.")
+    parser.add_argument(
+        "--input",
+        default="",
+        help=(
+            "Subtitle or SUPER TXT file. When omitted, generate all recognized "
+            "non-baseline TXT files in the current directory."
+        ),
+    )
     parser.add_argument(
         "--output",
         default="",
@@ -387,18 +427,30 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    input_path = Path(args.input)
     kind = None if args.kind == "auto" else DocumentKind(args.kind)
     try:
-        output = generate_docs(
-            input_path,
-            output_path=Path(args.output) if args.output else None,
-            kind=kind,
-            template_path=Path(args.template),
+        input_paths = (
+            [Path(args.input)]
+            if args.input
+            else discover_input_paths(Path.cwd())
         )
+        if not input_paths:
+            raise ValueError(
+                "No recognized non-baseline subtitle or SUPER TXT files "
+                "were found in the current directory."
+            )
+        if args.output and len(input_paths) > 1:
+            raise ValueError("--output can only be used with one --input file.")
+        for input_path in input_paths:
+            output = generate_docs(
+                input_path,
+                output_path=Path(args.output) if args.output else None,
+                kind=kind,
+                template_path=Path(args.template),
+            )
+            print(output)
     except (FileNotFoundError, UnicodeError, ValueError) as exc:
         raise SystemExit(f"[error] {exc}") from exc
-    print(output)
 
 
 if __name__ == "__main__":

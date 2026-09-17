@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 import zipfile
 
 import pytest
@@ -11,7 +12,9 @@ from generate_docs import (
     DocumentKind,
     default_output_path,
     detect_document_kind,
+    discover_input_paths,
     generate_docs,
+    main,
     parse_docs_text,
 )
 from style_tokens import (
@@ -26,6 +29,42 @@ def test_gen_docs_wrapper_uses_project_virtual_environment() -> None:
 
     assert wrapper.stat().st_mode & 0o111
     assert ".venv/bin/python" in wrapper.read_text(encoding="utf-8")
+
+
+def test_no_argument_discovery_uses_working_txt_files_only(tmp_path: Path) -> None:
+    subtitle = tmp_path / "episode_chus字幕.txt"
+    super_file = tmp_path / "episode_super.txt"
+    subtitle.write_text("00:00:00:00\t00:00:01:00\t中文\n", encoding="utf-8")
+    super_file.write_text("00:00:00:00\t00:00:01:00\n中文\n", encoding="utf-8")
+    (tmp_path / "episode_chus字幕.baseline.txt").write_text("baseline", encoding="utf-8")
+    (tmp_path / "sources.txt").write_text("unrelated", encoding="utf-8")
+    (tmp_path / "~episode_super.txt").write_text("temporary", encoding="utf-8")
+
+    assert discover_input_paths(tmp_path) == [subtitle, super_file]
+
+
+def test_main_without_arguments_generates_current_docs_txt_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "episode_chus字幕.txt").write_text(
+        "00:00:00:00\t00:00:01:00\t中文\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "episode_super.txt").write_text(
+        "00:00:00:00\t00:00:01:00\n中文\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "episode_super.baseline.txt").write_text(
+        "baseline",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["gen-docs"])
+
+    main()
+
+    assert (tmp_path / "output/episode_chus字幕.docx").is_file()
+    assert (tmp_path / "output/episode_super.docx").is_file()
 
 
 def test_subtitle_parser_preserves_timecodes_and_splits_bilingual_text() -> None:
@@ -209,7 +248,7 @@ def test_subtitle_highlights_blocks_without_inline_translation(tmp_path: Path) -
     )
 
 
-def test_super_highlights_blocks_without_inline_translation(tmp_path: Path) -> None:
+def test_super_does_not_highlight_slash_translation_blocks(tmp_path: Path) -> None:
     source = tmp_path / "episode_super.txt"
     source.write_text(
         "00:00:00:00\t00:00:02:00\n"
@@ -223,12 +262,35 @@ def test_super_highlights_blocks_without_inline_translation(tmp_path: Path) -> N
     generate_docs(source, output_path=output)
 
     paragraphs = Document(output).paragraphs
+    assert paragraphs[3].text == ""
+    assert all(
+        run.font.highlight_color is None
+        for paragraph in paragraphs
+        for run in paragraph.runs
+    )
+
+
+def test_super_highlights_only_separate_bilingual_blocks(tmp_path: Path) -> None:
+    source = tmp_path / "episode_super.txt"
+    source.write_text(
+        "00:00:00:00\t00:00:02:00\n"
+        "主持人\n"
+        "Host\n\n"
+        "00:00:02:00\t00:00:04:00\n"
+        "只有中文尚未翻譯\n\n"
+        "00:00:04:00\t00:00:06:00\t//Inline English\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "super.docx"
+
+    generate_docs(source, output_path=output)
+
+    paragraphs = Document(output).paragraphs
     assert all(
         run.font.highlight_color == WD_COLOR_INDEX.YELLOW
         for paragraph in paragraphs[:3]
         for run in paragraph.runs
     )
-    assert paragraphs[3].text == ""
     assert all(
         run.font.highlight_color is None
         for paragraph in paragraphs[4:]
@@ -300,7 +362,7 @@ def test_explicit_super_as_subtitle_note_uses_cyan(tmp_path: Path) -> None:
         )
 
 
-def test_shared_highlight_helper_preserves_cyan_and_adds_yellow(
+def test_shared_highlight_helper_preserves_explicit_cyan_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source = tmp_path / "episode_super.txt"
@@ -333,8 +395,6 @@ def test_shared_highlight_helper_preserves_cyan_and_adds_yellow(
         ("00:00:00:00\t00:00:01:00", WD_COLOR_INDEX.TURQUOISE),
         ("明確標記", WD_COLOR_INDEX.TURQUOISE),
         ("", WD_COLOR_INDEX.TURQUOISE),
-        ("00:00:02:00\t00:00:03:00", WD_COLOR_INDEX.YELLOW),
-        ("一般內容", WD_COLOR_INDEX.YELLOW),
     ]
 
 
