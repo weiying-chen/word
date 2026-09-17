@@ -36,11 +36,12 @@ from style_tokens import (
     BODY_TEXT_SIZE_PT,
     REFERENCE_HIGHLIGHT_DEFAULT,
     REFERENCE_TEXT_SIZE_PT,
+    SECTION_LABEL_BLUE_RGB,
 )
 
 
 FIELD_RE = re.compile(r"^(?P<key>[A-Za-z_]+)\s*:\s*(?P<value>.*)$")
-FIELD_KEYS = {"TITLE", "VIDEO_URL", "BODY", "SOURCES"}
+FIELD_KEYS = {"TITLE", "VIDEO_URL", "HOOK", "BODY", "SOURCES"}
 HTTP_URL_RE = re.compile(r"^https?://\S+$", re.IGNORECASE)
 
 
@@ -72,7 +73,7 @@ def parse_post_text(text: str) -> dict[str, str]:
             idx += 1
         fields[key] = "\n".join(collected).strip()
 
-    for key in ("TITLE", "VIDEO_URL", "BODY", "SOURCES"):
+    for key in ("TITLE", "VIDEO_URL", "HOOK", "BODY", "SOURCES"):
         if not fields.get(key, "").strip():
             raise ValueError(f"[error] Missing required field: {key}")
 
@@ -92,6 +93,7 @@ def parse_post_text(text: str) -> dict[str, str]:
     return {
         "title": fields["TITLE"].strip(),
         "video_url": video_url,
+        "hook": fields["HOOK"].strip(),
         "post_en": _join_content(content[:en_hash_idx]),
         "hashtags_en": content[en_hash_idx].strip(),
         "post_zh": _join_content(content[en_hash_idx + 1 : zh_hash_idx]),
@@ -104,17 +106,41 @@ def parse_post_file(path: Path) -> dict[str, str]:
     return parse_post_text(path.read_text(encoding="utf-8-sig"))
 
 
-def _remove_draft_scaffolding(doc: Document) -> None:
-    remove_text = {
-        "標題",
-        "{{TITLE_LINE_1}}",
-        "{{TITLE_LINE_2}}",
+def build_default_output_path(input_path: Path) -> Path:
+    stem = input_path.stem
+    if not stem.endswith("小編文_al"):
+        stem = f"{stem}小編文_al"
+    return input_path.with_name(f"{stem}.docx")
+
+
+def _render_hook(doc: Document, hook: str) -> None:
+    hook_lines = hook.splitlines()
+    if hook_lines and hook_lines[0].strip() in {"標題", "標題:", "標題："}:
+        hook_lines.pop(0)
+    hook_lines = [line.strip() for line in hook_lines if line.strip()]
+
+    replacements = {
+        "標題": "標題：",
+        "{{TITLE_LINE_1}}": hook_lines[0] if hook_lines else "",
+        "{{TITLE_LINE_2}}": hook_lines[1] if len(hook_lines) > 1 else "",
     }
-    for paragraph in reversed(doc.paragraphs):
-        if paragraph.text.strip() in remove_text:
-            remove_paragraph(paragraph)
-    while doc.paragraphs and not doc.paragraphs[0].text.strip():
-        remove_paragraph(doc.paragraphs[0])
+    for paragraph in doc.paragraphs:
+        replacement = replacements.get(paragraph.text.strip())
+        if replacement is None:
+            continue
+        if paragraph.runs:
+            paragraph.runs[0].text = replacement
+            for run in paragraph.runs[1:]:
+                run.text = ""
+        else:
+            paragraph.add_run(replacement)
+        apply_font_size_to_runs(paragraph, font_size_pt=BODY_TEXT_SIZE_PT)
+        for run in paragraph.runs:
+            if run.text:
+                run.font.color.rgb = SECTION_LABEL_BLUE_RGB
+
+    if len(hook_lines) > 2:
+        raise ValueError("[error] HOOK must contain no more than two lines.")
 
 
 def _render_sources(doc: Document, sources: str, indent_inches: float) -> None:
@@ -197,7 +223,7 @@ def generate_post(
     doc = Document(str(_resolve_template_path(template_path)))
     remove_obsolete_post_labels(doc)
     apply_font_size_to_document_runs(doc, font_size_pt=BODY_TEXT_SIZE_PT)
-    _remove_draft_scaffolding(doc)
+    _render_hook(doc, post["hook"])
     default_tab_stop = get_default_tab_stop_inches(doc)
     mapping = {
         "{{HEADER_TITLE}}": post["title"],
@@ -257,7 +283,7 @@ def main() -> None:
     args = parser.parse_args()
 
     input_path = Path(args.input)
-    output_path = Path(args.output) if args.output else input_path.with_suffix(".docx")
+    output_path = Path(args.output) if args.output else build_default_output_path(input_path)
     generate_post(
         input_path=input_path,
         template_path=Path(args.template),

@@ -5,12 +5,16 @@ from docx import Document
 from docx.oxml.ns import qn
 from docx.shared import Pt
 
-from generate_posts import generate_post, parse_post_text
+from generate_posts import build_default_output_path, generate_post, parse_post_text
 
 
 POST_TEXT = """TITLE: Da Ai Journal - Staying Young at 105 (大愛全紀實 - 人生歌未央 [1])
 
 VIDEO_URL: https://www.youtube.com/watch?v=example
+
+HOOK:
+105歲還在打羽球
+是什麼讓他一直年輕？
 
 BODY:
 
@@ -31,6 +35,15 @@ English translation.
 """
 
 
+def test_default_output_path_adds_editorial_suffix_once() -> None:
+    assert build_default_output_path(Path("episode.txt")) == Path(
+        "episode小編文_al.docx"
+    )
+    assert build_default_output_path(Path("episode小編文_al.txt")) == Path(
+        "episode小編文_al.docx"
+    )
+
+
 def test_parse_completed_post_text() -> None:
     post = parse_post_text(POST_TEXT)
 
@@ -38,6 +51,7 @@ def test_parse_completed_post_text() -> None:
         "Da Ai Journal - Staying Young at 105 (大愛全紀實 - 人生歌未央 [1])"
     )
     assert post["video_url"] == "https://www.youtube.com/watch?v=example"
+    assert post["hook"] == "105歲還在打羽球\n是什麼讓他一直年輕？"
     assert post["post_en"] == (
         "Lin You-mao is 105 years old—and he's still playing badminton."
     )
@@ -88,15 +102,26 @@ def test_generate_completed_post_uses_post_template_without_draft_header(
 
     texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
     assert "標題" not in texts
+    assert "標題：" in texts
+    assert "105歲還在打羽球" in texts
+    assert "是什麼讓他一直年輕？" in texts
+    title_block = [
+        next(p for p in Document(output_path).paragraphs if p.text == text)
+        for text in ("標題：", "105歲還在打羽球", "是什麼讓他一直年輕？")
+    ]
+    assert all(
+        str(paragraph.runs[0].font.color.rgb) == "0070C0"
+        for paragraph in title_block
+    )
     assert "英文翻譯：" not in texts
     assert not any(text.startswith("9/20(日)") for text in texts)
     assert texts[0] == (
         "Da Ai Journal - Staying Young at 105 (大愛全紀實 - 人生歌未央 [1])"
     )
     assert texts[1] == "https://www.youtube.com/watch?v=example"
-    assert texts[3] == (
+    assert (
         "Lin You-mao is 105 years old—and he's still playing badminton."
-    )
+    ) in texts
     assert sum(
         "Da Ai Journal - Staying Young at 105" in text for text in texts
     ) == 1
