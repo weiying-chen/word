@@ -10,7 +10,7 @@ from docx.shared import Pt
 import zipfile
 import xml.etree.ElementTree as ET
 
-from prepare_posts import generate_docs
+from prepare_posts import generate_docs, replace_placeholders
 from style_tokens import (
     BODY_TEXT_SIZE_PT,
     REFERENCE_HIGHLIGHT_DEFAULT,
@@ -23,6 +23,15 @@ def _write_docx(path: Path, paragraphs: list[str]) -> None:
     for text in paragraphs:
         doc.add_paragraph(text)
     doc.save(path)
+
+
+def test_reference_label_is_not_highlighted() -> None:
+    doc = Document()
+    label = doc.add_paragraph("參考資料：")
+
+    replace_placeholders(doc, {}, 0.5)
+
+    assert all(run.font.highlight_color is None for run in label.runs if run.text)
 
 
 def test_generated_docx_is_well_formed(tmp_path: Path) -> None:

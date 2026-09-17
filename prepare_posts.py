@@ -1396,7 +1396,13 @@ def replace_placeholders(
         paragraph_text = paragraph.text
         if paragraph_text.strip() in indent_labels:
             set_source_indent(paragraph, indent_inches)
-            apply_source_style(paragraph)
+            if paragraph_text.strip() == "參考資料：":
+                apply_font_size_to_runs(
+                    paragraph,
+                    font_size_pt=REFERENCE_TEXT_SIZE_PT,
+                )
+            else:
+                apply_source_style(paragraph)
         for placeholder, value in mapping.items():
             if placeholder not in paragraph_text:
                 continue
