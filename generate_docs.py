@@ -98,11 +98,10 @@ def _apply_star_highlight_range(blocks: list[DocsBlock]) -> None:
     marker_indices = [
         index for index, block in enumerate(blocks) if block.highlight_marker
     ]
-    if len(marker_indices) < 2:
-        return
-    start, end = marker_indices[:2]
-    for block in blocks[start : end + 1]:
-        block.yellow = True
+    for pair_start in range(0, len(marker_indices) - 1, 2):
+        start, end = marker_indices[pair_start : pair_start + 2]
+        for block in blocks[start : end + 1]:
+            block.yellow = True
 
 
 def _parse_subtitle(lines: list[str]) -> ParsedDocs:

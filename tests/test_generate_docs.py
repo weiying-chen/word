@@ -331,6 +331,41 @@ def test_super_star_markers_define_yellow_range(tmp_path: Path) -> None:
         )
 
 
+def test_star_markers_define_multiple_yellow_ranges(tmp_path: Path) -> None:
+    source = tmp_path / "episode_chus字幕.txt"
+    source.write_text(
+        "00:00:00:00\t00:00:01:00\tFirst start *\n"
+        "First English\n"
+        "00:00:01:00\t00:00:02:00\tFirst end *\n"
+        "00:00:02:00\t00:00:03:00\tOutside\n"
+        "00:00:03:00\t00:00:04:00\tSecond start *\n"
+        "00:00:04:00\t00:00:05:00\tSecond end *\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "subtitle.docx"
+
+    generate_docs(source, output_path=output)
+
+    paragraphs = Document(output).paragraphs
+    by_text = {paragraph.text: paragraph for paragraph in paragraphs}
+    assert not any("*" in paragraph.text for paragraph in paragraphs)
+    for text in (
+        "00:00:00:00\t00:00:01:00\tFirst start",
+        "First English",
+        "00:00:01:00\t00:00:02:00\tFirst end",
+        "00:00:03:00\t00:00:04:00\tSecond start",
+        "00:00:04:00\t00:00:05:00\tSecond end",
+    ):
+        assert all(
+            run.font.highlight_color == WD_COLOR_INDEX.YELLOW
+            for run in by_text[text].runs
+        )
+    assert all(
+        run.font.highlight_color is None
+        for run in by_text["00:00:02:00\t00:00:03:00\tOutside"].runs
+    )
+
+
 def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -> None:
     source = tmp_path / "episode_super.txt"
     source.write_text(
