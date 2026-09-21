@@ -6,6 +6,7 @@ import argparse
 import html
 import json
 import re
+import sys
 from datetime import date
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -648,17 +649,27 @@ def _description_paragraphs(description: str) -> list[str]:
 def fetch_youtube_video_metadata(url: str) -> tuple[str, str, str]:
     if not url or "youtu" not in url:
         return "", "", ""
-    try:
-        req = Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7",
-            },
+    req = Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7",
+        },
+    )
+    last_error: Exception | None = None
+    for _ in range(3):
+        try:
+            with urlopen(req, timeout=8) as resp:
+                raw = resp.read()
+            break
+        except Exception as error:
+            last_error = error
+    else:
+        print(
+            f"[warn] could not fetch YouTube metadata after 3 attempts: "
+            f"{url} ({last_error})",
+            file=sys.stderr,
         )
-        with urlopen(req, timeout=8) as resp:
-            raw = resp.read()
-    except Exception:
         return "", "", ""
 
     page = raw.decode("utf-8", errors="ignore")

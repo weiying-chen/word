@@ -137,6 +137,34 @@ def test_youtube_video_descriptions_parse_english_and_chinese() -> None:
     assert desc_zh == "對於B型與C型肝炎帶原者而言，單靠定期的抽血檢查並不足夠。"
 
 
+def test_youtube_metadata_retries_transient_failures() -> None:
+    description = "English summary.\\n\\n中文摘要。"
+    page = '{"shortDescription":"' + description + '"}'
+
+    with patch(
+        "prepare_posts.urlopen",
+        side_effect=[TimeoutError(), TimeoutError(), _FakeResponse(page)],
+    ) as mocked_urlopen:
+        desc_en, desc_zh = fetch_youtube_video_descriptions(
+            "https://www.youtube.com/watch?v=example"
+        )
+
+    assert mocked_urlopen.call_count == 3
+    assert desc_en == "English summary."
+    assert desc_zh == "中文摘要。"
+
+
+def test_youtube_metadata_warns_after_retries_fail(capsys) -> None:
+    with patch("prepare_posts.urlopen", side_effect=TimeoutError()) as mocked_urlopen:
+        desc_en, desc_zh = fetch_youtube_video_descriptions(
+            "https://www.youtube.com/watch?v=example"
+        )
+
+    assert mocked_urlopen.call_count == 3
+    assert (desc_en, desc_zh) == ("", "")
+    assert "[warn] could not fetch YouTube metadata after 3 attempts" in capsys.readouterr().err
+
+
 def test_bodhi_reference_excerpt_uses_episode_json_description() -> None:
     description = (
         "#人間菩提 #證嚴上人\\r\\n"
