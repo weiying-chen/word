@@ -34,14 +34,19 @@ def test_gen_docs_wrapper_uses_project_virtual_environment() -> None:
 
 def test_no_argument_discovery_uses_working_txt_files_only(tmp_path: Path) -> None:
     subtitle = tmp_path / "episode_chus字幕.txt"
+    alternate_subtitle = tmp_path / "episode_chus(字幕確定).txt"
     super_file = tmp_path / "episode_super.txt"
     subtitle.write_text("00:00:00:00\t00:00:01:00\t中文\n", encoding="utf-8")
+    alternate_subtitle.write_text(
+        "00:00:01:00\t00:00:02:00\t另一行中文\n",
+        encoding="utf-8",
+    )
     super_file.write_text("00:00:00:00\t00:00:01:00\n中文\n", encoding="utf-8")
     (tmp_path / "episode_chus字幕.baseline.txt").write_text("baseline", encoding="utf-8")
     (tmp_path / "sources.txt").write_text("unrelated", encoding="utf-8")
     (tmp_path / "~episode_super.txt").write_text("temporary", encoding="utf-8")
 
-    assert discover_input_paths(tmp_path) == [subtitle, super_file]
+    assert discover_input_paths(tmp_path) == [alternate_subtitle, subtitle, super_file]
 
 
 def test_main_without_arguments_generates_current_docs_txt_files(

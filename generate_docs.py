@@ -386,7 +386,7 @@ def discover_input_paths(directory: Path) -> list[Path]:
         if name.startswith("~") or name.endswith(".baseline.txt"):
             continue
         try:
-            detect_document_kind(path, "")
+            detect_document_kind(path, _decode_input(path))
         except ValueError:
             continue
         inputs.append(path)
