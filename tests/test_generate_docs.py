@@ -351,6 +351,39 @@ def test_super_star_markers_define_yellow_range(tmp_path: Path) -> None:
         )
 
 
+def test_double_star_highlights_one_block_alongside_star_range(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "episode_super.txt"
+    source.write_text(
+        "00:00:00:00\t00:00:01:00 **\n"
+        "Single block\n\n"
+        "00:00:01:00\t00:00:02:00\n"
+        "Outside\n\n"
+        "00:00:02:00\t00:00:03:00 *\n"
+        "Range start\n\n"
+        "00:00:03:00\t00:00:04:00 *\n"
+        "Range end\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "super.docx"
+
+    generate_docs(source, output_path=output)
+
+    paragraphs = Document(output).paragraphs
+    by_text = {paragraph.text: paragraph for paragraph in paragraphs}
+    assert not any("*" in paragraph.text for paragraph in paragraphs)
+    for text in ("Single block", "Range start", "Range end"):
+        assert all(
+            run.font.highlight_color == WD_COLOR_INDEX.YELLOW
+            for run in by_text[text].runs
+        )
+    assert all(
+        run.font.highlight_color is None
+        for run in by_text["Outside"].runs
+    )
+
+
 def test_star_markers_define_multiple_yellow_ranges(tmp_path: Path) -> None:
     source = tmp_path / "episode_chus字幕.txt"
     source.write_text(

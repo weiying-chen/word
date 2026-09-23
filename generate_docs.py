@@ -28,7 +28,7 @@ SUPER_AS_SUBTITLE_RE = re.compile(
     r"super.*字幕方式.*copy.*字幕檔", re.IGNORECASE
 )
 NO_TRANSLATION_RE = re.compile(r"(?:以下)?不用翻譯|do not translate", re.IGNORECASE)
-STAR_MARKER_RE = re.compile(r"\s*\*\s*$")
+STAR_MARKER_RE = re.compile(r"\s*(?P<marker>\*{1,2})\s*$")
 SHARING_SKY_DELIVERY_TITLE_RE = re.compile(
     r"(?P<title>風月同天第.+?\(\s*12分版\s*\))"
 )
@@ -47,7 +47,7 @@ class DocsBlock:
     cyan: bool = False
     no_translation: bool = False
     inline_translation: bool = False
-    highlight_marker: bool = False
+    highlight_marker: str = ""
     yellow: bool = False
     timestamp_inline_translation: bool = False
 
@@ -86,18 +86,24 @@ def _timecode_and_text(line: str) -> tuple[str, str | None] | None:
     return timecode, match.group("text")
 
 
-def _timed_line_and_marker(line: str) -> tuple[tuple[str, str | None] | None, bool]:
-    has_marker = STAR_MARKER_RE.search(line) is not None
-    candidate = STAR_MARKER_RE.sub("", line) if has_marker else line
+def _timed_line_and_marker(line: str) -> tuple[tuple[str, str | None] | None, str]:
+    marker_match = STAR_MARKER_RE.search(line)
+    marker = marker_match.group("marker") if marker_match is not None else ""
+    candidate = STAR_MARKER_RE.sub("", line) if marker else line
     timed = _timecode_and_text(candidate)
     if timed is None:
-        return _timecode_and_text(line), False
-    return timed, has_marker
+        return _timecode_and_text(line), ""
+    return timed, marker
 
 
 def _apply_star_highlight_range(blocks: list[DocsBlock]) -> None:
+    for block in blocks:
+        if block.highlight_marker == "**":
+            block.yellow = True
     marker_indices = [
-        index for index, block in enumerate(blocks) if block.highlight_marker
+        index
+        for index, block in enumerate(blocks)
+        if block.highlight_marker == "*"
     ]
     for pair_start in range(0, len(marker_indices) - 1, 2):
         start, end = marker_indices[pair_start : pair_start + 2]
