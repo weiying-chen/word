@@ -13,6 +13,7 @@ from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
 
 from docx_utils import apply_font_size_to_runs, apply_highlight_to_runs
+from generate_subs import is_full_line_comment
 from style_tokens import BODY_TEXT_SIZE_PT
 from template_styles import ensure_base_styles
 
@@ -213,7 +214,11 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
 
 
 def parse_docs_text(text: str, kind: DocumentKind) -> ParsedDocs:
-    lines = text.lstrip("\ufeff").splitlines()
+    lines = [
+        line
+        for line in text.lstrip("\ufeff").splitlines()
+        if not is_full_line_comment(line)
+    ]
     if kind is DocumentKind.SUBTITLE:
         return _parse_subtitle(lines)
     return _parse_super(lines)

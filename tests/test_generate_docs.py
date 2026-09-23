@@ -83,6 +83,26 @@ def test_subtitle_parser_preserves_timecodes_and_splits_bilingual_text() -> None
     assert parsed.blocks[1].english_lines == []
 
 
+@pytest.mark.parametrize("kind", [DocumentKind.SUBTITLE, DocumentKind.SUPER])
+def test_docs_parser_reuses_subs_full_line_comment_behavior(
+    kind: DocumentKind,
+) -> None:
+    source = (
+        "// ignore this comment\n"
+        "   // ignore this indented comment\n"
+        "00:00:00:00\t00:00:01:00\t中文//Timed English\n"
+    )
+
+    parsed = parse_docs_text(source, kind)
+
+    assert all(
+        "ignore this" not in line
+        for block in parsed.blocks
+        for line in (*block.source_lines, *block.english_lines)
+    )
+    assert parsed.blocks[0].english_lines == ["Timed English"]
+
+
 def test_super_parser_normalizes_full_width_timecode_separator_to_tab() -> None:
     source = (
         "00:01:39:08　00:01:43:02\n"
@@ -249,7 +269,7 @@ def test_super_does_not_highlight_slash_translation_blocks(tmp_path: Path) -> No
     source.write_text(
         "00:00:00:00\t00:00:02:00\n"
         "中文\n"
-        "//Separate English\n\n"
+        "// comment to ignore\n\n"
         "00:00:02:00\t00:00:04:00\t//Inline English\n",
         encoding="utf-8",
     )
@@ -258,7 +278,7 @@ def test_super_does_not_highlight_slash_translation_blocks(tmp_path: Path) -> No
     generate_docs(source, output_path=output)
 
     paragraphs = Document(output).paragraphs
-    assert paragraphs[3].text == ""
+    assert "comment to ignore" not in "\n".join(p.text for p in paragraphs)
     assert all(
         run.font.highlight_color is None
         for paragraph in paragraphs
@@ -370,8 +390,7 @@ def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -
     source = tmp_path / "episode_super.txt"
     source.write_text(
         "00:00:00:00\t00:00:02:00\n"
-        "風月同天\n"
-        "//Sharing the Same Sky.\n\n"
+        "風月同天//Sharing the Same Sky.\n\n"
         "(以下不用翻譯)\n"
         "歷史活動\n",
         encoding="utf-8",
