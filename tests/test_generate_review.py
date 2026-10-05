@@ -1249,6 +1249,50 @@ def test_generate_review_splits_current_and_previous_month_subs_and_total(
     assert table.cell(previous_row_idx + 2, 2).text.strip() == "• old note"
 
 
+def test_generate_review_skips_tasks_older_than_previous_month(
+    tmp_path: Path,
+) -> None:
+    template_path = tmp_path / "review_template.docx"
+    tasks_json = tmp_path / "tasks.json"
+    output_path = tmp_path / "review_output.docx"
+
+    _write_review_template(template_path)
+    tasks_json.write_text(
+        json.dumps(
+            [
+                _stage_task(
+                    "Older task",
+                    start_at="2026-04-30T08:00:00Z",
+                    notes=["older note"],
+                ),
+                _stage_task(
+                    "Previous month task",
+                    start_at="2026-05-31T08:00:00Z",
+                    notes=["previous note"],
+                ),
+                _stage_task(
+                    "Current month task",
+                    start_at="2026-06-01T08:00:00Z",
+                    notes=["current note"],
+                ),
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_review.generate_review(template_path, output_path, tasks_json)
+
+    document_text = "\n".join(
+        cell.text
+        for table in Document(output_path).tables
+        for row in table.rows
+        for cell in row.cells
+    )
+    assert "Previous month task" in document_text
+    assert "Older task" not in document_text
+
+
 def test_generate_review_splits_months_using_created_at_when_start_at_missing(
     tmp_path: Path,
 ) -> None:

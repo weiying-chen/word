@@ -178,7 +178,12 @@ def _task_month_relation(task: dict, target_month: tuple[int, int]) -> str | Non
     task_month = (start_at.year, start_at.month)
     if task_month == target_month:
         return "current"
-    if task_month < target_month:
+    target_year, target_month_number = target_month
+    if target_month_number == 1:
+        previous_month = (target_year - 1, 12)
+    else:
+        previous_month = (target_year, target_month_number - 1)
+    if task_month == previous_month:
         return "previous"
     return "future"
 
