@@ -8,6 +8,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 
 from generate_meta import (
+    _normalize_display_name_en,
     build_people_lines,
     default_output_path,
     generate_meta,
@@ -1000,6 +1001,9 @@ class RenderMetaTests(unittest.TestCase):
 
         self.assertIn("Hwang Lay Boon", texts)
         self.assertNotIn("HWANG LAY BOON", texts)
+
+    def test_display_name_normalization_handles_surname_prefixes(self) -> None:
+        self.assertEqual(_normalize_display_name_en("O'NEILL MCDONALD"), "O'Neill McDonald")
 
     def test_build_people_lines_prefers_super_sequence_when_requested(self) -> None:
         people = [

@@ -650,7 +650,8 @@ def _normalize_display_name_en(name_en: str) -> str:
         return text
     if text.upper() != text:
         return text
-    return text.title()
+    titled = text.title()
+    return re.sub(r"\bMc([a-z])", lambda match: f"Mc{match.group(1).upper()}", titled)
 
 
 def _person_label(person: dict) -> str:
