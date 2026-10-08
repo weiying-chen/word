@@ -449,6 +449,31 @@ def test_super_generation_preserves_notes_and_existing_english(tmp_path: Path) -
     ]
 
 
+def test_untimed_super_preserves_every_line_and_blank(tmp_path: Path) -> None:
+    source = tmp_path / "episode_super.txt"
+    source.write_text(
+        "片名:測試\n"
+        "Test Title\n"
+        "\n"
+        "\n"
+        "中文內容\n"
+        "English content\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "super.docx"
+
+    generate_docs(source, output_path=output)
+
+    assert [paragraph.text for paragraph in Document(output).paragraphs] == [
+        "片名:測試",
+        "Test Title",
+        "",
+        "",
+        "中文內容",
+        "English content",
+    ]
+
+
 def test_super_timestamp_inline_translation_does_not_warn_about_punctuation(
     tmp_path: Path,
 ) -> None:

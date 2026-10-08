@@ -56,7 +56,7 @@ class DocsBlock:
 class ParsedDocs:
     kind: DocumentKind
     blocks: list[DocsBlock]
-    blank_after: set[int] = field(default_factory=set)
+    blank_after: dict[int, int] = field(default_factory=dict)
 
 
 def _decode_input(path: Path) -> str:
@@ -113,7 +113,7 @@ def _apply_star_highlight_range(blocks: list[DocsBlock]) -> None:
 
 def _parse_subtitle(lines: list[str]) -> ParsedDocs:
     blocks: list[DocsBlock] = []
-    blank_after: set[int] = set()
+    blank_after: dict[int, int] = {}
     current: DocsBlock | None = None
 
     for line in lines:
@@ -134,7 +134,8 @@ def _parse_subtitle(lines: list[str]) -> ParsedDocs:
             continue
         if not line:
             if blocks:
-                blank_after.add(len(blocks) - 1)
+                index = len(blocks) - 1
+                blank_after[index] = blank_after.get(index, 0) + 1
             current = None
             continue
         if current is None:
@@ -152,7 +153,7 @@ def _parse_subtitle(lines: list[str]) -> ParsedDocs:
 
 def _parse_super(lines: list[str]) -> ParsedDocs:
     blocks: list[DocsBlock] = []
-    blank_after: set[int] = set()
+    blank_after: dict[int, int] = {}
     current: DocsBlock | None = None
     no_translation = False
     cyan_next = False
@@ -167,7 +168,8 @@ def _parse_super(lines: list[str]) -> ParsedDocs:
         if not line:
             finish_block()
             if blocks:
-                blank_after.add(len(blocks) - 1)
+                index = len(blocks) - 1
+                blank_after[index] = blank_after.get(index, 0) + 1
             continue
 
         timed, highlight_marker = _timed_line_and_marker(line)
@@ -361,7 +363,11 @@ def _render(parsed: ParsedDocs, output_path: Path, template_path: Path) -> Path:
                 doc, line, parsed.kind, cyan=block.cyan, yellow=yellow
             )
 
-        if parsed.kind is DocumentKind.SUPER and index in parsed.blank_after:
+        for _ in range(
+            parsed.blank_after.get(index, 0)
+            if parsed.kind is DocumentKind.SUPER
+            else 0
+        ):
             _add_paragraph(
                 doc, "", parsed.kind, cyan=block.cyan, yellow=yellow
             )
