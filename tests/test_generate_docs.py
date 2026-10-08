@@ -70,7 +70,7 @@ def test_main_without_arguments_generates_current_docs_txt_files(
     main()
 
     assert (tmp_path / "output/episode_chus字幕.docx").is_file()
-    assert (tmp_path / "output/episode_super.docx").is_file()
+    assert (tmp_path / "output/episode_super_final.docx").is_file()
 
 
 def test_subtitle_parser_preserves_timecodes_and_splits_bilingual_text() -> None:
@@ -168,6 +168,29 @@ def test_default_output_path_uses_output_directory_and_preserves_basename(
     source = Path("incoming") / "episode_chus字幕.txt"
 
     assert default_output_path(source, kind) == Path("output/episode_chus字幕.docx")
+
+
+@pytest.mark.parametrize(
+    ("source_name", "kind", "expected_name"),
+    [
+        (
+            "行動現場第555集_ch.txt",
+            DocumentKind.SUBTITLE,
+            "行動現場第555集_字幕_final.docx",
+        ),
+        (
+            "不只是送貨員Super.txt",
+            DocumentKind.SUPER,
+            "不只是送貨員_super_final.docx",
+        ),
+    ],
+)
+def test_default_output_path_replaces_generic_kind_markers(
+    source_name: str,
+    kind: DocumentKind,
+    expected_name: str,
+) -> None:
+    assert default_output_path(Path(source_name), kind) == Path("output") / expected_name
 
 
 @pytest.mark.parametrize(

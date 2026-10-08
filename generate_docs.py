@@ -382,6 +382,12 @@ def default_output_path(input_path: Path, kind: DocumentKind) -> Path:
     if delivery_title is not None:
         suffix = "字幕_final" if kind is DocumentKind.SUBTITLE else "super_final"
         return Path("output") / f"{delivery_title.group('title')}_{suffix}.docx"
+    if kind is DocumentKind.SUBTITLE and input_path.stem.casefold().endswith("_ch"):
+        title = input_path.stem[:-3]
+        return Path("output") / f"{title}_字幕_final.docx"
+    if kind is DocumentKind.SUPER and input_path.stem.casefold().endswith("super"):
+        title = input_path.stem[:-5].rstrip("_- ")
+        return Path("output") / f"{title}_super_final.docx"
     return Path("output") / input_path.with_suffix(".docx").name
 
 
