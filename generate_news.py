@@ -26,6 +26,7 @@ SHOT_ID_RE = re.compile(r"^\d+_\d{3,4}$")
 BODY_LABEL_LINE_RE = re.compile(r"^\s*(BODY|字幕)\s*[:：]\s*$")
 BODY_INLINE_LINE_RE = re.compile(r"^\s*(BODY|字幕)\s*[:：]\s*(.*)$")
 SOURCE_LINK_RE = re.compile(r"^https?://\S+$")
+SUPER_DURATION_RE = re.compile(r"^\d{2}$")
 MARKER_TEXT = "<"
 BODY_PLACEHOLDER = "{{BODY}}"
 R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -91,7 +92,28 @@ def parse_input(path: Path) -> dict[str, str]:
 
 
 def _strip_body_skip_placeholders(text: str) -> str:
-    lines = [line for line in text.splitlines() if line.strip() != "~"]
+    lines: list[str] = []
+    inside_super = False
+    awaiting_super_duration = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("/*SUPER:"):
+            inside_super = True
+            awaiting_super_duration = False
+        if inside_super and "*/" in stripped:
+            inside_super = False
+            awaiting_super_duration = True
+        elif awaiting_super_duration and (
+            BARE_SHOT_ID_RE.match(stripped) or stripped.startswith("/*")
+        ):
+            awaiting_super_duration = False
+
+        if stripped == "~":
+            continue
+        if awaiting_super_duration and SUPER_DURATION_RE.match(stripped):
+            awaiting_super_duration = False
+            continue
+        lines.append(line)
     return "\n".join(lines)
 
 

@@ -114,6 +114,31 @@ def test_parse_input_uses_whole_file_when_no_body_label(tmp_path: Path) -> None:
     assert data["BODY"] == "0014\n中文內文。\nEnglish line."
 
 
+def test_parse_input_omits_standalone_two_digit_super_duration(tmp_path: Path) -> None:
+    input_path = tmp_path / "news_input.txt"
+    input_path.write_text(
+        "/*SUPER:\n受災居民｜測試\n*/\nEnglish SUPER line.\n19\n\n0222\nBody line.\n",
+        encoding="utf-8",
+    )
+
+    data = generate_news.parse_input(input_path)
+
+    assert data["BODY"] == (
+        "/*SUPER:\n受災居民｜測試\n*/\nEnglish SUPER line.\n\n0222\nBody line."
+    )
+
+
+def test_parse_input_preserves_standalone_two_digit_line_outside_super(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "news_input.txt"
+    input_path.write_text("0014\n19\nBody line.\n", encoding="utf-8")
+
+    data = generate_news.parse_input(input_path)
+
+    assert data["BODY"] == "0014\n19\nBody line."
+
+
 def test_parse_input_fallback_encoding_warns_and_rewrites_utf8(tmp_path: Path) -> None:
     input_path = tmp_path / "news_input.txt"
     input_path.write_bytes("BODY: Café News\n".encode("cp1252"))
