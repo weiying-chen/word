@@ -434,10 +434,19 @@ def _build_bodhi_entry(
 ) -> dict[str, str]:
     raw_title = title_line.strip()
     cleaned_title, date_prefix = _extract_bodhi_date_prefix(raw_title)
-    english_title = explicit_english_title.strip() or fetch_bodhi_english_subtitle(
-        url_line, cleaned_title
-    )
-    ref_excerpt = fetch_bodhi_reference_excerpt(url_line, cleaned_title)
+    if cleaned_title:
+        english_title = explicit_english_title.strip() or fetch_bodhi_english_subtitle(
+            url_line, cleaned_title
+        )
+        ref_excerpt = fetch_bodhi_reference_excerpt(url_line, cleaned_title)
+    else:
+        inferred_title, inferred_english_title, ref_excerpt = (
+            fetch_bodhi_page_metadata(url_line)
+        )
+        cleaned_title = inferred_title
+        english_title = explicit_english_title.strip() or inferred_english_title
+        if cleaned_title:
+            raw_title = f"{raw_title}{cleaned_title}"
     display_title = cleaned_title
     if english_title:
         display_title = f"{display_title}\n{english_title}"
@@ -575,7 +584,7 @@ def _extract_bodhi_date_prefix(title_line: str) -> tuple[str, str | None]:
     rest = stripped[len(match.group(0)) :].lstrip()
     if rest.startswith("首播"):
         rest = rest[len("首播") :].lstrip()
-    cleaned_title = rest.strip() or stripped
+    cleaned_title = rest.strip()
     return cleaned_title, f"{mm:02d}/{dd:02d}"
 
 
@@ -778,6 +787,67 @@ def _iter_episode_json_objects(page: str):
         )
         if isinstance(parsed, dict):
             yield parsed
+
+
+def _english_title_from_bodhi_description(
+    description: str, chinese_title: str
+) -> str:
+    lines = [
+        _normalize_line_for_match(html.unescape(line))
+        for line in description.splitlines()
+    ]
+    title_norm = _normalize_line_for_match(chinese_title)
+    start = 0
+    if title_norm:
+        for index, line in enumerate(lines):
+            if line == title_norm:
+                start = index + 1
+                break
+    for index in range(start, len(lines)):
+        if _looks_like_english_title(lines[index]):
+            return _collect_english_title_lines(lines, index)
+    return ""
+
+
+def fetch_bodhi_page_metadata(url: str) -> tuple[str, str, str]:
+    """Fetch title, English title, and summary without needing a known title."""
+    if not url:
+        return "", "", ""
+    try:
+        req = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+        )
+        with urlopen(req, timeout=8) as resp:
+            raw = resp.read()
+    except Exception:
+        return "", "", ""
+
+    page = raw.decode("utf-8", errors="ignore")
+    episode_id_match = re.search(r"/(P\d+)(?:[/?#]|$)", url)
+    episode_id = episode_id_match.group(1) if episode_id_match else ""
+    candidates = list(_iter_episode_json_objects(page))
+    selected: dict | None = None
+    for episode in candidates:
+        object_id = f"{episode.get('ProgID', '')}{episode.get('EpID', '')}"
+        if episode_id and object_id == episode_id:
+            selected = episode
+            break
+    if selected is None and len(candidates) == 1:
+        selected = candidates[0]
+    if selected is None:
+        return "", "", ""
+
+    chinese_title = _normalize_line_for_match(str(selected.get("EpTitle", "")))
+    description = str(selected.get("Description", ""))
+    english_title = _english_title_from_bodhi_description(
+        description, chinese_title
+    )
+    excerpt = _excerpt_from_bodhi_description(description, chinese_title)
+    return chinese_title, english_title, excerpt
 
 
 def _excerpt_from_bodhi_description(description: str, chinese_title: str = "") -> str:

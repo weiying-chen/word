@@ -481,7 +481,10 @@ def test_generated_bodhi_docx_puts_english_title_under_chinese_title(tmp_path: P
     output_dir.mkdir()
 
     en_title = "32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore"
-    with patch("prepare_posts.fetch_bodhi_english_subtitle", return_value=en_title):
+    with (
+        patch("prepare_posts.fetch_bodhi_english_subtitle", return_value=en_title),
+        patch("prepare_posts.fetch_bodhi_reference_excerpt", return_value=""),
+    ):
         output_paths = generate_docs(
             schedule_path=schedule_path,
             template_path=template_path,

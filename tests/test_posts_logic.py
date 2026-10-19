@@ -224,6 +224,40 @@ def test_bodhi_reference_excerpt_uses_episode_json_description() -> None:
     )
 
 
+def test_date_only_bodhi_entry_fetches_title_and_summary(tmp_path: Path) -> None:
+    schedule_path = tmp_path / "schedule.docx"
+    _write_docx(
+        schedule_path,
+        [
+            "菩提1則",
+            "1. alex",
+            "10/16",
+            "https://www.daai.tv/master/life-wisdom/P90230414",
+            "--------------------------------",
+        ],
+    )
+
+    with patch(
+        "prepare_posts.fetch_bodhi_page_metadata",
+        return_value=(
+            "化度眾生益人間",
+            "Inspiring Love and Goodness for a Better World",
+            "慈濟大學不只傳授專業知識，也以品德與人文引導孩子。",
+        ),
+    ):
+        entries = extract_post_entries(schedule_path)
+
+    assert len(entries) == 1
+    assert entries[0]["header_title"] == (
+        "人間菩提\n10/16化度眾生益人間\n"
+        "Inspiring Love and Goodness for a Better World"
+    )
+    assert entries[0]["ref_title"] == (
+        "化度眾生益人間\nInspiring Love and Goodness for a Better World\n\n"
+        "慈濟大學不只傳授專業知識，也以品德與人文引導孩子。"
+    )
+
+
 def test_bodhi_reference_excerpt_skips_repeated_navigation_title() -> None:
     page = """
     <nav>
@@ -429,9 +463,12 @@ def test_bodhi_entry_includes_english_title_from_page(tmp_path: Path) -> None:
         ],
     )
 
-    with patch(
-        "prepare_posts.fetch_bodhi_english_subtitle",
-        return_value="32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore",
+    with (
+        patch(
+            "prepare_posts.fetch_bodhi_english_subtitle",
+            return_value="32 Years of Dedication Tzu Chi’s Recycling Efforts in Singapore",
+        ),
+        patch("prepare_posts.fetch_bodhi_reference_excerpt", return_value=""),
     ):
         entries = extract_post_entries(schedule_path)
 
@@ -516,7 +553,8 @@ def test_bodhi_entry_uses_explicit_english_title_line_when_present(tmp_path: Pat
         ],
     )
 
-    entries = extract_post_entries(schedule_path)
+    with patch("prepare_posts.fetch_bodhi_reference_excerpt", return_value=""):
+        entries = extract_post_entries(schedule_path)
 
     assert len(entries) == 1
     assert entries[0].get("reference_only")
