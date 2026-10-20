@@ -1839,6 +1839,30 @@ def test_default_output_path_uses_source_stem(tmp_path: Path) -> None:
     assert output == output_dir / "sample_story_標題職銜_final.docx"
 
 
+def test_role_only_people_override_uses_english_line_as_role(tmp_path: Path) -> None:
+    body_path = tmp_path / "body.txt"
+    meta_path = tmp_path / "meta.txt"
+    body_path.write_text(
+        "/*SUPER:\n高中生志工│//\n這是我們的專業\n*/\n",
+        encoding="utf-8",
+    )
+    meta_path.write_text(
+        "PEOPLE:\n高中生志工｜\nHigh school student volunteer\n",
+        encoding="utf-8",
+    )
+
+    data = parse_input(body_path, meta_path)
+    lines = build_people_lines(
+        data["people"],
+        data["people_tail_lines"],
+        data["people_meta_blocks"],
+        data["prefer_people_sequence"],
+    )
+
+    assert lines == ["", "高中生志工", "High school student volunteer"]
+    assert "{{高中生志工}}" not in lines
+
+
 def test_default_output_path_adds_final_suffix_when_missing(tmp_path: Path) -> None:
     source = tmp_path / "sample_story.docx"
     output_dir = tmp_path / "output"

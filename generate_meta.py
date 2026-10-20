@@ -171,6 +171,9 @@ def _parse_meta_people_blocks(
             continue
         label_zh = block[0].strip()
         role_zh, name_zh = _split_super_header(label_zh)
+        is_nameless_role = bool(
+            role_zh and not name_zh and ("│" in label_zh or "｜" in label_zh)
+        )
         if role_zh and name_zh:
             label_zh = f"{role_zh}｜{name_zh}"
         elif role_zh:
@@ -182,9 +185,19 @@ def _parse_meta_people_blocks(
             "label_zh": label_zh,
             "name_zh": name_zh,
             "role_zh": role_zh,
-            "name_en": block[1].strip() if len(block) > 1 else "",
-            "role_en": block[2].strip() if len(block) > 2 else "",
-            "org_en": block[3].strip() if len(block) > 3 else "",
+            "name_en": (
+                "" if is_nameless_role else block[1].strip() if len(block) > 1 else ""
+            ),
+            "role_en": (
+                block[1].strip()
+                if is_nameless_role and len(block) > 1
+                else block[2].strip() if len(block) > 2 else ""
+            ),
+            "org_en": (
+                block[2].strip()
+                if is_nameless_role and len(block) > 2
+                else block[3].strip() if len(block) > 3 else ""
+            ),
         }
         entries.append(entry)
         ordered_blocks.append({"kind": "person", "entry": entry})
