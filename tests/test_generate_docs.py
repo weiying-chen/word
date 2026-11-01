@@ -27,9 +27,12 @@ from style_tokens import (
 
 def test_gen_docs_wrapper_uses_project_virtual_environment() -> None:
     wrapper = Path(__file__).resolve().parents[1] / "gen-docs"
+    wrapper_text = wrapper.read_text(encoding="utf-8")
 
     assert wrapper.stat().st_mode & 0o111
-    assert ".venv/bin/python" in wrapper.read_text(encoding="utf-8")
+    assert ".venv/bin/python" in wrapper_text
+    assert "readlink -f" in wrapper_text
+    assert "/home/weiying" not in wrapper_text
 
 
 def test_no_argument_discovery_uses_working_txt_files_only(tmp_path: Path) -> None:
