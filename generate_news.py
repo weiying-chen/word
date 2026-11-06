@@ -230,7 +230,14 @@ def _extract_source_header_lines(source_docx_path: Path) -> list[RenderLine]:
 
     marker_idx = None
     for idx, line in enumerate(lines):
-        if line.text.strip() == MARKER_TEXT:
+        if line.text.rstrip().endswith(MARKER_TEXT):
+            prefix = line.text.rstrip()[:-len(MARKER_TEXT)].rstrip()
+            if prefix:
+                lines[idx:idx + 1] = [
+                    RenderLine(text=prefix, hyperlink=line.hyperlink),
+                    RenderLine(text=MARKER_TEXT),
+                ]
+                idx += 1
             marker_idx = idx
             break
     if marker_idx is None:

@@ -11,6 +11,17 @@ from lxml import etree
 
 from docx_utils import add_hyperlink
 import generate_news
+
+
+def test_source_header_with_trailing_marker(tmp_path):
+    source = tmp_path / 'source.docx'
+    doc = Document()
+    doc.add_paragraph('Title')
+    doc.add_paragraph('Introduction <')
+    doc.add_paragraph('VO')
+    doc.save(source)
+    assert [line.text for line in generate_news._extract_source_header_lines(source)] == ['Title', 'Introduction', '<']
+
 from style_tokens import BODY_TEXT_SIZE_PT
 
 
