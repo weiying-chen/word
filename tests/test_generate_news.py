@@ -125,7 +125,7 @@ def test_parse_input_uses_whole_file_when_no_body_label(tmp_path: Path) -> None:
     assert data["BODY"] == "0014\n中文內文。\nEnglish line."
 
 
-def test_parse_input_omits_standalone_two_digit_super_duration(tmp_path: Path) -> None:
+def test_parse_input_preserves_plain_number_after_super(tmp_path: Path) -> None:
     input_path = tmp_path / "news_input.txt"
     input_path.write_text(
         "/*SUPER:\n受災居民｜測試\n*/\nEnglish SUPER line.\n19\n\n0222\nBody line.\n",
@@ -135,7 +135,21 @@ def test_parse_input_omits_standalone_two_digit_super_duration(tmp_path: Path) -
     data = generate_news.parse_input(input_path)
 
     assert data["BODY"] == (
-        "/*SUPER:\n受災居民｜測試\n*/\nEnglish SUPER line.\n\n0222\nBody line."
+        "/*SUPER:\n受災居民｜測試\n*/\nEnglish SUPER line.\n19\n\n0222\nBody line."
+    )
+
+
+def test_parse_input_omits_parenthesized_super_duration(tmp_path: Path) -> None:
+    input_path = tmp_path / "news_input.txt"
+    input_path.write_text(
+        "/*SUPER:\n慈濟志工｜測試\n*/\nEnglish SUPER line.\n(19s)\n\n0222\nBody line.\n",
+        encoding="utf-8",
+    )
+
+    data = generate_news.parse_input(input_path)
+
+    assert data["BODY"] == (
+        "/*SUPER:\n慈濟志工｜測試\n*/\nEnglish SUPER line.\n\n0222\nBody line."
     )
 
 
