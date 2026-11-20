@@ -48,6 +48,7 @@ ALLOWED_KEYS = {
     "BODY",
 }
 SUPER_START_RE = re.compile(r"^/\*SUPER:?\s*$")
+RAW_PLACEHOLDER_RE = re.compile(r"\{\{[^{}]+\}\}")
 
 
 def _contains_cjk(text: str) -> bool:
@@ -884,6 +885,23 @@ def generate_meta(
     ensure_blank_after_labels(doc, HIGHLIGHT_LABELS)
     remove_trailing_blank_paragraphs(doc)
     apply_font_size_to_document_runs(doc, font_size_pt=BODY_TEXT_SIZE_PT)
+
+    output_text = [paragraph.text for paragraph in doc.paragraphs]
+    output_text.extend(
+        cell.text for table in doc.tables for row in table.rows for cell in row.cells
+    )
+    unresolved = sorted(
+        {
+            match.group(0)
+            for text in output_text
+            for match in RAW_PLACEHOLDER_RE.finditer(text)
+        }
+    )
+    if unresolved:
+        raise ValueError(
+            "[error] Generated meta DOCX contains unresolved placeholders: "
+            + ", ".join(unresolved)
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))

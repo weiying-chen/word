@@ -68,33 +68,8 @@ class RenderMetaTests(unittest.TestCase):
             self._build_template(template_path)
             payload_path.write_text(source_text, encoding="utf-8")
 
-            generate_meta(template_path, payload_path, output_path)
-
-            doc = Document(str(output_path))
-            texts = [p.text for p in doc.paragraphs]
-
-        self.assertEqual(
-            texts,
-            [
-                "重點標",
-                "",
-                "English Title",
-                "名字職銜",
-                "",
-                "",
-                "病患｜甲",
-                "Alice",
-                "{{病患}}",
-                "",
-                "醫師｜乙",
-                "Bob",
-                "{{醫師}}",
-                "",
-                "YT簡介",
-                "",
-                "English overview.",
-            ],
-        )
+            with self.assertRaisesRegex(ValueError, "{{病患}}, {{醫師}}"):
+                generate_meta(template_path, payload_path, output_path)
 
     def test_parse_input_splits_super_header_with_cjk_spacing(self) -> None:
         source_text = "\n".join(
@@ -165,6 +140,29 @@ class RenderMetaTests(unittest.TestCase):
 
         self.assertIn("English Title", texts)
         self.assertNotIn("{{TITLE_EN}}", texts)
+
+    def test_generate_meta_fails_when_output_contains_unresolved_placeholders(self) -> None:
+        source_text = "\n".join(
+            [
+                "TITLE: English Title",
+                "OVERVIEW: English overview.",
+                "BODY:",
+                "(  13   Alice )",
+                "/*SUPER:",
+                "病患│甲//",
+                "*/",
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            template_path = root / "meta_template.docx"
+            payload_path = root / "input.txt"
+            output_path = root / "meta.docx"
+            self._build_template(template_path)
+            payload_path.write_text(source_text, encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "unresolved placeholders: {{病患}}"):
+                generate_meta(template_path, payload_path, output_path)
 
     def test_generate_meta_removes_trailing_blank_template_paragraph(self) -> None:
         source_text = "\n".join(
@@ -996,11 +994,8 @@ class RenderMetaTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            generate_meta(template_path, body_path, output_path)
-            texts = [p.text for p in Document(str(output_path)).paragraphs]
-
-        self.assertIn("Hwang Lay Boon", texts)
-        self.assertNotIn("HWANG LAY BOON", texts)
+            with self.assertRaisesRegex(ValueError, "{{慈濟志工}}"):
+                generate_meta(template_path, body_path, output_path)
 
     def test_display_name_normalization_handles_surname_prefixes(self) -> None:
         self.assertEqual(_normalize_display_name_en("O'NEILL MCDONALD"), "O'Neill McDonald")
