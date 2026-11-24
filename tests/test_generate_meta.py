@@ -5,7 +5,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 
 from generate_meta import (
     _normalize_display_name_en,
@@ -1832,6 +1832,35 @@ def test_default_output_path_uses_source_stem(tmp_path: Path) -> None:
     output_dir = tmp_path / "output"
     output = default_output_path(source, output_dir)
     assert output == output_dir / "sample_story_標題職銜_final.docx"
+
+
+def test_generate_meta_preserves_template_margins(tmp_path: Path) -> None:
+    template_path = tmp_path / "meta_template.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    template = Document()
+    section = template.sections[0]
+    section.top_margin = Inches(0.6)
+    section.right_margin = Inches(0.7)
+    section.bottom_margin = Inches(0.8)
+    section.left_margin = Inches(0.9)
+    template.add_paragraph("{{TITLE_EN}}")
+    template.add_paragraph("{{PEOPLE}}")
+    template.add_paragraph("{{OVERVIEW_EN}}")
+    template.save(template_path)
+    input_path.write_text(
+        "TITLE: Test title\nOVERVIEW: Test overview.\n",
+        encoding="utf-8",
+    )
+
+    generate_meta(template_path, input_path, output_path)
+
+    generated_section = Document(output_path).sections[0]
+    assert generated_section.top_margin == Inches(0.6)
+    assert generated_section.right_margin == Inches(0.7)
+    assert generated_section.bottom_margin == Inches(0.8)
+    assert generated_section.left_margin == Inches(0.9)
 
 
 def test_role_only_people_override_uses_english_line_as_role(tmp_path: Path) -> None:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
-from docx.shared import Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor
 
 from docx_utils import clear_paragraph, set_style_font_family
 from style_tokens import (
@@ -29,6 +29,7 @@ SECTION_LABEL_RULES = (
     SectionLabelRule("其他工作:", "SectionLabelSmall"),
     SectionLabelRule("行政工作:", "SectionLabelSmall"),
 )
+PAGE_MARGIN_INCHES = 1.0
 
 
 def ensure_character_style(doc: Document, name: str, size_pt: int, color: RGBColor) -> None:
@@ -80,10 +81,19 @@ def sync_review_template_styles(doc: Document) -> None:
                         break
 
 
+def sync_page_layout(doc: Document) -> None:
+    for section in doc.sections:
+        section.top_margin = Inches(PAGE_MARGIN_INCHES)
+        section.right_margin = Inches(PAGE_MARGIN_INCHES)
+        section.bottom_margin = Inches(PAGE_MARGIN_INCHES)
+        section.left_margin = Inches(PAGE_MARGIN_INCHES)
+
+
 def sync_all_templates(template_paths: list[Path]) -> None:
     for path in template_paths:
         doc = Document(str(path))
         ensure_base_styles(doc)
+        sync_page_layout(doc)
         if path.name == "review_template.docx":
             sync_review_template_styles(doc)
         doc.save(str(path))

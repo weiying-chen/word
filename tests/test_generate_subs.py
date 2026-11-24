@@ -5,7 +5,7 @@ import warnings
 import pytest
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 from lxml import etree
 
 from docx_utils import add_hyperlink
@@ -332,6 +332,36 @@ def test_parse_input_multiline_intro(tmp_path: Path) -> None:
 
     data = generate_subs.parse_input(input_path)
     assert data["INTRO"] == "First intro line.\nSecond intro line."
+
+
+def test_generate_subs_preserves_template_margins(tmp_path: Path) -> None:
+    template_path = tmp_path / "template.docx"
+    source_docx = tmp_path / "source.docx"
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.docx"
+
+    template = Document()
+    section = template.sections[0]
+    section.top_margin = Inches(0.6)
+    section.right_margin = Inches(0.7)
+    section.bottom_margin = Inches(0.8)
+    section.left_margin = Inches(0.9)
+    template.add_paragraph("{{BODY}}")
+    template.save(template_path)
+    _write_source_docx(
+        source_docx,
+        header_paragraphs=[],
+        body_paragraphs=["00:00:00:00\t00:00:01:00\tSource line."],
+    )
+    input_path.write_text("BODY:\nSubtitle line.\n", encoding="utf-8")
+
+    generate_subs.generate_subs(template_path, source_docx, input_path, output_path)
+
+    generated_section = Document(output_path).sections[0]
+    assert generated_section.top_margin == Inches(0.6)
+    assert generated_section.right_margin == Inches(0.7)
+    assert generated_section.bottom_margin == Inches(0.8)
+    assert generated_section.left_margin == Inches(0.9)
 
 
 def test_yt_title_replacement_utf8_no_bom(tmp_path: Path) -> None:

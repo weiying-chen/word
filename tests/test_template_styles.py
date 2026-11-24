@@ -2,6 +2,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.shared import Inches
 
 import template_styles
 
@@ -61,3 +62,24 @@ def test_sync_review_template_styles_skips_tables_without_expected_grid(tmp_path
     doc = Document(path)
     template_styles.ensure_base_styles(doc)
     template_styles.sync_review_template_styles(doc)
+
+
+def test_sync_all_templates_applies_shared_one_inch_margins(tmp_path: Path) -> None:
+    paths = [tmp_path / "news_template.docx", tmp_path / "review_template.docx"]
+    for path in paths:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin = Inches(0.5)
+        section.right_margin = Inches(0.6)
+        section.bottom_margin = Inches(0.7)
+        section.left_margin = Inches(0.8)
+        doc.save(path)
+
+    template_styles.sync_all_templates(paths)
+
+    for path in paths:
+        section = Document(path).sections[0]
+        assert section.top_margin == Inches(1)
+        assert section.right_margin == Inches(1)
+        assert section.bottom_margin == Inches(1)
+        assert section.left_margin == Inches(1)

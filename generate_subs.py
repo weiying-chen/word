@@ -17,7 +17,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt
+from docx.shared import Pt
 from docx.text.paragraph import Paragraph
 
 from docx_utils import (
@@ -595,14 +595,6 @@ def _get_section_metrics(doc: Document):
     }
 
 
-def apply_default_margins(doc: Document) -> None:
-    for section in doc.sections:
-        section.top_margin = Inches(1.0)
-        section.bottom_margin = Inches(1.0)
-        section.left_margin = Inches(1.25)
-        section.right_margin = Inches(1.25)
-
-
 def _normalize_document_namespace(xml_text: str) -> str:
     match = re.search(r"<w:document[^>]*>", xml_text)
     if not match:
@@ -845,7 +837,6 @@ def generate_subs(
         allow_clip_marker=bool(body_text),
     )
     doc = Document(str(template_path))
-    apply_default_margins(doc)
     annotation_style = ensure_annotation_style(doc)
     ensure_hyperlink_style(doc)
     source_indent_inches = get_default_tab_stop_inches(doc)

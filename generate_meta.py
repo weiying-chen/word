@@ -12,7 +12,6 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.enum.text import WD_COLOR_INDEX
 from docx.text.paragraph import Paragraph
-from docx.shared import Inches
 
 from docx_utils import apply_font_size_to_document_runs, ensure_blank_after_labels
 from generate_subs import fix_docx_namespaces, normalize_input_text
@@ -818,14 +817,6 @@ def build_people_lines(
     return lines
 
 
-def apply_default_margins(doc: Document) -> None:
-    for section in doc.sections:
-        section.top_margin = Inches(1.0)
-        section.bottom_margin = Inches(1.0)
-        section.left_margin = Inches(1.25)
-        section.right_margin = Inches(1.25)
-
-
 def default_output_path(source_docx: Path, output_dir: Path) -> Path:
     stem = source_docx.stem
     if stem.endswith("_final"):
@@ -857,7 +848,6 @@ def generate_meta(
         )
 
     doc = Document(str(resolve_template_path(template_path)))
-    apply_default_margins(doc)
 
     title_placeholder = find_paragraph_by_text(doc, TITLE_PLACEHOLDER)
     replace_or_remove_paragraph_text(title_placeholder, str(data.get("title_en", "")))
