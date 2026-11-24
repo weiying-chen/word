@@ -362,6 +362,44 @@ def test_generate_news_allows_source_docx_without_marker(tmp_path: Path) -> None
     assert texts == ["<", "", "1_0001", "Body line."]
 
 
+def test_generate_news_preserves_leading_source_url_without_marker(
+    tmp_path: Path,
+) -> None:
+    source_docx = tmp_path / "source.docx"
+    template_docx = tmp_path / "template.docx"
+    input_path = tmp_path / "news_input.txt"
+    output_path = tmp_path / "news_output.docx"
+    source_url = "https://www.daai.tv/news/abroad/601113"
+
+    doc = Document()
+    link_paragraph = doc.add_paragraph("")
+    add_hyperlink(link_paragraph, source_url, source_url)
+    doc.add_paragraph("")
+    doc.add_paragraph("Original body that must not be copied")
+    doc.save(source_docx)
+    _write_template_docx(template_docx, marker="{{BODY}}")
+    input_path.write_text("BODY:\n1_0001\nBody line.\n", encoding="utf-8")
+
+    generate_news.generate_news(template_docx, source_docx, input_path, output_path)
+
+    generated = Document(output_path)
+    assert [p.text for p in generated.paragraphs] == [
+        source_url,
+        "",
+        "1_0001",
+        "Body line.",
+    ]
+    hyperlink_targets = [
+        rel.target_ref
+        for rel in generated.part.rels.values()
+        if rel.reltype == (
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+            "hyperlink"
+        )
+    ]
+    assert source_url in hyperlink_targets
+
+
 def test_generate_news_with_body_placeholder_template(tmp_path: Path) -> None:
     source_docx = tmp_path / "source.docx"
     template_docx = tmp_path / "template.docx"

@@ -241,7 +241,20 @@ def _extract_source_header_lines(source_docx_path: Path) -> list[RenderLine]:
             marker_idx = idx
             break
     if marker_idx is None:
-        return []
+        while lines and not lines[0].text.strip():
+            lines.pop(0)
+        leading_urls: list[RenderLine] = []
+        for line in lines:
+            if SOURCE_LINK_RE.fullmatch(line.text.strip()):
+                leading_urls.append(line)
+                continue
+            if not line.text.strip() and leading_urls:
+                leading_urls.append(line)
+                continue
+            break
+        while leading_urls and not leading_urls[-1].text.strip():
+            leading_urls.pop()
+        return leading_urls
 
     lines = lines[: marker_idx + 1]
     while lines and not lines[0].text.strip():
